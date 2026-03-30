@@ -1,14 +1,15 @@
 ---
 name: zhouheng-global-finance-mesh
-homepage: https://github.com/wd041216-bit/openclaw-global-finance-mesh
+homepage: https://github.com/wd041216-bit/zhouheng-global-finance-mesh
 description: >
-  Run finance events through a pack-based rule mesh that produces auditable
-  decision packets, replayable rule changes, and evidence graph snapshots.
+  Use the optional OpenClaw adapter to run finance events through a pack-based
+  rule mesh that produces auditable decision packets, replayable rule changes,
+  and evidence graph snapshots.
 ---
 
 # Zhouheng Global Finance Mesh
 
-Use this skill when the user wants an OpenClaw-style finance control plane instead of an ad hoc finance chatbot.
+Use this skill when the user is operating Zhouheng Global Finance Mesh through OpenClaw instead of using the standalone console directly.
 
 ## Mission
 
@@ -35,4 +36,3 @@ Turn economic events into:
 - Do not auto-execute high-risk finance actions without a rollback path.
 - Keep every rule decision explainable with pack version, rule id, and evidence reference.
 - Treat new exceptions as candidate rules, not silent one-off overrides.
-

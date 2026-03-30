@@ -1,26 +1,24 @@
-# OpenClaw Global Finance Mesh
+# Zhouheng Global Finance Mesh
 
-这是一个按 OpenClaw 风格组织的财务 Agent 仓库，把“宙衡 Global Finance Mesh”从规格文档落成了可运行 MVP。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线。
 
 ## 已落地内容
 
-- OpenClaw 插件入口
-- Finance Mesh 技能包装
+- 独立 Web 控制台，覆盖运行时配置、法律资料库、决策执行、回放分析、审计历史
 - 可插拔 Ollama 大脑，支持本地与云端模式
-- Web UI 控制台
-- 法律资料库采集、检索、引用注入链路
 - Pack 校验、决策生成、回放对比、审计追溯快照
+- 法律资料库采集、检索、引用注入链路
+- 本地持久化审计历史，decision / replay 结果会落盘保存
 - SaaS 年付预收场景示例
-- Country、Industry、Entity、Control、Output 五类 Pack 示例
-- Node 原生测试
+- 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
 
 ## 当前定位
 
-它不是“财务问答机器人”，而是一个规则网格驱动的财务决策中枢骨架。
+它不是“财务问答机器人”，也不是“某个宿主的附属插件壳”，而是一个规则网格驱动的财务决策中枢骨架。
 
 - 输入是经济事件与上下文
 - 中间层是 Pack 规则和优先级
-- 输出是可审计的 Decision Packet
+- 输出是可审计的 Decision Packet 与可回放的变更结果
 
 ## 快速开始
 
@@ -43,30 +41,38 @@ npm run dev
 
 默认不会持久化 API key，除非你在 UI 里主动勾选保存到本地忽略文件。
 
-## 适用团队
+## 审计历史
 
-- CFO 与财务共享中心
-- 税务和内控负责人
-- 财务系统产品团队
-- 想在 OpenClaw 上挂接财务治理能力的实施团队
+本轮开始，decision 和 replay 的运行结果会持久化到 `data/audit/runs.json`。
+
+- 控制台里可以直接看到最近运行历史和完整明细
+- 重启服务后历史仍然保留，便于 demo、排障、复盘
+- 这还是 MVP 级审计存储，不等于不可篡改的企业级审计底座
+
+## OpenClaw 兼容接入
+
+如果你仍然需要接到 OpenClaw，请使用 `integrations/openclaw/` 下的适配器，而不是把整个仓库继续当成 skill 根目录。
 
 ## 企业化边界
 
-这版已经具备企业产品骨架，但我不会不诚实地宣称它“已经企业标准完成”。
+这版已经具备产品骨架，但我不会不诚实地宣称它“已经企业标准完成”。
 
 已具备：
 - 大脑接入层
 - Web 操作台
 - 法律资料库基础管理
 - 可解释决策与回放
+- 本地持久化审计历史
 
 仍需继续补齐：
 - 权限与 SSO
-- 持久化审计和变更治理
+- 不可变审计存储与操作归因
 - 真实 ERP / 审批流连接器
 - 更大规模的法规资料装载与签核机制
 
-## 交接与长期方案
+## 相关文档
 
+- [docs/roadmap.md](./docs/roadmap.md)
+- [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)

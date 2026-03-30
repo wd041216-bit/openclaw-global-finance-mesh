@@ -11,7 +11,7 @@
 
 - Add connector adapters for ERP and ticketing systems
 - Add pack registry and version promotion workflow
-- Add persistent audit storage
+- Harden persisted audit storage with attribution and retention controls
 
 ## Phase 3
 
@@ -24,4 +24,3 @@
 - Add canary publishing and rollback automation
 - Add KPI dashboards for auto-execution and review queues
 - Add graph database export for complex trace analysis
-

@@ -1,0 +1,12 @@
+{
+  "plugins": {
+    "load": {
+      "paths": [
+        "/absolute/path/to/zhouheng-global-finance-mesh"
+      ]
+    },
+    "entries": [
+      "zhouheng-global-finance-mesh"
+    ]
+  }
+}

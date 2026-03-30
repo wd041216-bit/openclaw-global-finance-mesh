@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Global Finance Mesh Console</title>
+    <title>Zhouheng Finance Mesh Console</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -11,17 +11,17 @@
       <header class="masthead">
         <div>
           <p class="eyebrow">Finance Operating Console</p>
-          <h1>Global Finance Mesh Atlas</h1>
+          <h1>Zhouheng Finance Mesh Atlas</h1>
           <p class="lede">
-            A Pack-driven finance control plane with pluggable LLM brains, legal-library grounding,
-            and auditable decision flows.
+            A standalone Pack-driven finance control plane with pluggable LLM brains, governed legal-library grounding,
+            auditable decision flows, and persistent run history.
           </p>
         </div>
         <div class="status-card">
           <span class="status-dot"></span>
           <div>
-            <strong>Brain-ready runtime</strong>
-            <p>Local Ollama or Ollama Cloud. Cloud requests are serialized for safe concurrency.</p>
+            <strong>Operator-ready baseline</strong>
+            <p>Local Ollama or Ollama Cloud, plus persisted audit history for every decision and replay run.</p>
           </div>
         </div>
       </header>
@@ -155,7 +155,7 @@
 
         <section class="panel">
           <div class="panel-head">
-            <h2>Finance Mesh</h2>
+            <h2>Decision Workbench</h2>
             <span class="chip">Example packs wired in</span>
           </div>
           <div class="actions dual">
@@ -163,6 +163,17 @@
             <button id="run-replay" class="ghost">Run Example Replay</button>
           </div>
           <pre id="finance-output" class="output"></pre>
+        </section>
+
+        <section class="panel span-2">
+          <div class="panel-head">
+            <h2>Audit History</h2>
+            <button id="refresh-audit" class="ghost">Refresh History</button>
+          </div>
+          <div class="audit-layout">
+            <div id="audit-list" class="audit-list"></div>
+            <pre id="audit-detail" class="output"></pre>
+          </div>
         </section>
       </main>
     </div>

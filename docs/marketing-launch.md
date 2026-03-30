@@ -4,27 +4,27 @@
 
 Lead with one sentence:
 
-OpenClaw Global Finance Mesh turns finance events into auditable, replayable, Pack-driven decision packets instead of chat-style guesses.
+Zhouheng Global Finance Mesh turns finance events into auditable, replayable, Pack-driven decision packets instead of chat-style guesses.
 
 ## Launch assets
 
 - English README for GitHub discovery
 - Chinese README for the current operating audience
-- architecture ADR to explain the first-cut shape
+- standalone-control-plane ADR to explain the first-cut shape
 - example Packs and tests so the repo feels real on first open
+- screenshots or GIFs of the audit history view in the console
 
 ## First promotion moves
 
-1. Create a crisp repo description and tags around OpenClaw, finance agent, audit trail, and rule engine.
-2. Publish a short demo GIF or terminal capture of validation, decision run, and replay.
-3. Pin the repo if it becomes one of the lead OpenClaw extensions.
-4. Cross-link it from related OpenClaw repos in their README sections.
+1. Create a crisp repo description and tags around finance control plane, audit trail, rule engine, legal library, and replay analysis.
+2. Publish a short demo GIF or terminal capture of validation, decision run, replay, and audit history refresh.
+3. Pin the repo if it becomes one of the lead finance governance products in the portfolio.
+4. Cross-link it from related finance, compliance, and agent-infra repos.
 
 ## Message angle
 
 - not a finance chatbot
-- deterministic Pack-based control plane
+- standalone Pack-based control plane
 - explainable outputs
 - replay before publish
-- audit trace by default
-
+- audit history by default

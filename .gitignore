@@ -4,4 +4,6 @@ node_modules/
 coverage/
 dist/
 data/runtime/*.secrets.json
-
+data/runtime/*.json
+!data/runtime/.gitkeep
+data/audit/*.json

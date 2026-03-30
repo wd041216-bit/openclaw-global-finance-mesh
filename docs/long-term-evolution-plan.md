@@ -2,7 +2,7 @@
 
 ## North Star
 
-Build a finance-and-legal operating system that behaves like an installable OpenClaw product:
+Build a finance-and-legal operating system that behaves like a standalone product with optional adapters:
 
 - plug in a local or cloud LLM brain and start using it
 - ground responses and decisions in a governed legal library
@@ -233,5 +233,4 @@ Every future thread should prefer this loop:
 - claiming full legal coverage before governance exists
 - wiring direct execution before rollback and audit are credible
 - over-abstracting the architecture before operator workflows are stable
-- calling the product enterprise-ready before the checklist in [enterprise-readiness.md](/Users/dawei/Documents/New%20project/openclaw-global-finance-mesh/docs/enterprise-readiness.md) is actually met
-
+- calling the product enterprise-ready before the checklist in [enterprise-readiness.md](/Users/dawei/Documents/New%20project/zhouheng-global-finance-mesh/docs/enterprise-readiness.md) is actually met

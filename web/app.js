@@ -1,5 +1,7 @@
 const state = {
   config: null,
+  auditRuns: [],
+  selectedAuditId: null,
 };
 
 const configForm = document.querySelector("#config-form");
@@ -13,12 +15,15 @@ const chatOutput = document.querySelector("#chat-output");
 const citationsOutput = document.querySelector("#citations-output");
 const libraryResults = document.querySelector("#library-results");
 const financeOutput = document.querySelector("#finance-output");
+const auditList = document.querySelector("#audit-list");
+const auditDetail = document.querySelector("#audit-detail");
 
 document.querySelector("#load-models").addEventListener("click", loadModels);
 document.querySelector("#probe-runtime").addEventListener("click", probeRuntime);
 document.querySelector("#refresh-library").addEventListener("click", refreshLibrary);
 document.querySelector("#run-decision").addEventListener("click", runDecision);
 document.querySelector("#run-replay").addEventListener("click", runReplay);
+document.querySelector("#refresh-audit").addEventListener("click", refreshAuditHistory);
 
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -84,7 +89,7 @@ async function boot() {
   const [{ config }] = await Promise.all([api("/api/runtime/config")]);
   state.config = config;
   fillConfigForm(config);
-  await refreshLibrary();
+  await Promise.all([refreshLibrary(), refreshAuditHistory()]);
 }
 
 async function loadModels() {
@@ -127,7 +132,15 @@ async function runDecision() {
     method: "POST",
     body: JSON.stringify({}),
   });
-  financeOutput.textContent = JSON.stringify(result.decision.decisionPacket, null, 2);
+  financeOutput.textContent = JSON.stringify(
+    {
+      auditRun: result.auditRun,
+      decisionPacket: result.decision.decisionPacket,
+    },
+    null,
+    2,
+  );
+  await refreshAuditHistory(result.auditRun?.id);
 }
 
 async function runReplay() {
@@ -136,7 +149,74 @@ async function runReplay() {
     method: "POST",
     body: JSON.stringify({}),
   });
-  financeOutput.textContent = JSON.stringify(result.replay, null, 2);
+  financeOutput.textContent = JSON.stringify(
+    {
+      auditRun: result.auditRun,
+      replay: result.replay,
+    },
+    null,
+    2,
+  );
+  await refreshAuditHistory(result.auditRun?.id);
+}
+
+async function refreshAuditHistory(preferredId) {
+  const result = await api("/api/audit/runs?limit=12");
+  state.auditRuns = result.runs || [];
+  if (preferredId) {
+    state.selectedAuditId = preferredId;
+  } else if (!state.selectedAuditId && state.auditRuns.length > 0) {
+    state.selectedAuditId = state.auditRuns[0].id;
+  } else if (!state.auditRuns.some((item) => item.id === state.selectedAuditId)) {
+    state.selectedAuditId = state.auditRuns[0]?.id || null;
+  }
+
+  renderAuditRuns();
+  if (state.selectedAuditId) {
+    await openAuditRun(state.selectedAuditId);
+  } else {
+    auditDetail.textContent = "No persisted runs yet.";
+  }
+}
+
+async function openAuditRun(runId) {
+  state.selectedAuditId = runId;
+  renderAuditRuns();
+  auditDetail.textContent = "Loading audit run...";
+  const result = await api(`/api/audit/runs/${encodeURIComponent(runId)}`);
+  auditDetail.textContent = JSON.stringify(result.run, null, 2);
+}
+
+function renderAuditRuns() {
+  if (state.auditRuns.length === 0) {
+    auditList.innerHTML = '<p class="empty-state">Run a decision or replay to build your audit trail.</p>';
+    return;
+  }
+
+  auditList.innerHTML = state.auditRuns
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="audit-item ${item.id === state.selectedAuditId ? "active" : ""}"
+          data-run-id="${escapeHtml(item.id)}"
+        >
+          <div class="audit-item-head">
+            <strong>${escapeHtml(item.type === "decision" ? "Decision Run" : "Replay Run")}</strong>
+            <span>${escapeHtml(item.mode)}</span>
+          </div>
+          <p>${escapeHtml(item.label || "")}</p>
+          <small>${escapeHtml(formatAuditMeta(item))}</small>
+        </button>
+      `,
+    )
+    .join("");
+
+  for (const element of auditList.querySelectorAll("[data-run-id]")) {
+    element.addEventListener("click", () => {
+      void openAuditRun(element.getAttribute("data-run-id"));
+    });
+  }
 }
 
 function renderLibraryResults(results) {
@@ -213,4 +293,12 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function formatAuditMeta(item) {
+  const createdAt = new Date(item.createdAt).toLocaleString();
+  if (item.type === "decision") {
+    return `${createdAt} | ${item.riskRating || "unknown"} risk | confidence ${Number(item.confidence || 0).toFixed(2)}`;
+  }
+  return `${createdAt} | ${item.changedEvents || 0} changed | ${item.higherRiskEvents || 0} higher risk`;
 }

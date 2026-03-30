@@ -109,7 +109,7 @@ function defaultConfig(): BrainRuntimeConfig {
     apiKey: process.env.OLLAMA_API_KEY,
     temperature: process.env.OLLAMA_TEMPERATURE,
     systemPrompt:
-      "You are Global Finance Mesh. Use cited legal material when available, stay auditable, and prefer deterministic finance reasoning over vague claims.",
+      "You are Zhouheng Global Finance Mesh. Use cited legal material when available, stay auditable, and prefer deterministic finance reasoning over vague claims.",
   });
 }
 
@@ -130,7 +130,7 @@ function normalizeConfig(raw: Partial<BrainRuntimeConfig> & Record<string, unkno
     systemPrompt:
       typeof raw.systemPrompt === "string" && raw.systemPrompt.trim()
         ? raw.systemPrompt.trim()
-        : "You are Global Finance Mesh. Use cited legal material when available, stay auditable, and prefer deterministic finance reasoning over vague claims.",
+        : "You are Zhouheng Global Finance Mesh. Use cited legal material when available, stay auditable, and prefer deterministic finance reasoning over vague claims.",
   };
 }
 

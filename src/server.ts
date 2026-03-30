@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { AuditRunStore } from "./audit-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
 import { loadFinancePacksFromPaths } from "./fs.ts";
@@ -19,6 +20,7 @@ const PORT = Number(process.env.FINANCE_MESH_PORT || 3030);
 const runtimeStore = new RuntimeConfigStore();
 const brain = new OllamaBrainRuntime();
 const legalLibrary = new LegalLibraryStore();
+const auditRuns = new AuditRunStore();
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -39,12 +41,12 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Global Finance Mesh UI running at http://127.0.0.1:${PORT}`);
+  console.log(`Zhouheng Global Finance Mesh UI running at http://127.0.0.1:${PORT}`);
 });
 
 async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, requestUrl: URL): Promise<void> {
   if (req.method === "GET" && requestUrl.pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, service: "global-finance-mesh" });
+    sendJson(res, 200, { ok: true, service: "zhouheng-global-finance-mesh" });
     return;
   }
 
@@ -179,19 +181,27 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       return;
     }
 
+    const eventPayload =
+      body.eventPayload ??
+      JSON.parse(
+        await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
+      );
+    const mode = normalizeMode(body.mode);
     const result = runDecision({
       request: {
-        mode: body.mode,
-        event_payload:
-          body.eventPayload ??
-          JSON.parse(
-            await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
-          ),
+        mode,
+        event_payload: eventPayload,
       },
       packs: loadedPacks.map((item) => item.pack),
     });
+    const auditRun = await auditRuns.recordDecision({
+      mode,
+      packPaths,
+      event: eventPayload,
+      result,
+    });
 
-    sendJson(res, 200, { ok: true, decision: result });
+    sendJson(res, 200, { ok: true, decision: result, auditRun });
     return;
   }
 
@@ -212,13 +222,48 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     const exampleEvent = JSON.parse(
       await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
     );
+    const mode = normalizeMode(body.mode);
+    const events =
+      Array.isArray(body.events) && body.events.length > 0
+        ? body.events
+        : [exampleEvent];
     const replay = runReplay({
-      mode: body.mode,
+      mode,
       baselinePacks: baseline.map((item) => item.pack),
       candidatePacks: candidate.map((item) => item.pack),
-      events: Array.isArray(body.events) && body.events.length > 0 ? body.events : [exampleEvent],
+      events,
     });
-    sendJson(res, 200, { ok: true, replay });
+    const auditRun = await auditRuns.recordReplay({
+      mode,
+      baselinePackPaths,
+      candidatePackPaths,
+      events,
+      replay,
+    });
+    sendJson(res, 200, { ok: true, replay, auditRun });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/audit/runs") {
+    const limit = Number(requestUrl.searchParams.get("limit") || 12);
+    sendJson(res, 200, { ok: true, runs: await auditRuns.list(Number.isFinite(limit) ? limit : 12) });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/api/audit/runs/")) {
+    const id = requestUrl.pathname.slice("/api/audit/runs/".length).trim();
+    if (!id) {
+      sendJson(res, 400, { ok: false, error: "run id is required" });
+      return;
+    }
+
+    const record = await auditRuns.get(id);
+    if (!record) {
+      sendJson(res, 404, { ok: false, error: "Audit run not found" });
+      return;
+    }
+
+    sendJson(res, 200, { ok: true, run: record });
     return;
   }
 
@@ -257,6 +302,13 @@ function normalizePackPaths(value: unknown): string[] {
     return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
   }
   return [path.join("examples", "packs")];
+}
+
+function normalizeMode(value: unknown): "L0" | "L1" | "L2" | "L3" {
+  if (value === "L0" || value === "L2" || value === "L3") {
+    return value;
+  }
+  return "L1";
 }
 
 function sendJson(res: http.ServerResponse, statusCode: number, payload: Record<string, unknown>): void {

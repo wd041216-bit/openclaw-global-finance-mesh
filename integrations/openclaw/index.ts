@@ -1,11 +1,11 @@
-import { normalizeFinanceMeshConfig } from "./src/config.ts";
-import { FINANCE_MESH_PROMPT_GUIDANCE } from "./src/prompt-guidance.ts";
-import { createDecisionRunTool, createPackValidationTool, createReplayTool } from "./src/tool.ts";
+import { normalizeFinanceMeshConfig } from "../../src/config.ts";
+import { FINANCE_MESH_PROMPT_GUIDANCE } from "../../src/prompt-guidance.ts";
+import { createDecisionRunTool, createPackValidationTool, createReplayTool } from "../../src/tool.ts";
 
 const plugin = {
-  id: "global-finance-mesh",
-  name: "Global Finance Mesh",
-  description: "Pack-driven finance decisioning for OpenClaw.",
+  id: "zhouheng-global-finance-mesh",
+  name: "Zhouheng Global Finance Mesh",
+  description: "Optional OpenClaw adapter for the Zhouheng finance control plane.",
   register(api: {
     pluginConfig?: unknown;
     registerTool: (tool: unknown) => void;
@@ -30,4 +30,3 @@ const plugin = {
 };
 
 export default plugin;
-

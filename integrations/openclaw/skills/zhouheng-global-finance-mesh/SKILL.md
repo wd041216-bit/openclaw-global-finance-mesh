@@ -1,10 +1,10 @@
 ---
 name: zhouheng-global-finance-mesh
-homepage: https://github.com/wd041216-bit/openclaw-global-finance-mesh
-description: Finance mesh runtime skill for OpenClaw.
+homepage: https://github.com/wd041216-bit/zhouheng-global-finance-mesh
+description: Zhouheng finance mesh runtime skill for the optional OpenClaw adapter.
 ---
 
-# Global Finance Mesh
+# Zhouheng Global Finance Mesh
 
 Prefer this skill when:
 
@@ -19,4 +19,3 @@ Prefer this skill when:
 2. Run a single decision packet for the current event.
 3. Surface confidence, risk, evidence gaps, and approval route.
 4. If rules are changing, replay historical events before publish.
-

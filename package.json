@@ -1,8 +1,8 @@
 {
-  "name": "@wd041216-bit/openclaw-global-finance-mesh",
+  "name": "@wd041216-bit/zhouheng-global-finance-mesh",
   "version": "0.1.0",
   "private": false,
-  "description": "OpenClaw-style finance agent plugin for pack validation, decision packets, replay analysis, and audit trace generation.",
+  "description": "Standalone finance control plane for pack validation, decision packets, replay analysis, legal-library grounding, and audit history.",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
@@ -13,16 +13,12 @@
   },
   "files": [
     ".env.example",
-    "index.ts",
-    "openclaw.plugin.json",
     "src",
-    "skills",
-    "agents",
     "web",
     "data",
     "examples",
     "docs",
-    "SKILL.md",
+    "integrations",
     "README.md",
     "README.zh-CN.md",
     "CHANGELOG.md",
@@ -38,24 +34,19 @@
   "dependencies": {
     "yaml": "^2.8.1"
   },
-  "homepage": "https://github.com/wd041216-bit/openclaw-global-finance-mesh",
+  "homepage": "https://github.com/wd041216-bit/zhouheng-global-finance-mesh",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wd041216-bit/openclaw-global-finance-mesh.git"
+    "url": "https://github.com/wd041216-bit/zhouheng-global-finance-mesh.git"
   },
   "keywords": [
-    "openclaw",
     "finance",
-    "agent",
+    "control-plane",
     "audit-trail",
     "rule-engine",
     "decision-packet",
-    "plugin",
+    "legal-library",
+    "replay-analysis",
     "global-finance"
-  ],
-  "openclaw": {
-    "extensions": [
-      "./index.ts"
-    ]
-  }
+  ]
 }

@@ -100,7 +100,7 @@ function baseNode(input: {
 }): Record<string, unknown> {
   return {
     ...input,
-    created_by: "openclaw-global-finance-mesh",
+    created_by: "zhouheng-global-finance-mesh",
     version: "1.0",
     retention_policy: "finance-default",
     sensitivity_level: "restricted",
@@ -123,4 +123,3 @@ function stableStringify(value: unknown): string {
     .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableStringify(entryValue)}`)
     .join(",")}}`;
 }
-
