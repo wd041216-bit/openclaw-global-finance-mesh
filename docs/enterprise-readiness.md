@@ -7,6 +7,7 @@
 - replay-before-publish capability
 - evidence graph snapshots
 - local token-based RBAC with role-gated privileged endpoints
+- governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing
 - legal library ingestion and grounding
 - browser-based operator console

@@ -235,7 +235,13 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       return;
     }
     const query = requestUrl.searchParams.get("q") || "";
-    sendJson(res, 200, { ok: true, results: await legalLibrary.search(query, 8) });
+    const includeDrafts = requestUrl.searchParams.get("includeDrafts") === "true";
+    sendJson(res, 200, {
+      ok: true,
+      results: await legalLibrary.search(query, 8, {
+        statuses: includeDrafts ? undefined : ["reviewed", "approved"],
+      }),
+    });
     return;
   }
 
@@ -277,6 +283,32 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       filePath: typeof body.filePath === "string" ? body.filePath : undefined,
     });
     sendJson(res, 200, { ok: true, document });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname.startsWith("/api/legal-library/documents/") && requestUrl.pathname.endsWith("/status")) {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+
+    const documentId = requestUrl.pathname
+      .slice("/api/legal-library/documents/".length, -"/status".length)
+      .trim();
+    if (!documentId) {
+      sendJson(res, 400, { ok: false, error: "Document id is required." });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const status = body.status;
+    if (status !== "draft" && status !== "reviewed" && status !== "approved" && status !== "retired") {
+      sendJson(res, 400, { ok: false, error: "Invalid document status." });
+      return;
+    }
+
+    const document = await legalLibrary.updateStatus(documentId, status, auth.actor?.name);
+    sendJson(res, 200, { ok: true, document, actor: auth.actor });
     return;
   }
 

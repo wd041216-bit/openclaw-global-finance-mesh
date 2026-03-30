@@ -10,7 +10,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
 - pluggable Ollama brain runtime for local and cloud deployments
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
-- legal library store with ingestion, tagging, search, and citation grounding
+- legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
 - persistent local audit history for decision and replay runs
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
@@ -69,6 +69,15 @@ The console now supports local token-based RBAC.
 - authenticate with a bearer token stored in browser session storage
 - protect mutation and audit endpoints with `viewer`, `operator`, `reviewer`, and `admin` roles
 - stamp decision and replay audit history with the authenticated actor when auth is enabled
+
+## Legal library governance
+
+Legal-library documents now carry lifecycle state.
+
+- new documents start as `draft`
+- reviewers can promote documents to `reviewed` or `approved`, or retire them
+- default search grounding for agent context only uses `reviewed` and `approved` documents
+- the seeded example legal corpus is pre-marked as `approved` so the repo still works out of the box
 
 ## Audit history
 

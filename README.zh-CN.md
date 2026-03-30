@@ -8,7 +8,7 @@
 - 基于 token 的访问控制，支持 `viewer`、`operator`、`reviewer`、`admin` 四级角色
 - 可插拔 Ollama 大脑，支持本地与云端模式
 - Pack 校验、决策生成、回放对比、审计追溯快照
-- 法律资料库采集、检索、引用注入链路
+- 法律资料库采集、检索、治理状态流转、引用注入链路
 - 本地持久化审计历史，decision / replay 结果会落盘保存
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
@@ -58,6 +58,15 @@ npm run dev
 - 控制台里可以直接看到最近运行历史和完整明细
 - 重启服务后历史仍然保留，便于 demo、排障、复盘
 - 这还是 MVP 级审计存储，不等于不可篡改的企业级审计底座
+
+## 法律资料治理
+
+法律资料库现在已经带状态治理。
+
+- 新文档默认进入 `draft`
+- reviewer 可以把文档推进到 `reviewed` 或 `approved`
+- 默认 grounding 只会引用 `reviewed/approved` 文档
+- 仓库自带的种子法规已经预设成 `approved`，开箱即用不会失去引用能力
 
 ## OpenClaw 兼容接入
 

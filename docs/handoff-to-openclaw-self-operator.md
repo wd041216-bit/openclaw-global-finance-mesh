@@ -27,7 +27,7 @@ The intended operating mode is:
 - pluggable Ollama brain runtime with `local` and `cloud` modes
 - browser-based operator console
 - local token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
-- legal library ingestion, storage, search, and citation injection
+- legal library ingestion, storage, lifecycle governance, search, and citation injection
 - persisted local audit history for decision and replay runs
 - optional OpenClaw adapter under `integrations/openclaw/`
 
@@ -50,6 +50,7 @@ The intended operating mode is:
 - `/api/replay/run` persists replay outcomes and returns drift summaries
 - `/api/audit/runs` returns saved decision and replay history
 - `/api/access-control` returns auth posture and current session state
+- legal-library search and chat grounding now default to `reviewed` / `approved` source states
 - cloud runtime probe can distinguish:
   - model listing works
   - inference is unauthorized

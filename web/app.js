@@ -13,6 +13,7 @@ const accessConfigForm = document.querySelector("#access-config-form");
 const operatorForm = document.querySelector("#operator-form");
 const chatForm = document.querySelector("#chat-form");
 const searchForm = document.querySelector("#search-form");
+const reviewForm = document.querySelector("#review-form");
 const ingestForm = document.querySelector("#ingest-form");
 
 const modelsOutput = document.querySelector("#models-output");
@@ -148,8 +149,28 @@ searchForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
     const query = new FormData(searchForm).get("query") || "";
-    const result = await api(`/api/legal-library/search?q=${encodeURIComponent(String(query))}`);
+    const includeDrafts = isReviewerSession();
+    const result = await api(
+      `/api/legal-library/search?q=${encodeURIComponent(String(query))}${includeDrafts ? "&includeDrafts=true" : ""}`,
+    );
     renderLibraryResults(result.results || []);
+  } catch (error) {
+    libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+  }
+});
+
+reviewForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = formToObject(reviewForm);
+    await api(`/api/legal-library/documents/${encodeURIComponent(String(payload.documentId || ""))}/status`, {
+      method: "POST",
+      body: JSON.stringify({
+        status: payload.status,
+      }),
+    });
+    reviewForm.reset();
+    await refreshLibrary();
   } catch (error) {
     libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
   }
@@ -333,6 +354,7 @@ function renderAccessControl() {
   bootstrapForm.hidden = !config.bootstrapRequired;
   accessConfigForm.hidden = !(actor && actor.role === "admin");
   operatorForm.hidden = !(actor && actor.role === "admin");
+  reviewForm.hidden = !isReviewerSession();
 
   accessStatus.textContent = JSON.stringify(
     {
@@ -416,8 +438,9 @@ function renderLibraryResults(results) {
             <strong>${escapeHtml(item.document.title)}</strong>
             <span>${escapeHtml(item.document.jurisdiction)}</span>
           </div>
+          <p>${escapeHtml(item.document.status)} | v${escapeHtml(item.document.version)}</p>
           <p>${escapeHtml(item.excerpt || item.document.summary || "")}</p>
-          <small>${escapeHtml(item.document.sourceRef || "")}</small>
+          <small>${escapeHtml(item.document.id)} | ${escapeHtml(item.document.sourceRef || "")}</small>
         </article>
       `,
     )
@@ -521,4 +544,9 @@ function setSessionToken(value) {
     sessionStorage.removeItem("financeMeshSessionToken");
   }
   fillSessionForm();
+}
+
+function isReviewerSession() {
+  const role = state.access?.session?.actor?.role;
+  return role === "reviewer" || role === "admin";
 }

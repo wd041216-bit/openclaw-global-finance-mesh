@@ -193,6 +193,25 @@
           </form>
           <div id="library-results" class="library-list"></div>
           <hr />
+          <form id="review-form" class="stack" hidden>
+            <label>
+              Document ID
+              <input name="documentId" placeholder="Paste a legal-library document id" />
+            </label>
+            <label>
+              Status
+              <select name="status">
+                <option value="draft">Draft</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="approved">Approved</option>
+                <option value="retired">Retired</option>
+              </select>
+            </label>
+            <div class="actions">
+              <button type="submit">Update Status</button>
+            </div>
+          </form>
+          <hr />
           <form id="ingest-form" class="stack">
             <label>
               Title

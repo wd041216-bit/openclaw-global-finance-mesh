@@ -13,6 +13,10 @@ export interface LegalDocument {
   tags: string[];
   summary: string;
   body: string;
+  status: "draft" | "reviewed" | "approved" | "retired";
+  version: number;
+  reviewedBy?: string;
+  reviewedAt?: string;
   updatedAt: string;
 }
 
@@ -38,13 +42,18 @@ export class LegalLibraryStore {
     return payload.documents.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   }
 
-  async search(query: string, topK = 5): Promise<SearchResult[]> {
+  async search(
+    query: string,
+    topK = 5,
+    options?: { statuses?: LegalDocument["status"][] },
+  ): Promise<SearchResult[]> {
     const normalizedQuery = tokenize(query);
     if (normalizedQuery.length === 0) {
       return [];
     }
 
-    const documents = await this.listDocuments();
+    const statusSet = options?.statuses?.length ? new Set(options.statuses) : null;
+    const documents = (await this.listDocuments()).filter((document) => !statusSet || statusSet.has(document.status));
     return documents
       .map((document) => {
         const haystack = `${document.title}\n${document.summary}\n${document.body}\n${document.tags.join(" ")}`;
@@ -63,6 +72,7 @@ export class LegalLibraryStore {
   async createDocument(input: Partial<LegalDocument> & { title: string; body: string }): Promise<LegalDocument> {
     const payload = await this.load();
     const now = new Date().toISOString();
+    const existing = payload.documents.find((item) => item.id === input.id?.trim());
     const document: LegalDocument = {
       id: input.id?.trim() || slugify(`${input.title}-${now}`),
       title: input.title.trim(),
@@ -73,6 +83,10 @@ export class LegalLibraryStore {
       tags: Array.isArray(input.tags) ? input.tags.map(String).filter(Boolean) : [],
       summary: input.summary?.trim() || summarizeBody(input.body),
       body: input.body.trim(),
+      status: normalizeStatus(input.status, existing?.status ?? "draft"),
+      version: existing ? existing.version + 1 : 1,
+      reviewedBy: existing?.reviewedBy,
+      reviewedAt: existing?.reviewedAt,
       updatedAt: now,
     };
 
@@ -80,6 +94,35 @@ export class LegalLibraryStore {
     nextDocuments.push(document);
     await this.save({ documents: nextDocuments });
     return document;
+  }
+
+  async updateStatus(
+    documentId: string,
+    status: LegalDocument["status"],
+    actorName?: string,
+  ): Promise<LegalDocument> {
+    const payload = await this.load();
+    const document = payload.documents.find((item) => item.id === documentId);
+    if (!document) {
+      throw new Error("Legal document not found.");
+    }
+
+    const nextStatus = normalizeStatus(status, document.status);
+    const updatedDocument: LegalDocument = {
+      ...document,
+      status: nextStatus,
+      version: document.version + 1,
+      reviewedBy: nextStatus === "reviewed" || nextStatus === "approved" ? actorName || document.reviewedBy : document.reviewedBy,
+      reviewedAt:
+        nextStatus === "reviewed" || nextStatus === "approved"
+          ? new Date().toISOString()
+          : document.reviewedAt,
+      updatedAt: new Date().toISOString(),
+    };
+
+    payload.documents = payload.documents.map((item) => (item.id === documentId ? updatedDocument : item));
+    await this.save(payload);
+    return updatedDocument;
   }
 
   async ingest(input: {
@@ -123,19 +166,22 @@ export class LegalLibraryStore {
   }
 
   async buildContext(query: string, topK = 4): Promise<{ context: string; citations: Array<Record<string, string>> }> {
-    const matches = await this.search(query, topK);
+    const matches = await this.search(query, topK, {
+      statuses: ["reviewed", "approved"],
+    });
     const citations = matches.map((match) => ({
       id: match.document.id,
       title: match.document.title,
       sourceRef: match.document.sourceRef,
       jurisdiction: match.document.jurisdiction,
+      status: match.document.status,
       excerpt: match.excerpt,
     }));
 
     const context = citations
       .map(
         (citation, index) =>
-          `[Legal Source ${index + 1}] ${citation.title} (${citation.jurisdiction})\nSource: ${citation.sourceRef}\nExcerpt: ${citation.excerpt}`,
+          `[Legal Source ${index + 1}] ${citation.title} (${citation.jurisdiction}, ${citation.status})\nSource: ${citation.sourceRef}\nExcerpt: ${citation.excerpt}`,
       )
       .join("\n\n");
 
@@ -150,7 +196,7 @@ export class LegalLibraryStore {
       const content = await fs.readFile(this.libraryPath, "utf8");
       const payload = JSON.parse(content) as { documents?: LegalDocument[] };
       return {
-        documents: Array.isArray(payload.documents) ? payload.documents : [],
+        documents: Array.isArray(payload.documents) ? payload.documents.map(normalizeDocument) : [],
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -167,6 +213,14 @@ export class LegalLibraryStore {
     await fs.mkdir(path.dirname(this.libraryPath), { recursive: true });
     await fs.writeFile(this.libraryPath, JSON.stringify(payload, null, 2), "utf8");
   }
+}
+
+function normalizeDocument(document: LegalDocument): LegalDocument {
+  return {
+    ...document,
+    status: normalizeStatus(document.status, "draft"),
+    version: typeof document.version === "number" && Number.isFinite(document.version) ? document.version : 1,
+  };
 }
 
 function rankTokens(queryTokens: string[], documentTokens: string[]): number {
@@ -208,6 +262,16 @@ function buildExcerpt(body: string, queryTokens: string[]): string {
 
 function summarizeBody(body: string): string {
   return body.replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function normalizeStatus(
+  value: unknown,
+  fallback: LegalDocument["status"],
+): LegalDocument["status"] {
+  if (value === "reviewed" || value === "approved" || value === "retired") {
+    return value;
+  }
+  return fallback;
 }
 
 function stripHtml(value: string): string {
