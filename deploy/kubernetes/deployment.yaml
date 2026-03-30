@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-mesh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: finance-mesh
+  template:
+    metadata:
+      labels:
+        app: finance-mesh
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/api/metrics"
+        prometheus.io/port: "3030"
+    spec:
+      containers:
+        - name: finance-mesh
+          image: ghcr.io/wd041216-bit/zhouheng-global-finance-mesh:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3030
+              name: http
+          envFrom:
+            - configMapRef:
+                name: finance-mesh-config
+            - secretRef:
+                name: finance-mesh-secrets
+          volumeMounts:
+            - name: finance-mesh-data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /api/operations/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: finance-mesh-data
+          persistentVolumeClaim:
+            claimName: finance-mesh-data

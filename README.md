@@ -1,20 +1,24 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, and a tamper-evident SQLite audit ledger.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a summary-first operator console, and a tamper-evident SQLite audit ledger.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
 ## Console snapshots
 
 <p align="center">
-  <img src="./docs/assets/access-control-session.png" alt="Access Control with OIDC-backed operator session and active-session management" width="31%" />
-  <img src="./docs/assets/audit-integrity.png" alt="Audit Integrity panel with verification status and export history" width="31%" />
-  <img src="./docs/assets/operator-activity.png" alt="Operator Activity timeline showing identity, runtime, and governance actions" width="31%" />
+  <img src="./docs/assets/workbench-enterprise-beta.png" alt="Business workbench with decisions, replay, and summary cards" width="31%" />
+  <img src="./docs/assets/governance-enterprise-beta.png" alt="Governance center with integrity, exports, backups, and timelines" width="31%" />
+  <img src="./docs/assets/system-enterprise-beta.png" alt="System workspace for identity, runtime, and observability" width="31%" />
 </p>
 
 ## What ships in the current baseline
 
-- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, operator activity review, audit integrity, and identity/session administration
+- four-workspace Chinese-first web console for business and governance teams:
+  - `工作台` for decisions, replay, assistant guidance, and system snapshots
+  - `依据库` for legal-source search, review, and ingestion
+  - `治理中心` for integrity, exports, backups, and timelines
+  - `系统设置` for identity, runtime, and observability
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
@@ -22,10 +26,14 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
 - append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
+- local-directory and S3-compatible backup replication for ledger/session snapshots
+- `/api/dashboard/overview`, `/api/operations/health`, and Prometheus-friendly `/api/metrics`
+- structured request logging with request, actor, run, and backup references
 - persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
+- Docker single-instance baseline plus raw Kubernetes manifests for one-replica deployment
 
 ## Architecture
 
@@ -62,6 +70,8 @@ npm run dev
 ```
 
 Then open [http://127.0.0.1:3030](http://127.0.0.1:3030).
+
+The landing experience is now a summary-first workbench intended to stay understandable for non-technical operators. Raw JSON and ids are still there, but they live behind advanced details.
 
 To wire a cloud brain without committing secrets, set environment variables locally:
 
@@ -116,7 +126,8 @@ Every decision, replay, runtime probe, integrity verification, export batch, and
 - the web console shows decision/replay history, probe history, operator activity, and a dedicated audit integrity panel
 - legacy `runs.json` and `activity.json` files are migrated once on first boot if they exist, then kept as backup artifacts instead of active storage
 - the ledger survives restarts, supports whole-chain verification, and can export NDJSON slices with signed manifests
-- this is tamper-evident local storage, not yet immutable off-box enterprise storage
+- the ledger can also be snapshotted and replicated to mounted-directory or S3-compatible targets
+- this is tamper-evident storage with durability support, not yet immutable archival storage
 
 ## Operator activity
 
@@ -133,6 +144,21 @@ Privileged actions are part of the same audit chain.
 - `POST /api/audit/integrity/verify` replays the ledger hash chain and seals the verification result back into the ledger
 - `POST /api/audit/exports` writes an NDJSON slice plus JSON manifest under `data/audit/exports/`
 - reviewers can inspect integrity/export status; admins can trigger verification and new exports
+
+## Backup and observability
+
+- `GET /api/operations/health` provides runtime, ledger, legal-library, and backup-target health in one response
+- `GET /api/metrics` exposes Prometheus text metrics for HTTP traffic, runs, sessions, integrity verification, and backups
+- `POST /api/operations/backups/run` creates a snapshot bundle under `data/backups/` and replicates it to configured targets
+- `FINANCE_MESH_BACKUP_LOCAL_DIR` enables mounted-directory replication
+- `FINANCE_MESH_BACKUP_S3_*` enables S3-compatible object replication
+- `FINANCE_MESH_LOG_FORMAT=json` enables structured logs for containerized or aggregator environments
+
+## Deployment baseline
+
+- `Dockerfile` and `docker-compose.yml` provide a single-instance container baseline
+- `deploy/kubernetes/` contains ConfigMap, Secret example, Deployment, Service, PVC, and Ingress example manifests
+- the deployment posture is intentionally stateful and single-replica; it is a beta baseline, not an HA claim
 
 ## Finance flow
 
@@ -162,20 +188,22 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 
 This repo is intentionally honest about scope.
 
-- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, hybrid OIDC/local identity, cookie sessions with CSRF, SQLite audit ledger, runtime probe history, operator activity logging, integrity verification, export manifests, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
-- not yet included: SCIM or group sync, immutable off-box audit persistence, HA session replication, ERP-side writeback adapters, or full production governance workflows
+- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, hybrid OIDC/local identity, cookie sessions with CSRF, SQLite audit ledger, backup replication, runtime probe history, operator activity logging, integrity verification, export manifests, deployment/observability baseline, pluggable Ollama brain support, web console, and legal-library grounding
+- not yet included: SCIM or group sync, immutable archival audit persistence, HA session replication, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.
 
 ## Docs
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
+- [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 
 ## Contribution surface
 

@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finance-mesh-config
+data:
+  NODE_ENV: "production"
+  FINANCE_MESH_PORT: "3030"
+  OLLAMA_MODE: "local"
+  OLLAMA_MODEL: "qwen3:8b"
+  OLLAMA_BASE_URL: "http://ollama.default.svc.cluster.local:11434"
+  OLLAMA_CLOUD_BASE_URL: "https://ollama.com"
+  FINANCE_MESH_ENVIRONMENT: "beta"
+  FINANCE_MESH_TEAM_SCOPE: "shared-beta"
+  FINANCE_MESH_AUDIT_VERIFY_WARN_HOURS: "24"
+  FINANCE_MESH_ALLOW_LOCAL_TOKENS: "true"
+  FINANCE_MESH_OIDC_SCOPES: "openid profile email"
+  FINANCE_MESH_OIDC_REDIRECT_PATH: "/api/access-control/callback"
+  FINANCE_MESH_LOG_FORMAT: "json"
+  FINANCE_MESH_BACKUP_LOCAL_DIR: "/app/data/offbox"
+  FINANCE_MESH_BACKUP_INTERVAL_MINUTES: "60"
+  FINANCE_MESH_BACKUP_S3_REGION: "auto"
+  FINANCE_MESH_BACKUP_S3_PREFIX: "finance-mesh/beta"
+  FINANCE_MESH_BACKUP_S3_FORCE_PATH_STYLE: "true"

@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+npm-debug.log*
+.DS_Store
+data/backups
+data/runtime/*.json
+data/runtime/*.sqlite
+data/runtime/*.sqlite-shm
+data/runtime/*.sqlite-wal
+data/audit/*.sqlite-shm
+data/audit/*.sqlite-wal

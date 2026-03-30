@@ -15,10 +15,14 @@
 - subject/email identity bindings for OIDC operators
 - persisted operator activity timeline for privileged actions
 - integrity verification and export-manifest workflow
+- local-directory and S3-compatible backup replication with backup job history in the audit chain
+- structured logging plus Prometheus-friendly `/api/metrics`
+- detailed `/api/operations/health` endpoint for runtime, ledger, legal-library, and backup-target status
+- Docker single-instance baseline and Kubernetes raw manifests for a one-replica deployment
 - governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing
 - legal library ingestion and grounding
-- browser-based operator console
+- Chinese-first browser console with business-first workbench, governance center, and system workspace
 
 ## What still needs work before an honest enterprise-ready claim
 
@@ -29,7 +33,6 @@
 - tenant isolation
 - official-source ingestion governance
 - human signoff workflow integration
-- deployment, backup, and observability baselines
 - load and failover testing
 - full connector hardening for ERP, invoicing, and approval systems
 

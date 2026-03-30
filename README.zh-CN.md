@@ -1,10 +1,22 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、以及基于 SQLite 的防篡改审计账本。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、四工作区中文控制台、异地备份能力，以及基于 SQLite 的防篡改审计账本。
+
+## 控制台截图
+
+<p align="center">
+  <img src="./docs/assets/workbench-enterprise-beta.png" alt="工作台：决策、回放与状态摘要" width="31%" />
+  <img src="./docs/assets/governance-enterprise-beta.png" alt="治理中心：审计链、导出、备份与时间线" width="31%" />
+  <img src="./docs/assets/system-enterprise-beta.png" alt="系统设置：身份、运行时与部署观测" width="31%" />
+</p>
 
 ## 已落地内容
 
-- 独立 Web 控制台，覆盖运行时配置、法律资料库、决策执行、回放分析、审计历史、probe 历史、operator activity、audit integrity、身份与 session 管理
+- 四工作区中文控制台，给非技术人员也能直接上手：
+  - `工作台`：运行决策、回放影响、法规问答、系统快照
+  - `依据库`：搜索、治理、资料采集
+  - `治理中心`：审计链、导出、备份、时间线
+  - `系统设置`：身份、运行时、部署与观测
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
 - `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
@@ -12,9 +24,13 @@
 - Pack 校验、决策生成、回放对比、审计追溯快照
 - 法律资料库采集、检索、治理状态流转、引用注入链路
 - 基于 SQLite 的 append-only 审计账本，统一记录 decision / replay / runtime probe / integrity verify / export batch / operator activity
+- 目录复制与 S3-compatible 对象存储两种异地备份目标
+- `/api/dashboard/overview`、`/api/operations/health`、`/api/metrics` 三个聚合 / 观测接口
+- 结构化日志，便于请求、actor、run、backup 的串联排查
 - 持久化 operator activity timeline，记录 RBAC、session、运行时配置、法规治理和执行动作
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
+- Docker 单实例基线与 Kubernetes 原生单副本清单
 
 ## 当前定位
 
@@ -33,6 +49,8 @@ npm run dev
 ```
 
 然后访问 `http://127.0.0.1:3030`。
+
+默认首页现在是摘要优先的 `工作台`。先给业务可读结论和推荐动作，原始 JSON 与底层技术字段都收进了高级详情。
 
 如果走云端模型，可以本地设置：
 
@@ -78,7 +96,7 @@ npm run dev
 - decision、replay、runtime probe、integrity verify、export batch 和 operator activity 全都进入同一条 hash chain
 - 控制台里可以直接看到最近运行历史、完整明细和独立的 integrity 面板
 - 旧的 `data/audit/runs.json` 与 `data/audit/activity.json` 如果存在，会在首次启动时一次性迁移到 SQLite，然后保留为历史备份
-- 这已经是 tamper-evident 的本地审计底座，但还不是异地不可变企业存储
+- 这已经是 tamper-evident 的审计底座，并且支持把快照复制到目录或 S3-compatible 目标，但还不是不可变归档级企业存储
 
 ## Operator Activity
 
@@ -95,6 +113,21 @@ npm run dev
 - admin 可以触发 `POST /api/audit/integrity/verify` 以及 `POST /api/audit/exports`
 - 导出物会落到 `data/audit/exports/`，包含 NDJSON 数据文件和 JSON manifest
 - 运维恢复时可以恢复 `ledger.sqlite`，重新执行 integrity verify，再核对 export manifest hash
+
+## 备份与观测
+
+- `GET /api/operations/health`：面向运维和系统页的详细健康状态
+- `GET /api/metrics`：Prometheus 文本指标
+- `POST /api/operations/backups/run`：手动生成快照并复制到已配置目标
+- `FINANCE_MESH_BACKUP_LOCAL_DIR`：挂载目录复制
+- `FINANCE_MESH_BACKUP_S3_*`：S3-compatible 对象存储复制
+- `FINANCE_MESH_LOG_FORMAT=json`：容器化环境推荐的结构化日志模式
+
+## 部署基线
+
+- `Dockerfile` + `docker-compose.yml`：单实例容器运行基线
+- `deploy/kubernetes/`：ConfigMap、Secret 示例、Deployment、Service、PVC、Ingress 示例
+- 当前明确按“单副本 + 持久卷”的 beta 自托管方式设计，不宣称高可用
 
 ## 法律资料治理
 
@@ -115,11 +148,13 @@ npm run dev
 
 已具备：
 - 大脑接入层
-- Web 操作台
+- 中文 Web 操作台
 - 法律资料库基础管理
 - 可解释决策与回放
 - OIDC-ready 身份绑定、服务端 session、CSRF 与角色边界
 - SQLite 审计账本、integrity verify 和导出链路
+- 目录 / S3-compatible 备份复制
+- Docker / Kubernetes 单实例部署与基础观测
 
 仍需继续补齐：
 - SCIM / 群组映射 / 更强的身份联邦
@@ -130,9 +165,11 @@ npm run dev
 ## 相关文档
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
+- [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)

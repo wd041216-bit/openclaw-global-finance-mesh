@@ -14,6 +14,11 @@
 - added enterprise beta identity sessions with `HttpOnly` cookies, CSRF enforcement, logout, revoke, and active-session inspection
 - added OIDC authorization-code login with subject/email role bindings and break-glass local-token minting
 - updated docs, env examples, and GitHub packaging for the identity/session and audit-ledger baseline
+- rebuilt the console into four Chinese-first workspaces with summary-first UX for non-technical operators
+- added `/api/dashboard/overview`, `/api/operations/health`, and `/api/metrics`
+- added local-directory and S3-compatible backup replication plus scheduled backup support
+- added Docker and Kubernetes single-instance deployment baselines
+- refreshed README screenshots and deployment/operations documentation
 
 ## 0.1.0
 
