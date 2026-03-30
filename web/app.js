@@ -1,6 +1,8 @@
 const state = {
   config: null,
   access: null,
+  authFlash: null,
+  csrfToken: "",
   integrity: null,
   auditRuns: [],
   selectedAuditId: null,
@@ -10,7 +12,7 @@ const state = {
   selectedActivityId: null,
   exportBatches: [],
   selectedExportId: null,
-  sessionToken: sessionStorage.getItem("financeMeshSessionToken") || "",
+  accessSessions: [],
 };
 
 const configForm = document.querySelector("#config-form");
@@ -18,6 +20,7 @@ const sessionForm = document.querySelector("#session-form");
 const bootstrapForm = document.querySelector("#bootstrap-form");
 const accessConfigForm = document.querySelector("#access-config-form");
 const operatorForm = document.querySelector("#operator-form");
+const bindingForm = document.querySelector("#binding-form");
 const exportForm = document.querySelector("#export-form");
 const chatForm = document.querySelector("#chat-form");
 const searchForm = document.querySelector("#search-form");
@@ -30,6 +33,7 @@ const chatOutput = document.querySelector("#chat-output");
 const citationsOutput = document.querySelector("#citations-output");
 const libraryResults = document.querySelector("#library-results");
 const financeOutput = document.querySelector("#finance-output");
+const currentSessionOutput = document.querySelector("#current-session");
 const accessStatus = document.querySelector("#access-status");
 const integrityPanel = document.querySelector("#integrity-panel");
 const integrityStatus = document.querySelector("#integrity-status");
@@ -46,7 +50,10 @@ const probeHistoryDetail = document.querySelector("#probe-history-detail");
 const activityPanel = document.querySelector("#activity-panel");
 const activityList = document.querySelector("#activity-list");
 const activityDetail = document.querySelector("#activity-detail");
+const bindingList = document.querySelector("#binding-list");
+const activeSessionList = document.querySelector("#active-session-list");
 const operatorList = document.querySelector("#operator-list");
+const startOidcLoginButton = document.querySelector("#start-oidc-login");
 
 document.querySelector("#load-models").addEventListener("click", loadModels);
 document.querySelector("#probe-runtime").addEventListener("click", probeRuntime);
@@ -61,11 +68,8 @@ document.querySelector("#refresh-probes").addEventListener("click", refreshProbe
 document.querySelector("#refresh-activity").addEventListener("click", refreshOperatorActivity);
 document.querySelector("#refresh-access").addEventListener("click", refreshAccessControl);
 verifyIntegrityButton.addEventListener("click", verifyAuditIntegrity);
-document.querySelector("#clear-session").addEventListener("click", async () => {
-  setSessionToken("");
-  await refreshAllProtectedViews();
-  await refreshAccessControl();
-});
+startOidcLoginButton.addEventListener("click", startOidcLogin);
+document.querySelector("#clear-session").addEventListener("click", logoutCurrentSession);
 
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -88,10 +92,24 @@ configForm.addEventListener("submit", async (event) => {
 
 sessionForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const payload = formToObject(sessionForm);
-  setSessionToken(String(payload.sessionToken || ""));
-  await refreshAccessControl();
-  await refreshAllProtectedViews();
+  accessStatus.textContent = "Establishing a local server session...";
+  try {
+    const payload = formToObject(sessionForm);
+    const result = await api("/api/access-control/login/token", {
+      method: "POST",
+      body: JSON.stringify({
+        token: payload.sessionToken,
+      }),
+    });
+    sessionForm.reset();
+    state.access = result;
+    adoptSessionState(result.session);
+    renderAccessControl();
+    await refreshAllProtectedViews();
+    await refreshAccessControl();
+  } catch (error) {
+    accessStatus.textContent = String(error.message || error);
+  }
 });
 
 bootstrapForm.addEventListener("submit", async (event) => {
@@ -106,9 +124,9 @@ bootstrapForm.addEventListener("submit", async (event) => {
       enableAuth: Boolean(payload.enableAuth),
     }),
   });
-  setSessionToken(String(payload.token || ""));
   bootstrapForm.reset();
   state.access = result;
+  adoptSessionState(result.session);
   renderAccessControl();
   await refreshAllProtectedViews();
   await refreshAccessControl();
@@ -142,6 +160,29 @@ operatorForm.addEventListener("submit", async (event) => {
   operatorForm.reset();
   await refreshAccessControl();
   await refreshGovernanceTelemetry();
+});
+
+bindingForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const payload = formToObject(bindingForm);
+    await api("/api/access-control/bindings", {
+      method: "POST",
+      body: JSON.stringify({
+        label: payload.label,
+        matchType: payload.matchType,
+        role: payload.role,
+        issuer: payload.issuer,
+        subject: payload.subject,
+        email: payload.email,
+      }),
+    });
+    bindingForm.reset();
+    await refreshAccessControl();
+    await refreshOperatorActivity();
+  } catch (error) {
+    accessStatus.textContent = String(error.message || error);
+  }
 });
 
 exportForm.addEventListener("submit", async (event) => {
@@ -250,7 +291,7 @@ ingestForm.addEventListener("submit", async (event) => {
 boot();
 
 async function boot() {
-  fillSessionForm();
+  consumeAuthFlash();
   await refreshAccessControl();
   await refreshAllProtectedViews();
 }
@@ -610,7 +651,42 @@ async function openOperatorActivity(eventId) {
 async function refreshAccessControl() {
   const result = await api("/api/access-control");
   state.access = result;
+  adoptSessionState(result.session);
+  if (canManageIdentitySessions()) {
+    await refreshAccessSessions();
+  } else {
+    state.accessSessions = [];
+  }
   renderAccessControl();
+}
+
+async function refreshAccessSessions() {
+  try {
+    const result = await api("/api/access-control/sessions?limit=25");
+    state.accessSessions = result.sessions || [];
+  } catch (error) {
+    state.accessSessions = [];
+    activeSessionList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+  }
+}
+
+function startOidcLogin() {
+  window.location.href = "/api/access-control/login?next=%2F";
+}
+
+async function logoutCurrentSession() {
+  try {
+    await api("/api/access-control/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  } catch (_error) {
+    // Clear local auth state even if the server session was already gone.
+  }
+  state.csrfToken = "";
+  state.accessSessions = [];
+  await refreshAccessControl();
+  await refreshAllProtectedViews();
 }
 
 function renderAccessControl() {
@@ -620,13 +696,14 @@ function renderAccessControl() {
     enabled: false,
     bootstrapRequired: true,
     operators: [],
+    bindings: [],
   };
 
-  fillSessionForm();
   fillAccessConfigForm(config);
   bootstrapForm.hidden = !config.bootstrapRequired;
   accessConfigForm.hidden = !(actor && actor.role === "admin");
   operatorForm.hidden = !(actor && actor.role === "admin");
+  bindingForm.hidden = !(actor && actor.role === "admin");
   reviewForm.hidden = !canReviewGovernance();
   integrityPanel.hidden = !canViewAuditIntegrity();
   verifyIntegrityButton.hidden = !canManageAuditIntegrity();
@@ -634,13 +711,21 @@ function renderAccessControl() {
   auditPanel.hidden = !canViewAuditIntegrity();
   probePanel.hidden = !canViewAuditIntegrity();
   activityPanel.hidden = !canViewOperatorActivity();
+  startOidcLoginButton.hidden = !config.oidcConfigured;
+  startOidcLoginButton.disabled = !config.oidcConfigured;
 
   accessStatus.textContent = JSON.stringify(
     {
       enabled: config.enabled,
       bootstrapRequired: config.bootstrapRequired,
+      identityMode: config.identityMode,
+      allowLocalTokens: config.allowLocalTokens,
+      oidcConfigured: config.oidcConfigured,
+      oidcDisplayName: config.oidcDisplayName,
+      flash: state.authFlash,
       authenticated: Boolean(access?.session?.authenticated),
       actor,
+      authMethod: access?.session?.authMethod,
       operators: config.operators.map((item) => ({
         name: item.name,
         role: item.role,
@@ -651,7 +736,21 @@ function renderAccessControl() {
     2,
   );
 
+  currentSessionOutput.textContent = JSON.stringify(
+    {
+      authenticated: Boolean(access?.session?.authenticated),
+      authMethod: access?.session?.authMethod,
+      actor,
+      currentSession: access?.session?.currentSession || null,
+      csrfTokenPresent: Boolean(state.csrfToken),
+    },
+    null,
+    2,
+  );
+
   renderOperatorList(config.operators || []);
+  renderBindings(config.bindings || []);
+  renderAccessSessions();
 }
 
 function renderOperatorList(operators) {
@@ -674,6 +773,93 @@ function renderOperatorList(operators) {
       `,
     )
     .join("");
+}
+
+function renderBindings(bindings) {
+  if (!bindings.length) {
+    bindingList.innerHTML = '<p class="empty-state">OIDC identity bindings will appear here after an admin creates them.</p>';
+    return;
+  }
+
+  bindingList.innerHTML = bindings
+    .map(
+      (item) => `
+        <article class="library-card">
+          <div class="library-head">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(item.role)}</span>
+          </div>
+          <p>${escapeHtml(item.active ? `${item.matchType} binding` : `Inactive ${item.matchType} binding`)}</p>
+          <small>${escapeHtml(formatBindingMeta(item))}</small>
+          ${canManageIdentitySessions() && item.active ? `<div class="actions compact"><button type="button" class="ghost" data-binding-id="${escapeHtml(item.id)}">Deactivate</button></div>` : ""}
+        </article>
+      `,
+    )
+    .join("");
+
+  for (const element of bindingList.querySelectorAll("[data-binding-id]")) {
+    element.addEventListener("click", async () => {
+      try {
+        await api(`/api/access-control/bindings/${encodeURIComponent(element.getAttribute("data-binding-id"))}/deactivate`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        await refreshAccessControl();
+        await refreshOperatorActivity();
+      } catch (error) {
+        accessStatus.textContent = String(error.message || error);
+      }
+    });
+  }
+}
+
+function renderAccessSessions() {
+  if (!canManageIdentitySessions()) {
+    activeSessionList.innerHTML = '<p class="empty-state">Admin access is required to inspect active sessions.</p>';
+    return;
+  }
+
+  if (!state.accessSessions.length) {
+    activeSessionList.innerHTML = '<p class="empty-state">No active sessions are currently recorded.</p>';
+    return;
+  }
+
+  const currentSessionId = state.access?.session?.currentSession?.sessionId || null;
+  activeSessionList.innerHTML = state.accessSessions
+    .map(
+      (item) => `
+        <article class="library-card">
+          <div class="library-head">
+            <strong>${escapeHtml(item.actor?.name || item.actorName || "Session")}</strong>
+            <span>${escapeHtml(item.authMethod)}</span>
+          </div>
+          <p>${escapeHtml(item.actor?.role || item.actorRole || "unknown")} | ${escapeHtml(item.email || item.subject || "local session")}</p>
+          <small>${escapeHtml(formatAccessSessionMeta(item, currentSessionId))}</small>
+          <div class="actions compact">
+            <button type="button" class="ghost" data-session-id="${escapeHtml(item.sessionId)}">Revoke</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+
+  for (const element of activeSessionList.querySelectorAll("[data-session-id]")) {
+    element.addEventListener("click", async () => {
+      try {
+        const result = await api(`/api/access-control/sessions/${encodeURIComponent(element.getAttribute("data-session-id"))}/revoke`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        if (result.currentSessionId && result.currentSessionId === element.getAttribute("data-session-id")) {
+          state.csrfToken = "";
+        }
+        await refreshAccessControl();
+        await refreshOperatorActivity();
+      } catch (error) {
+        accessStatus.textContent = String(error.message || error);
+      }
+    });
+  }
 }
 
 function renderAuditRuns() {
@@ -874,13 +1060,6 @@ function fillConfigForm(config) {
   }
 }
 
-function fillSessionForm() {
-  const field = sessionForm.elements.namedItem("sessionToken");
-  if (field) {
-    field.value = state.sessionToken;
-  }
-}
-
 function fillAccessConfigForm(config) {
   const field = accessConfigForm.elements.namedItem("enabled");
   if (field) {
@@ -889,16 +1068,21 @@ function fillAccessConfigForm(config) {
 }
 
 async function api(url, init = {}) {
+  const method = String(init.method || "GET").toUpperCase();
   const headers = {
     "Content-Type": "application/json",
-    ...(state.sessionToken ? { Authorization: `Bearer ${state.sessionToken}` } : {}),
+    ...(!["GET", "HEAD", "OPTIONS"].includes(method) && state.csrfToken
+      ? { "x-finance-mesh-csrf": state.csrfToken }
+      : {}),
     ...(init.headers || {}),
   };
   const response = await fetch(url, {
+    credentials: "same-origin",
     headers,
     ...init,
   });
   const payload = await response.json();
+  adoptSessionState(payload.session);
   if (!response.ok || payload.ok === false) {
     const error = new Error(payload.error || "Request failed");
     error.status = response.status;
@@ -964,14 +1148,42 @@ function formatExportMeta(item) {
   return `${createdAt} | ${item.environment}/${item.teamScope} | ${item.sequenceFrom || 0}-${item.sequenceTo || 0} | sha ${String(item.dataSha256 || "").slice(0, 12)}`;
 }
 
-function setSessionToken(value) {
-  state.sessionToken = String(value || "").trim();
-  if (state.sessionToken) {
-    sessionStorage.setItem("financeMeshSessionToken", state.sessionToken);
-  } else {
-    sessionStorage.removeItem("financeMeshSessionToken");
+function formatBindingMeta(item) {
+  const createdAt = new Date(item.createdAt).toLocaleString();
+  if (item.matchType === "subject") {
+    return `${createdAt} | ${item.issuer || "issuer"} | ${item.subject || "subject"}`;
   }
-  fillSessionForm();
+  return `${createdAt} | ${item.email || "email binding"}`;
+}
+
+function formatAccessSessionMeta(item, currentSessionId) {
+  const lastSeenAt = new Date(item.lastSeenAt).toLocaleString();
+  const expiresAt = new Date(item.expiresAt).toLocaleString();
+  const current = item.sessionId === currentSessionId ? " | current session" : "";
+  return `${lastSeenAt} | expires ${expiresAt}${current}`;
+}
+
+function adoptSessionState(sessionState) {
+  if (sessionState && typeof sessionState === "object") {
+    state.csrfToken = sessionState.csrfToken || state.csrfToken || "";
+    if (sessionState.authenticated === false) {
+      state.csrfToken = "";
+    }
+  }
+}
+
+function consumeAuthFlash() {
+  const url = new URL(window.location.href);
+  const auth = url.searchParams.get("auth");
+  const authError = url.searchParams.get("authError");
+  if (!auth && !authError) {
+    return;
+  }
+
+  state.authFlash = { auth, authError };
+  url.searchParams.delete("auth");
+  url.searchParams.delete("authError");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function isReviewerSession() {
@@ -981,6 +1193,10 @@ function isReviewerSession() {
 
 function isAdminSession() {
   return state.access?.session?.actor?.role === "admin";
+}
+
+function canManageIdentitySessions() {
+  return !state.access?.config?.enabled || isAdminSession();
 }
 
 function canReviewGovernance() {

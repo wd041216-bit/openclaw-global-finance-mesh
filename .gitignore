@@ -5,6 +5,8 @@ coverage/
 dist/
 data/runtime/*.secrets.json
 data/runtime/*.json
+data/runtime/*.sqlite
+data/runtime/*.sqlite-*
 !data/runtime/.gitkeep
 data/audit/*.json
 data/audit/*.sqlite

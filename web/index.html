@@ -84,16 +84,24 @@
             <h2>Access Control</h2>
             <button id="refresh-access" type="button" class="ghost">Refresh Access</button>
           </div>
-          <form id="session-form" class="stack">
-            <label>
-              Session Token
-              <input name="sessionToken" type="password" placeholder="Paste an admin, reviewer, or operator token" />
-            </label>
-            <div class="actions">
-              <button type="submit">Save Session</button>
-              <button id="clear-session" type="button" class="ghost">Clear Session</button>
+          <div class="stack">
+            <div class="response-block">
+              <h3>Current Session</h3>
+              <pre id="current-session" class="output small"></pre>
             </div>
-          </form>
+
+            <form id="session-form" class="stack">
+              <label>
+                Break-Glass Local Token
+                <input name="sessionToken" type="password" placeholder="Use a local operator token to mint a server session" />
+              </label>
+              <div class="actions">
+                <button type="submit">Login With Local Token</button>
+                <button id="start-oidc-login" type="button" class="ghost">Continue With SSO</button>
+                <button id="clear-session" type="button" class="ghost">Logout</button>
+              </div>
+            </form>
+          </div>
           <pre id="access-status" class="output small"></pre>
 
           <form id="bootstrap-form" class="stack" hidden>
@@ -151,7 +159,61 @@
             </div>
           </form>
 
-          <div id="operator-list" class="library-list"></div>
+          <form id="binding-form" class="stack" hidden>
+            <label>
+              Binding Label
+              <input name="label" placeholder="APAC reviewer SSO binding" />
+            </label>
+            <div class="dual">
+              <label>
+                Match Type
+                <select name="matchType">
+                  <option value="subject">Issuer + Subject</option>
+                  <option value="email">Verified Email</option>
+                </select>
+              </label>
+              <label>
+                Role
+                <select name="role">
+                  <option value="operator">Operator</option>
+                  <option value="reviewer">Reviewer</option>
+                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Issuer
+              <input name="issuer" placeholder="Required for subject bindings" />
+            </label>
+            <label>
+              Subject
+              <input name="subject" placeholder="OIDC subject claim for subject bindings" />
+            </label>
+            <label>
+              Verified Email
+              <input name="email" type="email" placeholder="Used only for email bindings" />
+            </label>
+            <div class="actions">
+              <button type="submit">Create Identity Binding</button>
+            </div>
+          </form>
+
+          <div class="response-block">
+            <h3>Identity Bindings</h3>
+            <div id="binding-list" class="library-list"></div>
+          </div>
+
+          <div class="response-block">
+            <h3>Active Sessions</h3>
+            <div id="active-session-list" class="library-list"></div>
+          </div>
+
+          <div class="response-block">
+            <h3>Local Operators</h3>
+            <div id="operator-list" class="library-list"></div>
+          </div>
+
         </section>
 
         <section class="panel chat-panel">

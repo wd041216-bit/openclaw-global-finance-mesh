@@ -3,10 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { AccessControlStore, isAccessRole } from "./access-control.ts";
+import { AccessControlStore, isAccessRole, isIdentityBindingMatchType } from "./access-control.ts";
 import { OperatorActivityStore } from "./activity-store.ts";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 import { AuditRunStore } from "./audit-store.ts";
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "./auth-session-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
 import { loadFinancePacksFromPaths } from "./fs.ts";
@@ -57,10 +58,14 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/access-control") {
+    const session = await accessControl.getSession(req.headers);
+    if (session.clearSessionCookies) {
+      res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+    }
     sendJson(res, 200, {
       ok: true,
-      config: await accessControl.getPublicConfig(),
-      session: await accessControl.getSession(req.headers),
+      config: await accessControl.getPublicConfig(session.actor),
+      session,
     });
     return;
   }
@@ -72,8 +77,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       token: String(body.token ?? ""),
       enableAuth: body.enableAuth !== false,
     });
-    const config = await accessControl.getPublicConfig();
     const actor = actorFromOperator(operator);
+    const login = await accessControl.loginWithToken(String(body.token ?? ""));
+    res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
+    const config = await accessControl.getPublicConfig(login.actor);
     await operatorActivity.record({
       action: "access.bootstrap_admin",
       actor,
@@ -84,14 +91,169 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
         config,
       },
     });
-    const session = await accessControl.getSession({
-      authorization: `Bearer ${String(body.token ?? "")}`,
-    });
     sendJson(res, 200, {
       ok: true,
       operator,
       config,
-      session,
+      session: {
+        authenticated: true,
+        actor: login.actor,
+        authMethod: login.authMethod,
+        currentSession: login.currentSession,
+        csrfToken: login.csrfToken,
+      },
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/login/token") {
+    const body = await readJsonBody(req);
+    try {
+      const login = await accessControl.loginWithToken(String(body.token ?? ""));
+      res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
+      const config = await accessControl.getPublicConfig(login.actor);
+      await operatorActivity.record({
+        action: "access.login_token",
+        actor: login.actor,
+        subject: login.actor.name,
+        message: `Established a local token session for ${login.actor.name}.`,
+        detail: {
+          authMethod: login.authMethod,
+          role: login.actor.role,
+          sessionId: login.currentSession.sessionId,
+        },
+      });
+      sendJson(res, 200, {
+        ok: true,
+        config,
+        session: {
+          authenticated: true,
+          actor: login.actor,
+          authMethod: login.authMethod,
+          currentSession: login.currentSession,
+          csrfToken: login.csrfToken,
+        },
+      });
+    } catch (error) {
+      await operatorActivity.record({
+        action: "access.login_token",
+        outcome: "failure",
+        actor: null,
+        subject: "local_token",
+        message: "Rejected a local token login attempt.",
+        detail: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      });
+      sendJson(res, 401, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/access-control/login") {
+    try {
+      const redirectTo = sanitizeRedirectTarget(requestUrl.searchParams.get("next"));
+      const login = await accessControl.beginOidcLogin({
+        redirectTo,
+      });
+      redirect(res, login.location);
+    } catch (error) {
+      redirect(res, buildUiRedirect("/", {
+        authError: error instanceof Error ? error.message : String(error),
+      }));
+    }
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/access-control/callback") {
+    const providerError = requestUrl.searchParams.get("error");
+    if (providerError) {
+      await operatorActivity.record({
+        action: "access.login_oidc",
+        outcome: "failure",
+        actor: null,
+        subject: "oidc",
+        message: `OIDC provider returned ${providerError}.`,
+        detail: {
+          error: providerError,
+          description: requestUrl.searchParams.get("error_description"),
+        },
+      });
+      redirect(
+        res,
+        buildUiRedirect("/", {
+          authError: requestUrl.searchParams.get("error_description") || providerError,
+        }),
+      );
+      return;
+    }
+
+    const state = requestUrl.searchParams.get("state") || "";
+    const code = requestUrl.searchParams.get("code") || "";
+    if (!state || !code) {
+      redirect(res, buildUiRedirect("/", { authError: "OIDC callback is missing code or state." }));
+      return;
+    }
+
+    try {
+      const login = await accessControl.completeOidcLogin({ state, code });
+      res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
+      await operatorActivity.record({
+        action: "access.login_oidc",
+        actor: login.actor,
+        subject: login.email ?? login.subject,
+        message: `Established an OIDC session for ${login.actor.name}.`,
+        detail: {
+          issuer: login.issuer,
+          subject: login.subject,
+          email: login.email,
+          sessionId: login.currentSession.sessionId,
+          role: login.actor.role,
+        },
+      });
+      redirect(res, buildUiRedirect(login.redirectTo, { auth: "success" }));
+    } catch (error) {
+      await operatorActivity.record({
+        action: "access.login_oidc",
+        outcome: "failure",
+        actor: null,
+        subject: "oidc",
+        message: "Rejected an OIDC login attempt.",
+        detail: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      });
+      redirect(res, buildUiRedirect("/", { authError: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/logout") {
+    const sessionState = await accessControl.getSession(req.headers);
+    const logout = await accessControl.logout(req.headers);
+    res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+    if (sessionState.actor) {
+      await operatorActivity.record({
+        action: "access.logout",
+        actor: sessionState.actor,
+        subject: sessionState.actor.name,
+        message: `Closed the ${sessionState.authMethod ?? "unknown"} session for ${sessionState.actor.name}.`,
+        detail: {
+          sessionId: logout.session?.sessionId ?? sessionState.currentSession?.sessionId,
+          authMethod: sessionState.authMethod,
+        },
+      });
+    }
+    sendJson(res, 200, {
+      ok: true,
+      session: {
+        authenticated: false,
+        actor: null,
+        currentSession: null,
+      },
     });
     return;
   }
@@ -103,10 +265,11 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     }
 
     const body = await readJsonBody(req);
-    const previousConfig = await accessControl.getPublicConfig();
-    const config = await accessControl.updateConfig({
+    const previousConfig = await accessControl.getPublicConfig(auth.actor);
+    await accessControl.updateConfig({
       enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
     });
+    const config = await accessControl.getPublicConfig(auth.actor);
     await operatorActivity.record({
       action: "access.update_config",
       actor: auth.actor,
@@ -143,7 +306,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       token: String(body.token ?? ""),
       active: body.active !== false,
     });
-    const config = await accessControl.getPublicConfig();
+    const config = await accessControl.getPublicConfig(auth.actor);
     await operatorActivity.record({
       action: "access.create_operator",
       actor: auth.actor,
@@ -159,6 +322,149 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       operator,
       config,
       actor: auth.actor,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/bindings") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    if (!isIdentityBindingMatchType(body.matchType)) {
+      sendJson(res, 400, { ok: false, error: "Invalid identity binding type." });
+      return;
+    }
+    if (!isAccessRole(body.role)) {
+      sendJson(res, 400, { ok: false, error: "Invalid operator role." });
+      return;
+    }
+
+    const binding = await accessControl.createBinding({
+      label: typeof body.label === "string" ? body.label : undefined,
+      matchType: body.matchType,
+      role: body.role,
+      issuer: typeof body.issuer === "string" ? body.issuer : undefined,
+      subject: typeof body.subject === "string" ? body.subject : undefined,
+      email: typeof body.email === "string" ? body.email : undefined,
+    });
+    await operatorActivity.record({
+      action: "access.create_binding",
+      actor: auth.actor,
+      subject: binding.label,
+      message: `Created an ${binding.matchType} identity binding for ${binding.role}.`,
+      detail: {
+        binding,
+      },
+    });
+    sendJson(res, 200, {
+      ok: true,
+      binding,
+      config: await accessControl.getPublicConfig(auth.actor),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname.startsWith("/api/access-control/bindings/") && requestUrl.pathname.endsWith("/deactivate")) {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+
+    const bindingId = requestUrl.pathname
+      .slice("/api/access-control/bindings/".length, -"/deactivate".length)
+      .trim();
+    if (!bindingId) {
+      sendJson(res, 400, { ok: false, error: "binding id is required" });
+      return;
+    }
+
+    const binding = await accessControl.deactivateBinding(bindingId);
+    if (!binding) {
+      sendJson(res, 404, { ok: false, error: "Identity binding not found" });
+      return;
+    }
+
+    await operatorActivity.record({
+      action: "access.deactivate_binding",
+      actor: auth.actor,
+      subject: binding.label,
+      message: `Deactivated identity binding ${binding.label}.`,
+      detail: {
+        binding,
+      },
+    });
+    sendJson(res, 200, {
+      ok: true,
+      binding,
+      config: await accessControl.getPublicConfig(auth.actor),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/access-control/sessions") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const limit = Number(requestUrl.searchParams.get("limit") || 25);
+    const sessions = await accessControl.listSessions(Number.isFinite(limit) ? limit : 25);
+    await operatorActivity.record({
+      action: "access.read_identity_status",
+      actor: auth.actor,
+      subject: "sessions",
+      message: `Reviewed ${sessions.length} active sessions.`,
+      detail: {
+        limit,
+      },
+    });
+    sendJson(res, 200, {
+      ok: true,
+      sessions,
+      currentSessionId: auth.currentSession?.sessionId ?? null,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname.startsWith("/api/access-control/sessions/") && requestUrl.pathname.endsWith("/revoke")) {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+
+    const sessionId = requestUrl.pathname
+      .slice("/api/access-control/sessions/".length, -"/revoke".length)
+      .trim();
+    if (!sessionId) {
+      sendJson(res, 400, { ok: false, error: "session id is required" });
+      return;
+    }
+
+    const revoked = await accessControl.revokeSession(sessionId);
+    if (!revoked) {
+      sendJson(res, 404, { ok: false, error: "Session not found" });
+      return;
+    }
+    if (auth.currentSession?.sessionId === revoked.sessionId) {
+      res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+    }
+    await operatorActivity.record({
+      action: "access.revoke_session",
+      actor: auth.actor,
+      subject: revoked.actor.name,
+      message: `Revoked ${revoked.authMethod} session for ${revoked.actor.name}.`,
+      detail: {
+        sessionId: revoked.sessionId,
+        authMethod: revoked.authMethod,
+        role: revoked.actor.role,
+      },
+    });
+    sendJson(res, 200, {
+      ok: true,
+      revoked,
+      currentSessionId: auth.currentSession?.sessionId ?? null,
     });
     return;
   }
@@ -773,14 +1079,26 @@ async function requireRole(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   role: "viewer" | "operator" | "reviewer" | "admin",
-): Promise<{ actor: import("./access-control.ts").AuthenticatedActor | null } | null> {
-  const auth = await accessControl.authorize(req.headers, role);
+): Promise<{
+  actor: import("./access-control.ts").AuthenticatedActor | null;
+  currentSession: import("./auth-session-store.ts").AuthenticatedSession | null;
+} | null> {
+  const auth = await accessControl.authorize(req.headers, role, {
+    method: req.method,
+  });
   if (!auth.ok) {
+    if (auth.clearSessionCookies) {
+      res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+    }
     sendJson(res, auth.status, { ok: false, error: auth.error });
     return null;
   }
+  if (auth.clearSessionCookies) {
+    res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+  }
   return {
     actor: auth.actor,
+    currentSession: auth.currentSession,
   };
 }
 
@@ -813,6 +1131,67 @@ function buildProbeActivityMessage(
     return `Probe reached ${probe.mode} runtime for ${model}, but inference failed.`;
   }
   return `Probe failed to reach ${probe.mode} runtime for ${model}.`;
+}
+
+function buildAuthCookies(
+  req: http.IncomingMessage,
+  session: import("./auth-session-store.ts").AuthenticatedSession,
+  csrfToken: string,
+): string[] {
+  const secure = shouldUseSecureCookies(req);
+  const expires = new Date(session.absoluteExpiresAt).toUTCString();
+  const shared = `Path=/; SameSite=Lax; Expires=${expires}${secure ? "; Secure" : ""}`;
+  return [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(session.sessionId)}; ${shared}; HttpOnly`,
+    `${CSRF_COOKIE_NAME}=${encodeURIComponent(csrfToken)}; ${shared}`,
+  ];
+}
+
+function buildClearedAuthCookies(req: http.IncomingMessage): string[] {
+  const secure = shouldUseSecureCookies(req);
+  const shared = `Path=/; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`;
+  return [
+    `${SESSION_COOKIE_NAME}=; ${shared}; HttpOnly`,
+    `${CSRF_COOKIE_NAME}=; ${shared}`,
+  ];
+}
+
+function shouldUseSecureCookies(req: http.IncomingMessage): boolean {
+  const env = process.env.FINANCE_MESH_COOKIE_SECURE?.trim();
+  if (env === "true") {
+    return true;
+  }
+  if (env === "false") {
+    return false;
+  }
+  const host = String(req.headers.host || "");
+  return !host.startsWith("127.0.0.1") && !host.startsWith("localhost");
+}
+
+function redirect(res: http.ServerResponse, location: string): void {
+  res.writeHead(302, {
+    Location: location,
+  });
+  res.end();
+}
+
+function buildUiRedirect(basePath: string, params: Record<string, string>): string {
+  const safeBasePath = sanitizeRedirectTarget(basePath);
+  const nextUrl = new URL(safeBasePath, "http://finance-mesh.local");
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      nextUrl.searchParams.set(key, value);
+    }
+  }
+  return `${nextUrl.pathname}${nextUrl.search}`;
+}
+
+function sanitizeRedirectTarget(value: string | null | undefined): string {
+  const normalized = String(value || "").trim();
+  if (!normalized.startsWith("/") || normalized.startsWith("//")) {
+    return "/";
+  }
+  return normalized;
 }
 
 function sendJson(res: http.ServerResponse, statusCode: number, payload: Record<string, unknown>): void {
