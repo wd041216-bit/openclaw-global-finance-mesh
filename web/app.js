@@ -8,12 +8,14 @@ const searchForm = document.querySelector("#search-form");
 const ingestForm = document.querySelector("#ingest-form");
 
 const modelsOutput = document.querySelector("#models-output");
+const probeOutput = document.querySelector("#probe-output");
 const chatOutput = document.querySelector("#chat-output");
 const citationsOutput = document.querySelector("#citations-output");
 const libraryResults = document.querySelector("#library-results");
 const financeOutput = document.querySelector("#finance-output");
 
 document.querySelector("#load-models").addEventListener("click", loadModels);
+document.querySelector("#probe-runtime").addEventListener("click", probeRuntime);
 document.querySelector("#refresh-library").addEventListener("click", refreshLibrary);
 document.querySelector("#run-decision").addEventListener("click", runDecision);
 document.querySelector("#run-replay").addEventListener("click", runReplay);
@@ -92,6 +94,19 @@ async function loadModels() {
     modelsOutput.textContent = JSON.stringify(result.models, null, 2);
   } catch (error) {
     modelsOutput.textContent = String(error.message || error);
+  }
+}
+
+async function probeRuntime() {
+  probeOutput.textContent = "Probing runtime...";
+  try {
+    const result = await api("/api/runtime/probe", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    probeOutput.textContent = JSON.stringify(result, null, 2);
+  } catch (error) {
+    probeOutput.textContent = String(error.message || error);
   }
 }
 
@@ -199,4 +214,3 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
-

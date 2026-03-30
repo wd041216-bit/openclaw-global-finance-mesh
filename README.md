@@ -94,11 +94,13 @@ Minimal runtime integration example:
 The built-in console exposes four operator surfaces:
 
 - `Brain Runtime`: switch between local Ollama and Ollama Cloud, update model routing, and list available models
+- `Brain Runtime`: switch between local Ollama and Ollama Cloud, probe runtime readiness, update model routing, and list available models
 - `Agent Console`: run grounded prompts with legal-library citations injected into the LLM context
 - `Legal Library`: collect, ingest, search, and manage legal or policy source material
 - `Finance Mesh`: trigger example decision and replay flows from the browser
 
 For cloud mode, requests are serialized in-process so a single-concurrency subscription does not get overloaded.
+The runtime probe distinguishes between model-list access and actual inference access, which is useful when a cloud key can enumerate models but is not authorized to run completions.
 
 ## Legal library
 

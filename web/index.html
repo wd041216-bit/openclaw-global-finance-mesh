@@ -30,7 +30,10 @@
         <section class="panel">
           <div class="panel-head">
             <h2>Brain Runtime</h2>
-            <button id="load-models" class="ghost">Refresh Models</button>
+            <div class="actions compact">
+              <button id="probe-runtime" type="button" class="ghost">Probe Runtime</button>
+              <button id="load-models" type="button" class="ghost">Refresh Models</button>
+            </div>
           </div>
           <form id="config-form" class="stack">
             <label>
@@ -72,6 +75,7 @@
               <button type="submit">Save Runtime</button>
             </div>
           </form>
+          <pre id="probe-output" class="output small"></pre>
           <pre id="models-output" class="output small"></pre>
         </section>
 
@@ -166,4 +170,3 @@
     <script type="module" src="/app.js"></script>
   </body>
 </html>
-

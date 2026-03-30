@@ -12,6 +12,16 @@ export interface BrainChatResult {
   raw: Record<string, unknown>;
 }
 
+export interface BrainProbeResult {
+  ok: boolean;
+  mode: BrainRuntimeConfig["mode"];
+  listModelsOk: boolean;
+  inferenceOk: boolean;
+  availableModels: string[];
+  inferencePreview?: string;
+  error?: string;
+}
+
 export class OllamaBrainRuntime {
   private cloudQueue: Promise<unknown> = Promise.resolve();
 
@@ -63,6 +73,46 @@ export class OllamaBrainRuntime {
     return runner();
   }
 
+  async probe(config: BrainRuntimeConfig): Promise<BrainProbeResult> {
+    try {
+      const models = await this.listModels(config);
+      try {
+        const inference = await this.chat(config, [
+          {
+            role: "user",
+            content: "Reply with exactly: cloud ok",
+          },
+        ]);
+        return {
+          ok: true,
+          mode: config.mode,
+          listModelsOk: true,
+          inferenceOk: true,
+          availableModels: models.map((item) => item.name),
+          inferencePreview: inference.content,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          mode: config.mode,
+          listModelsOk: true,
+          inferenceOk: false,
+          availableModels: models.map((item) => item.name),
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        mode: config.mode,
+        listModelsOk: false,
+        inferenceOk: false,
+        availableModels: [],
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   private async requestJson(
     config: BrainRuntimeConfig,
     endpoint: string,
@@ -101,4 +151,3 @@ export class OllamaBrainRuntime {
     return nextTask;
   }
 }
-

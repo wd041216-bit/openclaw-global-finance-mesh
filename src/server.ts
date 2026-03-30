@@ -76,6 +76,13 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     return;
   }
 
+  if (req.method === "POST" && requestUrl.pathname === "/api/runtime/probe") {
+    const config = await runtimeStore.get();
+    const probe = await brain.probe(config);
+    sendJson(res, probe.ok ? 200 : 400, probe);
+    return;
+  }
+
   if (req.method === "POST" && requestUrl.pathname === "/api/chat") {
     const body = await readJsonBody(req);
     const config = await runtimeStore.get();

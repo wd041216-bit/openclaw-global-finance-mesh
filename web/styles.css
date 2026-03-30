@@ -158,6 +158,10 @@ h1 {
   align-items: center;
 }
 
+.actions.compact {
+  gap: 8px;
+}
+
 .search-row input {
   flex: 1;
 }
@@ -288,4 +292,3 @@ hr {
     margin: 12px auto 30px;
   }
 }
-
