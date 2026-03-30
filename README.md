@@ -1,22 +1,31 @@
 # Zhouheng Global Finance Mesh
 
-Standalone finance control plane for Pack validation, deterministic decision packets, replay analysis, legal-library grounding, a tamper-evident SQLite audit ledger, and operator governance telemetry.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, and a tamper-evident SQLite audit ledger.
 
-This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec.
+This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
-## What it ships
+## Console snapshots
 
-- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, operator activity review, and audit integrity checks
-- token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
+<p align="center">
+  <img src="./docs/assets/access-control-session.png" alt="Access Control with OIDC-backed operator session and active-session management" width="31%" />
+  <img src="./docs/assets/audit-integrity.png" alt="Audit Integrity panel with verification status and export history" width="31%" />
+  <img src="./docs/assets/operator-activity.png" alt="Operator Activity timeline showing identity, runtime, and governance actions" width="31%" />
+</p>
+
+## What ships in the current baseline
+
+- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, operator activity review, audit integrity, and identity/session administration
+- service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
+- hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
+- `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
 - pluggable Ollama brain runtime for local and cloud deployments
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
 - append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
-- persisted operator activity timeline for RBAC, runtime, legal-library, and release actions
+- persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
-- optional OpenClaw adapter under `integrations/openclaw/`
-- node:test coverage for validation, decisioning, replay, legal library, and audit storage
+- node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
 
 ## Architecture
 
@@ -65,14 +74,31 @@ npm run dev
 
 The UI also lets you enter the API key at runtime; it is not persisted unless you explicitly opt in.
 
-## Access control
+## Identity and access
 
-The console now supports local token-based RBAC.
+The product now ships with an enterprise beta identity baseline.
 
 - bootstrap the first admin in the Access Control panel or with `FINANCE_MESH_BOOTSTRAP_ADMIN_*` env vars
-- authenticate with a bearer token stored in browser session storage
-- protect mutation and audit endpoints with `viewer`, `operator`, `reviewer`, and `admin` roles
-- stamp decision and replay audit history with the authenticated actor when auth is enabled
+- use a break-glass local token to mint a server session when `FINANCE_MESH_ALLOW_LOCAL_TOKENS=true`
+- enable OIDC with `FINANCE_MESH_BASE_URL`, `FINANCE_MESH_OIDC_ISSUER`, `FINANCE_MESH_OIDC_CLIENT_ID`, and `FINANCE_MESH_OIDC_CLIENT_SECRET`
+- bind OIDC users to platform roles with exact `issuer + subject` or verified-email matching
+- protect cookie-authenticated writes with `x-finance-mesh-csrf`
+- inspect and revoke active sessions from the Access Control panel or `/api/access-control/sessions`
+
+Minimal OIDC setup looks like this:
+
+```bash
+export FINANCE_MESH_AUTH_ENABLED=true
+export FINANCE_MESH_BASE_URL=https://finance-mesh.example.com
+export FINANCE_MESH_OIDC_ISSUER=https://id.example.com
+export FINANCE_MESH_OIDC_CLIENT_ID=finance-mesh-console
+export FINANCE_MESH_OIDC_CLIENT_SECRET=replace_me
+export FINANCE_MESH_OIDC_SCOPES="openid profile email"
+export FINANCE_MESH_ALLOW_LOCAL_TOKENS=true
+npm run dev
+```
+
+See [docs/identity-operations.md](./docs/identity-operations.md) for full bootstrap, OIDC, session-revoke, and CSRF troubleshooting steps.
 
 ## Legal library governance
 
@@ -136,18 +162,20 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 
 This repo is intentionally honest about scope.
 
-- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, SQLite audit ledger, runtime probe history, operator activity logging, integrity verification, export manifests, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
-- not yet included: SSO, immutable off-box audit persistence, ERP-side writeback adapters, or full production governance workflows
+- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, hybrid OIDC/local identity, cookie sessions with CSRF, SQLite audit ledger, runtime probe history, operator activity logging, integrity verification, export manifests, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
+- not yet included: SCIM or group sync, immutable off-box audit persistence, HA session replication, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.
 
 ## Docs
 
+- [docs/identity-operations.md](./docs/identity-operations.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
 - [docs/audit-operations.md](./docs/audit-operations.md)
+- [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 
 ## Contribution surface
 
