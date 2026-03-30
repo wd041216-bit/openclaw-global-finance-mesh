@@ -16,7 +16,7 @@ The intended operating mode is:
 
 - Repo: [zhouheng-global-finance-mesh](https://github.com/wd041216-bit/zhouheng-global-finance-mesh)
 - Default branch: `main`
-- Current published baseline date: March 30, 2026
+- Current published baseline date: March 31, 2026
 
 ## What exists right now
 
@@ -26,9 +26,9 @@ The intended operating mode is:
 - Pack validation, deterministic Decision Packet generation, replay analysis, evidence graph snapshotting
 - pluggable Ollama brain runtime with `local` and `cloud` modes
 - browser-based operator console
-- local token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
+- hybrid identity and session control with break-glass local tokens, OIDC login, active-session revoke, and `viewer`/`operator`/`reviewer`/`admin` roles
 - legal library ingestion, storage, lifecycle governance, search, and citation injection
-- persisted local audit history for decision and replay runs
+- persisted SQLite audit ledger for decision, replay, runtime probe, integrity, export, and operator activity events
 - optional OpenClaw adapter under `integrations/openclaw/`
 
 ### Entry points
@@ -50,6 +50,8 @@ The intended operating mode is:
 - `/api/replay/run` persists replay outcomes and returns drift summaries
 - `/api/audit/runs` returns saved decision and replay history
 - `/api/access-control` returns auth posture and current session state
+- `/api/access-control/login/token`, `/api/access-control/login`, and `/api/access-control/callback` drive local-session and OIDC login flows
+- `/api/access-control/sessions` and binding endpoints allow admin review and revoke actions
 - legal-library search and chat grounding now default to `reviewed` / `approved` source states
 - cloud runtime probe can distinguish:
   - model listing works
@@ -99,7 +101,7 @@ Do not describe cloud inference as operational until the runtime probe shows bot
 - deterministic finance Decision Packet output
 - replay-before-publish capability
 - visible legal-source grounding path
-- persisted local audit history with actor attribution when auth is enabled
+- persisted SQLite audit history with actor attribution and chain metadata
 - honest enterprise-readiness messaging
 - no committed secrets
 
@@ -119,16 +121,16 @@ Make cloud inference truly usable.
 
 - confirm required Ollama Cloud inference entitlement or scope
 - support any required OpenAI-compatible endpoint variant if different from current implementation
-- store probe history for operator debugging
+- keep probe history and activity views operational for operator debugging
 
 ### Priority 2
 
-Add stronger enterprise control surfaces.
+Push the identity and audit baseline past beta.
 
-- auth and role boundaries
-- operator action attribution
+- off-box audit replication and backup automation
+- OIDC group mapping or SCIM-compatible identity lifecycle
 - per-environment runtime config separation
-- retention policies for persisted audit runs
+- HA or documented restore posture for auth sessions
 
 ### Priority 3
 

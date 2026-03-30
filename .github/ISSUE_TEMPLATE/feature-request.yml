@@ -1,0 +1,39 @@
+name: Feature request
+description: Propose a new enterprise workflow, connector, or operator experience improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Explain the operator or governance problem this feature should address.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe what success looks like in the product.
+    validations:
+      required: true
+  - type: dropdown
+    id: workstream
+    attributes:
+      label: Workstream
+      options:
+        - Identity and access
+        - Audit and integrity
+        - Legal library
+        - Runtime and models
+        - Decisioning and replay
+        - Connectors and execution
+        - GitHub and docs
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Extra context
+      description: Add sketches, constraints, linked issues, or implementation notes.

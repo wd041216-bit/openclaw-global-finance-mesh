@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Identity and audit operations guide
+    url: https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/docs/identity-operations.md
+    about: Check the current OIDC, session, revoke, and CSRF guide before opening an auth issue.
+  - name: Audit ledger operations guide
+    url: https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/docs/audit-operations.md
+    about: Check the restore, integrity verification, and export workflow guide before opening an audit issue.

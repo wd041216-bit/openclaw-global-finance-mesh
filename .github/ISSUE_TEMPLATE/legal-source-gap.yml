@@ -1,0 +1,40 @@
+name: Legal source or governance gap
+description: Request a legal-library source addition, governance workflow improvement, or citation fix.
+title: "[Legal source gap]: "
+labels:
+  - documentation
+  - legal-library
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when a legal source is missing, outdated, or governed incorrectly.
+  - type: input
+    id: jurisdiction
+    attributes:
+      label: Jurisdiction or domain
+      placeholder: Singapore GST / EU VAT / US ASC 606
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: What is missing or incorrect?
+      description: Describe the gap in the library or governance state.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Official or candidate source
+      description: Add links, references, or identifiers for the source material.
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      options:
+        - Nice to have
+        - Needed for beta evaluation
+        - Blocking a real workflow
+    validations:
+      required: true

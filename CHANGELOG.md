@@ -11,6 +11,9 @@
 - added operator activity logging for RBAC, runtime, legal-library, decision, and replay actions
 - replaced JSON audit persistence with a tamper-evident SQLite ledger and one-time legacy migration
 - added integrity verification and NDJSON export manifests for the audit chain
+- added enterprise beta identity sessions with `HttpOnly` cookies, CSRF enforcement, logout, revoke, and active-session inspection
+- added OIDC authorization-code login with subject/email role bindings and break-glass local-token minting
+- updated docs, env examples, and GitHub packaging for the identity/session and audit-ledger baseline
 
 ## 0.1.0
 

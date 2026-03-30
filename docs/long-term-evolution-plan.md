@@ -21,13 +21,14 @@ Build a finance-and-legal operating system that behaves like a standalone produc
 - local/cloud Ollama runtime abstraction
 - web console
 - legal library foundation
-- token-based RBAC
+- hybrid identity baseline with OIDC-ready session management
 - SQLite audit ledger with integrity verify and export manifests
 
 ### Not yet enterprise-complete
 
 - immutable off-box audit persistence
 - environment separation and deployment hardening
+- production identity federation completeness such as SCIM, group sync, and IdP lifecycle automation
 - official-source governance workflow
 - connector-grade ERP and approval integrations
 - production observability and incident playbooks
@@ -67,6 +68,7 @@ Required outcomes:
 - source provenance visible on all grounded responses
 - pack publishing gates include validation and replay
 - tamper-evident verification on the local audit ledger
+- service-side sessions and logout/revoke workflow
 
 Exit criteria:
 
@@ -87,6 +89,7 @@ Required outcomes:
 - environment-specific config separation
 - observability covering runtime errors, replay drift, library ingestion, and model failures
 - deployment guide for repeatable rollout
+- off-box backup automation for the audit ledger and session restore posture
 
 Exit criteria:
 
@@ -102,7 +105,7 @@ Reach a level where calling the product enterprise-ready is honest.
 
 Required outcomes:
 
-- SSO and RBAC
+- production-grade identity federation beyond the current beta baseline
 - tamper-evident or immutable audit storage
 - secret handling and encryption posture
 - tenancy or environment isolation strategy
@@ -170,10 +173,9 @@ Protect data, actions, and operators.
 
 Backlog:
 
-- auth middleware
-- RBAC model
-- session management
-- audit persistence
+- group or SCIM-based identity lifecycle
+- multi-IdP or environment-aware identity configuration
+- HA session storage
 - off-box ledger replication
 - secrets segregation
 - environment separation
@@ -219,6 +221,7 @@ Backlog:
 - release notes cadence
 - issue templates for runtime, legal library, and connector requests
 - project board or milestone labeling discipline
+- tighter GitHub metadata around enterprise beta identity and audit posture
 
 ## Working model for future Codex threads
 

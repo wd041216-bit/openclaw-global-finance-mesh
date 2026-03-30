@@ -13,6 +13,8 @@
 - `FINANCE_MESH_AUDIT_EXPORT_DIR`: export output directory. Default `data/audit/exports`.
 - `FINANCE_MESH_AUDIT_VERIFY_WARN_HOURS`: how long an integrity verification can age before the API marks it stale. Default `24`.
 
+Audit APIs are normally exercised from an authenticated reviewer/admin browser session or an admin break-glass token that mints a session first. See [identity-operations.md](./identity-operations.md) for login and CSRF details.
+
 ## Verification workflow
 
 1. Trigger `POST /api/audit/integrity/verify` as an admin.
@@ -37,3 +39,4 @@
 - The ledger is append-only from the application perspective. There is no purge path in the current product.
 - Integrity verification and export batches are themselves written back into the ledger, so verification and backup operations are auditable events.
 - The current design is tamper-evident on a single-node SQLite deployment. It is not a substitute for immutable external archival storage.
+- If a restored environment also restores browser sessions, revoke old sessions and run an integrity verification before reopening operator access.

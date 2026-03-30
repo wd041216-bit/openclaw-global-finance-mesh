@@ -1,0 +1,56 @@
+name: Runtime bug
+description: Report a runtime, session, replay, or audit-ledger bug.
+title: "[Runtime bug]: "
+labels:
+  - bug
+  - runtime
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please include enough detail for us to reproduce the behavior in the control plane, runtime probe, audit ledger, or identity/session flow.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and the expected behavior.
+      placeholder: The runtime probe succeeded, but the replay run returned a 500 after login.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Runtime probe
+        - Decision run
+        - Replay run
+        - Audit ledger / integrity
+        - Identity / session / OIDC
+        - Legal library
+        - Web console
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: List the exact steps or API calls that reproduce the bug.
+      placeholder: |
+        1. Start the server with FINANCE_MESH_AUTH_ENABLED=true
+        2. Log in with a local token
+        3. Open Audit Integrity
+        4. Click Verify
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Share relevant environment variables, runtime mode, and deployment context without secrets.
+      placeholder: local / cloud mode, OIDC enabled, browser, Node version
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or payload snippets
+      description: Paste sanitized logs or add screenshots if helpful.

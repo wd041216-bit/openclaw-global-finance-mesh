@@ -4,7 +4,7 @@
 
 Lead with one sentence:
 
-Zhouheng Global Finance Mesh turns finance events into auditable, replayable, Pack-driven decision packets instead of chat-style guesses.
+Zhouheng Global Finance Mesh turns finance events into auditable, replayable, Pack-driven decision packets with enterprise beta identity controls instead of chat-style guesses.
 
 ## Launch assets
 
@@ -12,12 +12,12 @@ Zhouheng Global Finance Mesh turns finance events into auditable, replayable, Pa
 - Chinese README for the current operating audience
 - standalone-control-plane ADR to explain the first-cut shape
 - example Packs and tests so the repo feels real on first open
-- screenshots or GIFs of the audit history view in the console
+- screenshots or GIFs of Access Control, Audit Integrity, and Operator Activity in the console
 
 ## First promotion moves
 
-1. Create a crisp repo description and tags around finance control plane, audit trail, rule engine, legal library, and replay analysis.
-2. Publish a short demo GIF or terminal capture of validation, decision run, replay, and audit history refresh.
+1. Create a crisp repo description and tags around finance control plane, audit ledger, rule engine, legal library, OIDC, and replay analysis.
+2. Publish a short demo GIF or screenshot set of login, decision run, integrity verify, and operator activity refresh.
 3. Pin the repo if it becomes one of the lead finance governance products in the portfolio.
 4. Cross-link it from related finance, compliance, and agent-infra repos.
 
@@ -28,3 +28,4 @@ Zhouheng Global Finance Mesh turns finance events into auditable, replayable, Pa
 - explainable outputs
 - replay before publish
 - audit history by default
+- operator identity and governance visible by default
