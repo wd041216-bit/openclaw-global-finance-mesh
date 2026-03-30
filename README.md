@@ -1,17 +1,18 @@
 # Zhouheng Global Finance Mesh
 
-Standalone finance control plane for Pack validation, deterministic decision packets, replay analysis, legal-library grounding, and persistent audit history.
+Standalone finance control plane for Pack validation, deterministic decision packets, replay analysis, legal-library grounding, persistent audit history, and operator governance telemetry.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec.
 
 ## What it ships
 
-- standalone web console for runtime control, legal-library operations, decisions, replays, and audit history
+- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, and operator activity review
 - token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
 - pluggable Ollama brain runtime for local and cloud deployments
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
-- persistent local audit history for decision and replay runs
+- persistent local audit history for decision, replay, and runtime probe runs
+- persisted operator activity timeline for RBAC, runtime, legal-library, and release actions
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
 - optional OpenClaw adapter under `integrations/openclaw/`
@@ -29,11 +30,12 @@ See [ADR-001](./docs/ADR-001-standalone-control-plane.md) for the decision recor
 
 ## Repository layout
 
-- `src/`: engine, validation, replay, audit-store, and runtime implementations
+- `src/`: engine, validation, replay, audit-store, activity-store, and runtime implementations
 - `src/server.ts`: browser-accessible control plane
 - `web/`: single-page operator console
 - `data/legal-library/library.json`: starter legal library corpus
-- `data/audit/runs.json`: persisted decision and replay history
+- `data/audit/runs.json`: persisted decision, replay, and probe history
+- `data/audit/activity.json`: persisted operator activity timeline
 - `examples/packs/`: example Pack files
 - `examples/events/`: example event payloads
 - `integrations/openclaw/`: optional OpenClaw adapter, manifest, and bundled skill
@@ -81,11 +83,19 @@ Legal-library documents now carry lifecycle state.
 
 ## Audit history
 
-Every example decision and replay run is persisted to `data/audit/runs.json`.
+Every decision, replay, and runtime probe run is persisted to `data/audit/runs.json`.
 
 - the web console shows the most recent runs and the full stored payload for each run
 - the history survives restarts, so demos and debugging sessions remain inspectable
 - this is a practical MVP audit trail, not yet immutable enterprise-grade storage
+
+## Operator activity
+
+Privileged actions are also written to `data/audit/activity.json`.
+
+- bootstrap admin, access-policy changes, operator issuance, runtime updates, legal-library governance actions, probe runs, decisions, and replays all generate activity events
+- the web console exposes a separate operator activity panel so admins can inspect governance actions without digging through raw files
+- activity events are actor-stamped when auth is enabled and still persist in auth-disabled local development mode
 
 ## Finance flow
 
@@ -115,7 +125,7 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 
 This repo is intentionally honest about scope.
 
-- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, audit history, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
+- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, audit history, runtime probe history, operator activity logging, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
 - not yet included: SSO, immutable audit persistence, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.

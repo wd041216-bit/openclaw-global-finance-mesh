@@ -5,8 +5,10 @@
 - deterministic Pack validation
 - auditable Decision Packet generation
 - replay-before-publish capability
+- persisted runtime probe history
 - evidence graph snapshots
 - local token-based RBAC with role-gated privileged endpoints
+- persisted operator activity timeline for privileged actions
 - governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing
 - legal library ingestion and grounding
@@ -30,6 +32,7 @@ The product should only be called enterprise-ready when:
 
 1. privileged actions are access-controlled and attributable
 2. audit records survive service restarts and review
-3. legal source provenance is reviewable
-4. replay gates are part of release workflow
-5. integration failures have recovery paths
+3. runtime health probes and governance actions are historically reviewable
+4. legal source provenance is reviewable
+5. replay gates are part of release workflow
+6. integration failures have recovery paths

@@ -4,15 +4,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AuthenticatedActor } from "./access-control.ts";
+import type { BrainProbeResult } from "./brain.ts";
+import type { BrainMode, BrainRuntimeConfig } from "./runtime-config.ts";
 import type { DecisionRunResult, EventPayload, Mode, ReplayRunResult, RiskLevel } from "./types.ts";
 
-export type AuditRunType = "decision" | "replay";
+export type AuditRunType = "decision" | "replay" | "probe";
+export type AuditRunMode = Mode | BrainMode;
 
 export interface AuditRunSummary {
   id: string;
   type: AuditRunType;
   createdAt: string;
-  mode: Mode;
+  mode: AuditRunMode;
   label: string;
   packPaths: string[];
   eventIds: string[];
@@ -25,6 +28,11 @@ export interface AuditRunSummary {
   actorId?: string;
   actorName?: string;
   actorRole?: string;
+  probeOk?: boolean;
+  listModelsOk?: boolean;
+  inferenceOk?: boolean;
+  availableModelCount?: number;
+  model?: string;
 }
 
 export interface AuditRunRecord extends AuditRunSummary {
@@ -42,9 +50,11 @@ export class AuditRunStore {
     this.auditPath = auditPath;
   }
 
-  async list(limit = 12): Promise<AuditRunSummary[]> {
+  async list(limit = 12, options?: { types?: AuditRunType[] }): Promise<AuditRunSummary[]> {
     const payload = await this.load();
+    const typeSet = options?.types?.length ? new Set(options.types) : null;
     return payload.runs
+      .filter((item) => !typeSet || typeSet.has(item.type))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, Math.max(1, limit))
       .map(({ detail: _detail, ...summary }) => summary);
@@ -126,6 +136,39 @@ export class AuditRunStore {
     return toSummary(record);
   }
 
+  async recordProbe(input: {
+    config: Pick<BrainRuntimeConfig, "mode" | "model" | "localBaseUrl" | "cloudBaseUrl"> & { hasApiKey: boolean };
+    probe: BrainProbeResult;
+    actor: AuthenticatedActor | null;
+  }): Promise<AuditRunSummary> {
+    const createdAt = new Date().toISOString();
+    const record: AuditRunRecord = {
+      id: crypto.randomUUID(),
+      type: "probe",
+      createdAt,
+      mode: input.probe.mode,
+      label: buildProbeLabel(input.probe, input.config.model),
+      packPaths: [],
+      eventIds: [],
+      actorId: input.actor?.id,
+      actorName: input.actor?.name,
+      actorRole: input.actor?.role,
+      probeOk: input.probe.ok,
+      listModelsOk: input.probe.listModelsOk,
+      inferenceOk: input.probe.inferenceOk,
+      availableModelCount: input.probe.availableModels.length,
+      model: input.config.model,
+      detail: {
+        actor: input.actor,
+        config: input.config,
+        probe: input.probe,
+      },
+    };
+
+    await this.append(record);
+    return toSummary(record);
+  }
+
   private async append(record: AuditRunRecord): Promise<void> {
     const payload = await this.load();
     payload.runs.push(record);
@@ -167,6 +210,11 @@ function buildDecisionLabel(event: EventPayload, result: DecisionRunResult): str
 
 function buildReplayLabel(replay: ReplayRunResult): string {
   return `${replay.changed_events}/${replay.compared_events} events changed`;
+}
+
+function buildProbeLabel(probe: BrainProbeResult, model: string): string {
+  const health = probe.ok ? "healthy" : "degraded";
+  return `${probe.mode} ${model} probe ${health}`;
 }
 
 function uniqueStrings(values: string[]): string[] {

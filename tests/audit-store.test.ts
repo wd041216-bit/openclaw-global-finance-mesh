@@ -116,13 +116,51 @@ test("audit store persists decision and replay runs and returns newest-first sum
     events: [event],
     replay,
   });
+  const probeSummary = await store.recordProbe({
+    config: {
+      mode: "local",
+      model: "qwen3:8b",
+      localBaseUrl: "http://127.0.0.1:11434",
+      cloudBaseUrl: "https://ollama.com",
+      hasApiKey: false,
+    },
+    probe: {
+      ok: true,
+      mode: "local",
+      listModelsOk: true,
+      inferenceOk: true,
+      availableModels: ["qwen3:8b", "llama3.2"],
+      inferencePreview: "cloud ok",
+    },
+    actor: {
+      id: "operator-1",
+      name: "Olivia Operator",
+      role: "operator",
+    },
+  });
 
   const summaries = await store.list(10);
+  const decisionAndReplay = await store.list(10, {
+    types: ["decision", "replay"],
+  });
+  const probes = await store.list(10, {
+    types: ["probe"],
+  });
   const replayRecord = await store.get(replaySummary.id);
+  const probeRecord = await store.get(probeSummary.id);
 
-  assert.equal(summaries.length, 2);
-  assert.equal(summaries[0]?.id, replaySummary.id);
-  assert.equal(summaries[1]?.id, decisionSummary.id);
+  assert.equal(summaries.length, 3);
+  assert.equal(summaries[0]?.id, probeSummary.id);
+  assert.equal(summaries[1]?.id, replaySummary.id);
+  assert.equal(summaries[2]?.id, decisionSummary.id);
+  assert.deepEqual(
+    decisionAndReplay.map((item) => item.type),
+    ["replay", "decision"],
+  );
+  assert.deepEqual(
+    probes.map((item) => item.type),
+    ["probe"],
+  );
   assert.equal(decisionSummary.decisionPacketId, decision.decisionPacket.decision_packet_id);
   assert.equal(replaySummary.changedEvents, 1);
   assert.equal(replayRecord?.type, "replay");
@@ -131,4 +169,8 @@ test("audit store persists decision and replay runs and returns newest-first sum
     (replayRecord?.detail.replay as { changed_events?: number } | undefined)?.changed_events,
     1,
   );
+  assert.equal(probeRecord?.type, "probe");
+  assert.equal(probeRecord?.probeOk, true);
+  assert.equal(probeRecord?.availableModelCount, 2);
+  assert.equal((probeRecord?.detail.config as { model?: string } | undefined)?.model, "qwen3:8b");
 });

@@ -21,7 +21,7 @@
           <span class="status-dot"></span>
           <div>
             <strong>Operator-ready baseline</strong>
-            <p>Local Ollama or Ollama Cloud, plus persisted audit history for every decision and replay run.</p>
+            <p>Local Ollama or Ollama Cloud, plus persisted audit, probe, and operator activity history.</p>
           </div>
         </div>
       </header>
@@ -259,14 +259,36 @@
           <pre id="finance-output" class="output"></pre>
         </section>
 
-        <section class="panel span-2">
+        <section id="audit-panel" class="panel span-2">
           <div class="panel-head">
-            <h2>Audit History</h2>
+            <h2>Decision Audit History</h2>
             <button id="refresh-audit" class="ghost">Refresh History</button>
           </div>
           <div class="audit-layout">
             <div id="audit-list" class="audit-list"></div>
             <pre id="audit-detail" class="output"></pre>
+          </div>
+        </section>
+
+        <section id="probe-panel" class="panel">
+          <div class="panel-head">
+            <h2>Probe History</h2>
+            <button id="refresh-probes" class="ghost">Refresh Probes</button>
+          </div>
+          <div class="audit-layout split-layout">
+            <div id="probe-history-list" class="audit-list"></div>
+            <pre id="probe-history-detail" class="output"></pre>
+          </div>
+        </section>
+
+        <section id="activity-panel" class="panel">
+          <div class="panel-head">
+            <h2>Operator Activity</h2>
+            <button id="refresh-activity" class="ghost">Refresh Activity</button>
+          </div>
+          <div class="audit-layout split-layout">
+            <div id="activity-list" class="audit-list"></div>
+            <pre id="activity-detail" class="output"></pre>
           </div>
         </section>
       </main>

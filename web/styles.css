@@ -272,6 +272,10 @@ button.ghost {
   gap: 16px;
 }
 
+.split-layout {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+}
+
 .audit-item {
   display: grid;
   gap: 8px;

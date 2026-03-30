@@ -3,6 +3,10 @@ const state = {
   access: null,
   auditRuns: [],
   selectedAuditId: null,
+  probeRuns: [],
+  selectedProbeId: null,
+  activityEvents: [],
+  selectedActivityId: null,
   sessionToken: sessionStorage.getItem("financeMeshSessionToken") || "",
 };
 
@@ -23,8 +27,15 @@ const citationsOutput = document.querySelector("#citations-output");
 const libraryResults = document.querySelector("#library-results");
 const financeOutput = document.querySelector("#finance-output");
 const accessStatus = document.querySelector("#access-status");
+const auditPanel = document.querySelector("#audit-panel");
 const auditList = document.querySelector("#audit-list");
 const auditDetail = document.querySelector("#audit-detail");
+const probePanel = document.querySelector("#probe-panel");
+const probeHistoryList = document.querySelector("#probe-history-list");
+const probeHistoryDetail = document.querySelector("#probe-history-detail");
+const activityPanel = document.querySelector("#activity-panel");
+const activityList = document.querySelector("#activity-list");
+const activityDetail = document.querySelector("#activity-detail");
 const operatorList = document.querySelector("#operator-list");
 
 document.querySelector("#load-models").addEventListener("click", loadModels);
@@ -33,6 +44,8 @@ document.querySelector("#refresh-library").addEventListener("click", refreshLibr
 document.querySelector("#run-decision").addEventListener("click", runDecision);
 document.querySelector("#run-replay").addEventListener("click", runReplay);
 document.querySelector("#refresh-audit").addEventListener("click", refreshAuditHistory);
+document.querySelector("#refresh-probes").addEventListener("click", refreshProbeHistory);
+document.querySelector("#refresh-activity").addEventListener("click", refreshOperatorActivity);
 document.querySelector("#refresh-access").addEventListener("click", refreshAccessControl);
 document.querySelector("#clear-session").addEventListener("click", async () => {
   setSessionToken("");
@@ -53,6 +66,7 @@ configForm.addEventListener("submit", async (event) => {
     state.config = result.config;
     fillConfigForm(result.config);
     probeOutput.textContent = "Runtime configuration saved.";
+    await refreshOperatorActivity();
   } catch (error) {
     probeOutput.textContent = String(error.message || error);
   }
@@ -113,6 +127,7 @@ operatorForm.addEventListener("submit", async (event) => {
   });
   operatorForm.reset();
   await refreshAccessControl();
+  await refreshOperatorActivity();
 });
 
 chatForm.addEventListener("submit", async (event) => {
@@ -171,6 +186,7 @@ reviewForm.addEventListener("submit", async (event) => {
     });
     reviewForm.reset();
     await refreshLibrary();
+    await refreshOperatorActivity();
   } catch (error) {
     libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
   }
@@ -187,6 +203,7 @@ ingestForm.addEventListener("submit", async (event) => {
     });
     ingestForm.reset();
     await refreshLibrary();
+    await refreshOperatorActivity();
   } catch (error) {
     libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
   }
@@ -201,7 +218,13 @@ async function boot() {
 }
 
 async function refreshAllProtectedViews() {
-  await Promise.all([refreshRuntimeConfig(), refreshLibrary(), refreshAuditHistory()]);
+  await Promise.all([
+    refreshRuntimeConfig(),
+    refreshLibrary(),
+    refreshAuditHistory(),
+    refreshProbeHistory(),
+    refreshOperatorActivity(),
+  ]);
 }
 
 async function refreshRuntimeConfig() {
@@ -234,7 +257,16 @@ async function probeRuntime() {
       method: "POST",
       body: JSON.stringify({}),
     });
-    probeOutput.textContent = JSON.stringify(result, null, 2);
+    probeOutput.textContent = JSON.stringify(
+      {
+        probe: result.probe,
+        auditRun: result.auditRun,
+      },
+      null,
+      2,
+    );
+    await refreshProbeHistory(result.auditRun?.id);
+    await refreshOperatorActivity();
   } catch (error) {
     probeOutput.textContent = String(error.message || error);
   }
@@ -271,6 +303,7 @@ async function runDecision() {
       2,
     );
     await refreshAuditHistory(result.auditRun?.id);
+    await refreshOperatorActivity();
   } catch (error) {
     financeOutput.textContent = String(error.message || error);
   }
@@ -292,12 +325,21 @@ async function runReplay() {
       2,
     );
     await refreshAuditHistory(result.auditRun?.id);
+    await refreshOperatorActivity();
   } catch (error) {
     financeOutput.textContent = String(error.message || error);
   }
 }
 
 async function refreshAuditHistory(preferredId) {
+  if (!canViewProbeHistory()) {
+    state.auditRuns = [];
+    state.selectedAuditId = null;
+    auditList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view audit history.</p>';
+    auditDetail.textContent = "Audit history is hidden until a reviewer or admin session is active.";
+    return;
+  }
+
   try {
     const result = await api("/api/audit/runs?limit=12");
     state.auditRuns = result.runs || [];
@@ -334,6 +376,96 @@ async function openAuditRun(runId) {
   }
 }
 
+async function refreshProbeHistory(preferredId) {
+  if (!canViewProbeHistory()) {
+    state.probeRuns = [];
+    state.selectedProbeId = null;
+    probeHistoryList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view probe history.</p>';
+    probeHistoryDetail.textContent = "Probe history is hidden until a reviewer or admin session is active.";
+    return;
+  }
+
+  try {
+    const result = await api("/api/runtime/probes?limit=12");
+    state.probeRuns = result.runs || [];
+    if (preferredId) {
+      state.selectedProbeId = preferredId;
+    } else if (!state.selectedProbeId && state.probeRuns.length > 0) {
+      state.selectedProbeId = state.probeRuns[0].id;
+    } else if (!state.probeRuns.some((item) => item.id === state.selectedProbeId)) {
+      state.selectedProbeId = state.probeRuns[0]?.id || null;
+    }
+
+    renderProbeRuns();
+    if (state.selectedProbeId) {
+      await openProbeRun(state.selectedProbeId);
+    } else {
+      probeHistoryDetail.textContent = "No persisted probes yet.";
+    }
+  } catch (error) {
+    state.probeRuns = [];
+    probeHistoryList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+    probeHistoryDetail.textContent = String(error.message || error);
+  }
+}
+
+async function openProbeRun(runId) {
+  state.selectedProbeId = runId;
+  renderProbeRuns();
+  probeHistoryDetail.textContent = "Loading probe run...";
+  try {
+    const result = await api(`/api/runtime/probes/${encodeURIComponent(runId)}`);
+    probeHistoryDetail.textContent = JSON.stringify(result.run, null, 2);
+  } catch (error) {
+    probeHistoryDetail.textContent = String(error.message || error);
+  }
+}
+
+async function refreshOperatorActivity(preferredId) {
+  if (!canViewOperatorActivity()) {
+    state.activityEvents = [];
+    state.selectedActivityId = null;
+    activityList.innerHTML = '<p class="empty-state">Admin access is required to view operator activity.</p>';
+    activityDetail.textContent = "Operator activity is hidden until an admin session is active.";
+    return;
+  }
+
+  try {
+    const result = await api("/api/access-control/activity?limit=20");
+    state.activityEvents = result.events || [];
+    if (preferredId) {
+      state.selectedActivityId = preferredId;
+    } else if (!state.selectedActivityId && state.activityEvents.length > 0) {
+      state.selectedActivityId = state.activityEvents[0].id;
+    } else if (!state.activityEvents.some((item) => item.id === state.selectedActivityId)) {
+      state.selectedActivityId = state.activityEvents[0]?.id || null;
+    }
+
+    renderOperatorActivity();
+    if (state.selectedActivityId) {
+      await openOperatorActivity(state.selectedActivityId);
+    } else {
+      activityDetail.textContent = "No operator activity logged yet.";
+    }
+  } catch (error) {
+    state.activityEvents = [];
+    activityList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+    activityDetail.textContent = String(error.message || error);
+  }
+}
+
+async function openOperatorActivity(eventId) {
+  state.selectedActivityId = eventId;
+  renderOperatorActivity();
+  activityDetail.textContent = "Loading operator activity...";
+  try {
+    const result = await api(`/api/access-control/activity/${encodeURIComponent(eventId)}`);
+    activityDetail.textContent = JSON.stringify(result.event, null, 2);
+  } catch (error) {
+    activityDetail.textContent = String(error.message || error);
+  }
+}
+
 async function refreshAccessControl() {
   const result = await api("/api/access-control");
   state.access = result;
@@ -354,7 +486,10 @@ function renderAccessControl() {
   bootstrapForm.hidden = !config.bootstrapRequired;
   accessConfigForm.hidden = !(actor && actor.role === "admin");
   operatorForm.hidden = !(actor && actor.role === "admin");
-  reviewForm.hidden = !isReviewerSession();
+  reviewForm.hidden = !canReviewGovernance();
+  auditPanel.hidden = !canViewProbeHistory();
+  probePanel.hidden = !canViewProbeHistory();
+  activityPanel.hidden = !canViewOperatorActivity();
 
   accessStatus.textContent = JSON.stringify(
     {
@@ -425,6 +560,70 @@ function renderAuditRuns() {
   for (const element of auditList.querySelectorAll("[data-run-id]")) {
     element.addEventListener("click", () => {
       void openAuditRun(element.getAttribute("data-run-id"));
+    });
+  }
+}
+
+function renderProbeRuns() {
+  if (state.probeRuns.length === 0) {
+    probeHistoryList.innerHTML = '<p class="empty-state">Run a runtime probe to build probe history.</p>';
+    return;
+  }
+
+  probeHistoryList.innerHTML = state.probeRuns
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="audit-item ${item.id === state.selectedProbeId ? "active" : ""}"
+          data-probe-id="${escapeHtml(item.id)}"
+        >
+          <div class="audit-item-head">
+            <strong>${escapeHtml(item.probeOk ? "Healthy Probe" : "Degraded Probe")}</strong>
+            <span>${escapeHtml(item.mode)}</span>
+          </div>
+          <p>${escapeHtml(item.label || "")}</p>
+          <small>${escapeHtml(formatProbeMeta(item))}</small>
+        </button>
+      `,
+    )
+    .join("");
+
+  for (const element of probeHistoryList.querySelectorAll("[data-probe-id]")) {
+    element.addEventListener("click", () => {
+      void openProbeRun(element.getAttribute("data-probe-id"));
+    });
+  }
+}
+
+function renderOperatorActivity() {
+  if (state.activityEvents.length === 0) {
+    activityList.innerHTML = '<p class="empty-state">Operator actions will appear here after governance activity occurs.</p>';
+    return;
+  }
+
+  activityList.innerHTML = state.activityEvents
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="audit-item ${item.id === state.selectedActivityId ? "active" : ""}"
+          data-activity-id="${escapeHtml(item.id)}"
+        >
+          <div class="audit-item-head">
+            <strong>${escapeHtml(item.action)}</strong>
+            <span>${escapeHtml(item.outcome)}</span>
+          </div>
+          <p>${escapeHtml(item.message || "")}</p>
+          <small>${escapeHtml(formatActivityMeta(item))}</small>
+        </button>
+      `,
+    )
+    .join("");
+
+  for (const element of activityList.querySelectorAll("[data-activity-id]")) {
+    element.addEventListener("click", () => {
+      void openOperatorActivity(element.getAttribute("data-activity-id"));
     });
   }
 }
@@ -536,6 +735,17 @@ function formatAuditMeta(item) {
   return `${createdAt} | ${item.changedEvents || 0} changed | ${item.actorName || "anonymous"} | ${item.higherRiskEvents || 0} higher risk`;
 }
 
+function formatProbeMeta(item) {
+  const createdAt = new Date(item.createdAt).toLocaleString();
+  const status = item.probeOk ? "healthy" : "degraded";
+  return `${createdAt} | ${status} | ${item.actorName || "anonymous"} | ${item.availableModelCount || 0} models`;
+}
+
+function formatActivityMeta(item) {
+  const createdAt = new Date(item.createdAt).toLocaleString();
+  return `${createdAt} | ${item.actorName || "anonymous"} | ${item.subject || "system"}${item.relatedRunId ? ` | run ${item.relatedRunId}` : ""}`;
+}
+
 function setSessionToken(value) {
   state.sessionToken = String(value || "").trim();
   if (state.sessionToken) {
@@ -549,4 +759,20 @@ function setSessionToken(value) {
 function isReviewerSession() {
   const role = state.access?.session?.actor?.role;
   return role === "reviewer" || role === "admin";
+}
+
+function isAdminSession() {
+  return state.access?.session?.actor?.role === "admin";
+}
+
+function canReviewGovernance() {
+  return !state.access?.config?.enabled || isReviewerSession();
+}
+
+function canViewProbeHistory() {
+  return !state.access?.config?.enabled || isReviewerSession();
+}
+
+function canViewOperatorActivity() {
+  return !state.access?.config?.enabled || isAdminSession();
 }
