@@ -11,7 +11,7 @@
 
 - Add connector adapters for ERP and ticketing systems
 - Add pack registry and version promotion workflow
-- Harden persisted audit storage with attribution and retention controls
+- Add retention controls and backup discipline on top of the SQLite audit ledger
 
 ## Phase 3
 

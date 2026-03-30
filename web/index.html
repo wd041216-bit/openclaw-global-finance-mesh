@@ -14,14 +14,14 @@
           <h1>Zhouheng Finance Mesh Atlas</h1>
           <p class="lede">
             A standalone Pack-driven finance control plane with pluggable LLM brains, governed legal-library grounding,
-            auditable decision flows, and persistent run history.
+            auditable decision flows, and a tamper-evident SQLite ledger.
           </p>
         </div>
         <div class="status-card">
           <span class="status-dot"></span>
           <div>
             <strong>Operator-ready baseline</strong>
-            <p>Local Ollama or Ollama Cloud, plus persisted audit, probe, and operator activity history.</p>
+            <p>Local Ollama or Ollama Cloud, plus a shared audit ledger for runs, probes, exports, and governance telemetry.</p>
           </div>
         </div>
       </header>
@@ -257,6 +257,55 @@
             <button id="run-replay" class="ghost">Run Example Replay</button>
           </div>
           <pre id="finance-output" class="output"></pre>
+        </section>
+
+        <section id="integrity-panel" class="panel span-2">
+          <div class="panel-head">
+            <h2>Audit Integrity</h2>
+            <div class="actions compact">
+              <button id="refresh-integrity" type="button" class="ghost">Refresh Integrity</button>
+              <button id="run-integrity-verify" type="button" class="ghost">Verify Chain</button>
+            </div>
+          </div>
+          <div class="integrity-layout">
+            <div class="stack">
+              <pre id="integrity-status" class="output small"></pre>
+              <div id="migration-status" class="library-list"></div>
+            </div>
+            <div class="stack">
+              <form id="export-form" class="stack">
+                <div class="panel-head subhead">
+                  <h3>Export Ledger Slice</h3>
+                  <span class="chip">Admin only</span>
+                </div>
+                <div class="export-grid">
+                  <label>
+                    Sequence From
+                    <input name="sequenceFrom" type="number" min="1" placeholder="1" />
+                  </label>
+                  <label>
+                    Sequence To
+                    <input name="sequenceTo" type="number" min="1" placeholder="120" />
+                  </label>
+                  <label>
+                    Created From
+                    <input name="createdFrom" type="datetime-local" />
+                  </label>
+                  <label>
+                    Created To
+                    <input name="createdTo" type="datetime-local" />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button type="submit">Create Export</button>
+                </div>
+              </form>
+              <div class="audit-layout split-layout">
+                <div id="export-list" class="audit-list"></div>
+                <pre id="export-detail" class="output"></pre>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section id="audit-panel" class="panel span-2">

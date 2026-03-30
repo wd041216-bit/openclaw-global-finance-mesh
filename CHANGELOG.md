@@ -9,6 +9,8 @@
 - added legal-library lifecycle states so default grounding only uses reviewed and approved source material
 - added persisted runtime probe history and a dedicated probe timeline in the web console
 - added operator activity logging for RBAC, runtime, legal-library, decision, and replay actions
+- replaced JSON audit persistence with a tamper-evident SQLite ledger and one-time legacy migration
+- added integrity verification and NDJSON export manifests for the audit chain
 
 ## 0.1.0
 

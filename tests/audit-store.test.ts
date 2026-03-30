@@ -83,7 +83,14 @@ function makePack(reviewRequired: boolean): FinancePack {
 
 test("audit store persists decision and replay runs and returns newest-first summaries", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "finance-mesh-audit-"));
-  const store = new AuditRunStore(path.join(tempDir, "runs.json"));
+  const store = new AuditRunStore({
+    ledgerPath: path.join(tempDir, "ledger.sqlite"),
+    legacyRunsPath: path.join(tempDir, "runs.json"),
+    legacyActivityPath: path.join(tempDir, "activity.json"),
+    exportDir: path.join(tempDir, "exports"),
+    environment: "test",
+    teamScope: "qa",
+  });
   const baselinePack = makePack(true);
   const candidatePack = makePack(false);
   const event = makeEvent("event-1", 120000);
@@ -173,4 +180,8 @@ test("audit store persists decision and replay runs and returns newest-first sum
   assert.equal(probeRecord?.probeOk, true);
   assert.equal(probeRecord?.availableModelCount, 2);
   assert.equal((probeRecord?.detail.config as { model?: string } | undefined)?.model, "qwen3:8b");
+  assert.equal(probeRecord?.sequence, 3);
+  assert.equal(probeRecord?.chainStatus, "pending");
+  assert.equal(probeRecord?.environment, "test");
+  assert.equal(probeRecord?.teamScope, "qa");
 });

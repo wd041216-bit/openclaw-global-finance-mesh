@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { AuditLedgerStore } from "./audit-ledger.ts";
 
 import type { AuthenticatedActor } from "./access-control.ts";
+import type { LedgerMetadata } from "./audit-ledger.ts";
 
 export type OperatorActivityAction =
   | "access.bootstrap_admin"
@@ -19,7 +19,7 @@ export type OperatorActivityAction =
 
 export type OperatorActivityOutcome = "success" | "failure";
 
-export interface OperatorActivitySummary {
+export interface OperatorActivitySummary extends LedgerMetadata {
   id: string;
   createdAt: string;
   action: OperatorActivityAction;
@@ -36,28 +36,50 @@ export interface OperatorActivityRecord extends OperatorActivitySummary {
   detail: Record<string, unknown>;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const ACTIVITY_PATH = path.join(REPO_ROOT, "data", "audit", "activity.json");
+interface OperatorActivityStoreOptions {
+  ledger?: AuditLedgerStore;
+  ledgerPath?: string;
+  legacyRunsPath?: string;
+  legacyActivityPath?: string;
+  exportDir?: string;
+  environment?: string;
+  teamScope?: string;
+  verifyWarnHours?: number;
+}
 
 export class OperatorActivityStore {
-  private readonly activityPath: string;
+  private readonly ledger: AuditLedgerStore;
 
-  constructor(activityPath = ACTIVITY_PATH) {
-    this.activityPath = activityPath;
+  constructor(options?: OperatorActivityStoreOptions) {
+    this.ledger =
+      options?.ledger ??
+      new AuditLedgerStore({
+        ledgerPath: options?.ledgerPath,
+        legacyRunsPath: options?.legacyRunsPath,
+        legacyActivityPath: options?.legacyActivityPath,
+        exportDir: options?.exportDir,
+        environment: options?.environment,
+        teamScope: options?.teamScope,
+        verifyWarnHours: options?.verifyWarnHours,
+      });
   }
 
   async list(limit = 20): Promise<OperatorActivitySummary[]> {
-    const payload = await this.load();
-    return payload.events
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .slice(0, Math.max(1, limit))
-      .map(({ detail: _detail, ...summary }) => summary);
+    const entries = await this.ledger.listEntries<OperatorActivityRecord>({
+      kinds: ["operator_activity"],
+      limit,
+    });
+    return entries.map((entry) => this.toSummary(entry.payload, entry));
   }
 
   async get(id: string): Promise<OperatorActivityRecord | null> {
-    const payload = await this.load();
-    return payload.events.find((item) => item.id === id) ?? null;
+    const entry = await this.ledger.getEntry<OperatorActivityRecord>(id, {
+      kinds: ["operator_activity"],
+    });
+    if (!entry) {
+      return null;
+    }
+    return this.toRecord(entry.payload, entry);
   }
 
   async record(input: {
@@ -69,9 +91,10 @@ export class OperatorActivityStore {
     relatedRunId?: string;
     detail?: Record<string, unknown>;
   }): Promise<OperatorActivitySummary> {
+    const createdAt = new Date().toISOString();
     const record: OperatorActivityRecord = {
       id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
+      createdAt,
       action: input.action,
       outcome: input.outcome ?? "success",
       actorId: input.actor?.id,
@@ -80,39 +103,58 @@ export class OperatorActivityStore {
       subject: input.subject,
       message: input.message,
       relatedRunId: input.relatedRunId,
+      sequence: 0,
+      entryHash: "",
+      prevHash: "",
+      environment: "",
+      teamScope: "",
+      chainStatus: "pending",
       detail: input.detail ?? {},
     };
 
-    const payload = await this.load();
-    payload.events.push(record);
-    await this.save(payload);
-    return toSummary(record);
+    const entry = await this.ledger.appendEntry({
+      entryId: record.id,
+      kind: "operator_activity",
+      createdAt,
+      actor: input.actor,
+      subject: input.subject,
+      relatedRunId: input.relatedRunId,
+      payload: record,
+    });
+
+    return this.toSummary(entry.payload, entry);
   }
 
-  private async load(): Promise<{ events: OperatorActivityRecord[] }> {
-    try {
-      const content = await fs.readFile(this.activityPath, "utf8");
-      const payload = JSON.parse(content) as { events?: OperatorActivityRecord[] };
-      return {
-        events: Array.isArray(payload.events) ? payload.events : [],
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        const seed = { events: [] as OperatorActivityRecord[] };
-        await this.save(seed);
-        return seed;
-      }
-      throw error;
-    }
+  private toSummary(
+    payload: OperatorActivityRecord,
+    metadata: Pick<
+      OperatorActivityRecord,
+      "sequence" | "entryHash" | "prevHash" | "environment" | "teamScope" | "chainStatus" | "chainVerifiedAt"
+    >,
+  ): OperatorActivitySummary {
+    const { detail: _detail, ...summary } = payload;
+    return {
+      ...summary,
+      sequence: metadata.sequence,
+      entryHash: metadata.entryHash,
+      prevHash: metadata.prevHash,
+      environment: metadata.environment,
+      teamScope: metadata.teamScope,
+      chainStatus: metadata.chainStatus,
+      chainVerifiedAt: metadata.chainVerifiedAt,
+    };
   }
 
-  private async save(payload: { events: OperatorActivityRecord[] }): Promise<void> {
-    await fs.mkdir(path.dirname(this.activityPath), { recursive: true });
-    await fs.writeFile(this.activityPath, JSON.stringify(payload, null, 2), "utf8");
+  private toRecord(payload: OperatorActivityRecord, metadata: OperatorActivityRecord): OperatorActivityRecord {
+    return {
+      ...payload,
+      sequence: metadata.sequence,
+      entryHash: metadata.entryHash,
+      prevHash: metadata.prevHash,
+      environment: metadata.environment,
+      teamScope: metadata.teamScope,
+      chainStatus: metadata.chainStatus,
+      chainVerifiedAt: metadata.chainVerifiedAt,
+    };
   }
-}
-
-function toSummary(record: OperatorActivityRecord): OperatorActivitySummary {
-  const { detail: _detail, ...summary } = record;
-  return summary;
 }

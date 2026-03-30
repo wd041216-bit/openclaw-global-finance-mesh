@@ -1,17 +1,17 @@
 # Zhouheng Global Finance Mesh
 
-Standalone finance control plane for Pack validation, deterministic decision packets, replay analysis, legal-library grounding, persistent audit history, and operator governance telemetry.
+Standalone finance control plane for Pack validation, deterministic decision packets, replay analysis, legal-library grounding, a tamper-evident SQLite audit ledger, and operator governance telemetry.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec.
 
 ## What it ships
 
-- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, and operator activity review
+- standalone web console for runtime control, legal-library operations, decisions, replays, audit history, probe history, operator activity review, and audit integrity checks
 - token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
 - pluggable Ollama brain runtime for local and cloud deployments
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
-- persistent local audit history for decision, replay, and runtime probe runs
+- append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
 - persisted operator activity timeline for RBAC, runtime, legal-library, and release actions
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
@@ -30,12 +30,14 @@ See [ADR-001](./docs/ADR-001-standalone-control-plane.md) for the decision recor
 
 ## Repository layout
 
-- `src/`: engine, validation, replay, audit-store, activity-store, and runtime implementations
+- `src/`: engine, validation, replay, audit-store, audit-ledger, activity-store, and runtime implementations
 - `src/server.ts`: browser-accessible control plane
 - `web/`: single-page operator console
 - `data/legal-library/library.json`: starter legal library corpus
-- `data/audit/runs.json`: persisted decision, replay, and probe history
-- `data/audit/activity.json`: persisted operator activity timeline
+- `data/audit/ledger.sqlite`: source-of-truth audit ledger
+- `data/audit/runs.json`: legacy audit import source retained for one-time migration/backups
+- `data/audit/activity.json`: legacy activity import source retained for one-time migration/backups
+- `data/audit/exports/`: generated NDJSON exports and manifest files
 - `examples/packs/`: example Pack files
 - `examples/events/`: example event payloads
 - `integrations/openclaw/`: optional OpenClaw adapter, manifest, and bundled skill
@@ -83,19 +85,28 @@ Legal-library documents now carry lifecycle state.
 
 ## Audit history
 
-Every decision, replay, and runtime probe run is persisted to `data/audit/runs.json`.
+Every decision, replay, runtime probe, integrity verification, export batch, and operator governance event now lands in `data/audit/ledger.sqlite`.
 
-- the web console shows the most recent runs and the full stored payload for each run
-- the history survives restarts, so demos and debugging sessions remain inspectable
-- this is a practical MVP audit trail, not yet immutable enterprise-grade storage
+- the web console shows decision/replay history, probe history, operator activity, and a dedicated audit integrity panel
+- legacy `runs.json` and `activity.json` files are migrated once on first boot if they exist, then kept as backup artifacts instead of active storage
+- the ledger survives restarts, supports whole-chain verification, and can export NDJSON slices with signed manifests
+- this is tamper-evident local storage, not yet immutable off-box enterprise storage
 
 ## Operator activity
 
-Privileged actions are also written to `data/audit/activity.json`.
+Privileged actions are part of the same audit chain.
 
-- bootstrap admin, access-policy changes, operator issuance, runtime updates, legal-library governance actions, probe runs, decisions, and replays all generate activity events
+- bootstrap admin, access-policy changes, operator issuance, runtime updates, legal-library governance actions, probe runs, decisions, and replays all generate operator activity entries
+- integrity verification and export batches are ledger-native events surfaced through the audit integrity panel and export detail views
 - the web console exposes a separate operator activity panel so admins can inspect governance actions without digging through raw files
 - activity events are actor-stamped when auth is enabled and still persist in auth-disabled local development mode
+
+## Integrity and export operations
+
+- `GET /api/audit/integrity` exposes the latest chain state, migration summary, staleness, and latest export metadata
+- `POST /api/audit/integrity/verify` replays the ledger hash chain and seals the verification result back into the ledger
+- `POST /api/audit/exports` writes an NDJSON slice plus JSON manifest under `data/audit/exports/`
+- reviewers can inspect integrity/export status; admins can trigger verification and new exports
 
 ## Finance flow
 
@@ -125,8 +136,8 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 
 This repo is intentionally honest about scope.
 
-- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, audit history, runtime probe history, operator activity logging, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
-- not yet included: SSO, immutable audit persistence, ERP-side writeback adapters, or full production governance workflows
+- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, SQLite audit ledger, runtime probe history, operator activity logging, integrity verification, export manifests, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
+- not yet included: SSO, immutable off-box audit persistence, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.
 
@@ -136,6 +147,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
+- [docs/audit-operations.md](./docs/audit-operations.md)
 
 ## Contribution surface
 

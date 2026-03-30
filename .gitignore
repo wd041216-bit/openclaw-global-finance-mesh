@@ -7,3 +7,6 @@ data/runtime/*.secrets.json
 data/runtime/*.json
 !data/runtime/.gitkeep
 data/audit/*.json
+data/audit/*.sqlite
+data/audit/*.sqlite-*
+data/audit/exports/

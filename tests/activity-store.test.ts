@@ -8,7 +8,14 @@ import { OperatorActivityStore } from "../src/activity-store.ts";
 
 test("operator activity store persists newest-first governance events", async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "finance-mesh-activity-"));
-  const store = new OperatorActivityStore(path.join(tempDir, "activity.json"));
+  const store = new OperatorActivityStore({
+    ledgerPath: path.join(tempDir, "ledger.sqlite"),
+    legacyRunsPath: path.join(tempDir, "runs.json"),
+    legacyActivityPath: path.join(tempDir, "activity.json"),
+    exportDir: path.join(tempDir, "exports"),
+    environment: "beta",
+    teamScope: "team-red",
+  });
 
   const first = await store.record({
     action: "runtime.update_config",
@@ -53,4 +60,7 @@ test("operator activity store persists newest-first governance events", async ()
   assert.equal(detail?.action, "runtime.probe");
   assert.equal(detail?.relatedRunId, "probe-run-1");
   assert.equal((detail?.detail.inferenceOk as boolean | undefined) ?? true, false);
+  assert.equal(detail?.sequence, 2);
+  assert.equal(detail?.environment, "beta");
+  assert.equal(detail?.teamScope, "team-red");
 });

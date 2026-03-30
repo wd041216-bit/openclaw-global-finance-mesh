@@ -1,17 +1,17 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { AuditLedgerStore } from "./audit-ledger.ts";
 
 import type { AuthenticatedActor } from "./access-control.ts";
 import type { BrainProbeResult } from "./brain.ts";
+import type { LedgerMetadata } from "./audit-ledger.ts";
 import type { BrainMode, BrainRuntimeConfig } from "./runtime-config.ts";
 import type { DecisionRunResult, EventPayload, Mode, ReplayRunResult, RiskLevel } from "./types.ts";
 
 export type AuditRunType = "decision" | "replay" | "probe";
 export type AuditRunMode = Mode | BrainMode;
 
-export interface AuditRunSummary {
+export interface AuditRunSummary extends LedgerMetadata {
   id: string;
   type: AuditRunType;
   createdAt: string;
@@ -39,30 +39,50 @@ export interface AuditRunRecord extends AuditRunSummary {
   detail: Record<string, unknown>;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const AUDIT_PATH = path.join(REPO_ROOT, "data", "audit", "runs.json");
+interface AuditRunStoreOptions {
+  ledger?: AuditLedgerStore;
+  ledgerPath?: string;
+  legacyRunsPath?: string;
+  legacyActivityPath?: string;
+  exportDir?: string;
+  environment?: string;
+  teamScope?: string;
+  verifyWarnHours?: number;
+}
 
 export class AuditRunStore {
-  private readonly auditPath: string;
+  private readonly ledger: AuditLedgerStore;
 
-  constructor(auditPath = AUDIT_PATH) {
-    this.auditPath = auditPath;
+  constructor(options?: AuditRunStoreOptions) {
+    this.ledger =
+      options?.ledger ??
+      new AuditLedgerStore({
+        ledgerPath: options?.ledgerPath,
+        legacyRunsPath: options?.legacyRunsPath,
+        legacyActivityPath: options?.legacyActivityPath,
+        exportDir: options?.exportDir,
+        environment: options?.environment,
+        teamScope: options?.teamScope,
+        verifyWarnHours: options?.verifyWarnHours,
+      });
   }
 
   async list(limit = 12, options?: { types?: AuditRunType[] }): Promise<AuditRunSummary[]> {
-    const payload = await this.load();
-    const typeSet = options?.types?.length ? new Set(options.types) : null;
-    return payload.runs
-      .filter((item) => !typeSet || typeSet.has(item.type))
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-      .slice(0, Math.max(1, limit))
-      .map(({ detail: _detail, ...summary }) => summary);
+    const entries = await this.ledger.listEntries<AuditRunRecord>({
+      kinds: (options?.types?.length ? options.types : ["decision", "replay", "probe"]).map(toLedgerKind),
+      limit,
+    });
+    return entries.map((entry) => this.toSummary(entry.payload, entry));
   }
 
   async get(id: string): Promise<AuditRunRecord | null> {
-    const payload = await this.load();
-    return payload.runs.find((item) => item.id === id) ?? null;
+    const entry = await this.ledger.getEntry<AuditRunRecord>(id, {
+      kinds: ["decision_run", "replay_run", "probe_run"],
+    });
+    if (!entry) {
+      return null;
+    }
+    return this.toRecord(entry.payload, entry);
   }
 
   async recordDecision(input: {
@@ -87,6 +107,12 @@ export class AuditRunStore {
       actorId: input.actor?.id,
       actorName: input.actor?.name,
       actorRole: input.actor?.role,
+      sequence: 0,
+      entryHash: "",
+      prevHash: "",
+      environment: "",
+      teamScope: "",
+      chainStatus: "pending",
       detail: {
         actor: input.actor,
         event: input.event,
@@ -97,8 +123,16 @@ export class AuditRunStore {
       },
     };
 
-    await this.append(record);
-    return toSummary(record);
+    const entry = await this.ledger.appendEntry({
+      entryId: record.id,
+      kind: "decision_run",
+      createdAt,
+      actor: input.actor,
+      subject: input.event.event_id,
+      relatedRunId: record.id,
+      payload: record,
+    });
+    return this.toSummary(entry.payload, entry);
   }
 
   async recordReplay(input: {
@@ -124,6 +158,12 @@ export class AuditRunStore {
       actorId: input.actor?.id,
       actorName: input.actor?.name,
       actorRole: input.actor?.role,
+      sequence: 0,
+      entryHash: "",
+      prevHash: "",
+      environment: "",
+      teamScope: "",
+      chainStatus: "pending",
       detail: {
         actor: input.actor,
         baselinePackPaths: input.baselinePackPaths,
@@ -132,8 +172,16 @@ export class AuditRunStore {
       },
     };
 
-    await this.append(record);
-    return toSummary(record);
+    const entry = await this.ledger.appendEntry({
+      entryId: record.id,
+      kind: "replay_run",
+      createdAt,
+      actor: input.actor,
+      subject: `${input.events.length} events`,
+      relatedRunId: record.id,
+      payload: record,
+    });
+    return this.toSummary(entry.payload, entry);
   }
 
   async recordProbe(input: {
@@ -158,6 +206,12 @@ export class AuditRunStore {
       inferenceOk: input.probe.inferenceOk,
       availableModelCount: input.probe.availableModels.length,
       model: input.config.model,
+      sequence: 0,
+      entryHash: "",
+      prevHash: "",
+      environment: "",
+      teamScope: "",
+      chainStatus: "pending",
       detail: {
         actor: input.actor,
         config: input.config,
@@ -165,42 +219,60 @@ export class AuditRunStore {
       },
     };
 
-    await this.append(record);
-    return toSummary(record);
+    const entry = await this.ledger.appendEntry({
+      entryId: record.id,
+      kind: "probe_run",
+      createdAt,
+      actor: input.actor,
+      subject: input.config.model,
+      relatedRunId: record.id,
+      payload: record,
+    });
+    return this.toSummary(entry.payload, entry);
   }
 
-  private async append(record: AuditRunRecord): Promise<void> {
-    const payload = await this.load();
-    payload.runs.push(record);
-    await this.save(payload);
+  private toSummary(
+    payload: AuditRunRecord,
+    metadata: Pick<
+      AuditRunRecord,
+      "sequence" | "entryHash" | "prevHash" | "environment" | "teamScope" | "chainStatus" | "chainVerifiedAt"
+    >,
+  ): AuditRunSummary {
+    const { detail: _detail, ...summary } = payload;
+    return {
+      ...summary,
+      sequence: metadata.sequence,
+      entryHash: metadata.entryHash,
+      prevHash: metadata.prevHash,
+      environment: metadata.environment,
+      teamScope: metadata.teamScope,
+      chainStatus: metadata.chainStatus,
+      chainVerifiedAt: metadata.chainVerifiedAt,
+    };
   }
 
-  private async load(): Promise<{ runs: AuditRunRecord[] }> {
-    try {
-      const content = await fs.readFile(this.auditPath, "utf8");
-      const payload = JSON.parse(content) as { runs?: AuditRunRecord[] };
-      return {
-        runs: Array.isArray(payload.runs) ? payload.runs : [],
-      };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        const seed = { runs: [] as AuditRunRecord[] };
-        await this.save(seed);
-        return seed;
-      }
-      throw error;
-    }
-  }
-
-  private async save(payload: { runs: AuditRunRecord[] }): Promise<void> {
-    await fs.mkdir(path.dirname(this.auditPath), { recursive: true });
-    await fs.writeFile(this.auditPath, JSON.stringify(payload, null, 2), "utf8");
+  private toRecord(payload: AuditRunRecord, metadata: AuditRunRecord): AuditRunRecord {
+    return {
+      ...payload,
+      sequence: metadata.sequence,
+      entryHash: metadata.entryHash,
+      prevHash: metadata.prevHash,
+      environment: metadata.environment,
+      teamScope: metadata.teamScope,
+      chainStatus: metadata.chainStatus,
+      chainVerifiedAt: metadata.chainVerifiedAt,
+    };
   }
 }
 
-function toSummary(record: AuditRunRecord): AuditRunSummary {
-  const { detail: _detail, ...summary } = record;
-  return summary;
+function toLedgerKind(type: AuditRunType): "decision_run" | "replay_run" | "probe_run" {
+  if (type === "replay") {
+    return "replay_run";
+  }
+  if (type === "probe") {
+    return "probe_run";
+  }
+  return "decision_run";
 }
 
 function buildDecisionLabel(event: EventPayload, result: DecisionRunResult): string {

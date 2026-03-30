@@ -272,8 +272,24 @@ button.ghost {
   gap: 16px;
 }
 
+.integrity-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+}
+
 .split-layout {
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.subhead {
+  margin: 0;
+}
+
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .audit-item {
@@ -335,7 +351,12 @@ hr {
     grid-template-columns: 1fr;
   }
 
+  .integrity-layout,
   .audit-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .export-grid {
     grid-template-columns: 1fr;
   }
 

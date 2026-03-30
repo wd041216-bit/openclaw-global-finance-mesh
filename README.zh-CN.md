@@ -1,15 +1,15 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了基于 SQLite 的防篡改审计账本。
 
 ## 已落地内容
 
-- 独立 Web 控制台，覆盖运行时配置、法律资料库、决策执行、回放分析、审计历史、probe 历史、operator activity
+- 独立 Web 控制台，覆盖运行时配置、法律资料库、决策执行、回放分析、审计历史、probe 历史、operator activity、audit integrity
 - 基于 token 的访问控制，支持 `viewer`、`operator`、`reviewer`、`admin` 四级角色
 - 可插拔 Ollama 大脑，支持本地与云端模式
 - Pack 校验、决策生成、回放对比、审计追溯快照
 - 法律资料库采集、检索、治理状态流转、引用注入链路
-- 本地持久化审计历史，decision / replay / runtime probe 结果会落盘保存
+- 基于 SQLite 的 append-only 审计账本，统一记录 decision / replay / runtime probe / integrity verify / export batch / operator activity
 - 持久化 operator activity timeline，记录 RBAC、运行时配置、法规治理和执行动作
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
@@ -54,19 +54,28 @@ npm run dev
 
 ## 审计历史
 
-本轮开始，decision、replay 和 runtime probe 的运行结果都会持久化到 `data/audit/runs.json`。
+本轮开始，审计真相源已经切到 `data/audit/ledger.sqlite`。
 
-- 控制台里可以直接看到最近运行历史和完整明细
-- 重启服务后历史仍然保留，便于 demo、排障、复盘
-- 这还是 MVP 级审计存储，不等于不可篡改的企业级审计底座
+- decision、replay、runtime probe、integrity verify、export batch 和 operator activity 全都进入同一条 hash chain
+- 控制台里可以直接看到最近运行历史、完整明细和独立的 integrity 面板
+- 旧的 `data/audit/runs.json` 与 `data/audit/activity.json` 如果存在，会在首次启动时一次性迁移到 SQLite，然后保留为历史备份
+- 这已经是 tamper-evident 的本地审计底座，但还不是异地不可变企业存储
 
 ## Operator Activity
 
-治理动作会额外持久化到 `data/audit/activity.json`。
+治理动作现在也进入同一条 SQLite 审计链。
 
-- bootstrap admin、访问控制开关、operator 发放、runtime 配置变更、法规状态流转、probe、decision、replay 都会写入时间线
+- bootstrap admin、访问控制开关、operator 发放、runtime 配置变更、法规状态流转、probe、decision、replay 都会写入 Operator Activity 时间线
+- integrity verify 和 export batch 作为账本原生事件展示在 Audit Integrity 面板和导出详情里
 - 控制台提供独立的 Operator Activity 面板，方便 admin 直接复盘后台治理动作
 - 开启 auth 后会附带操作者身份；本地开发模式下即使 auth 关闭也会继续落盘
+
+## Integrity 与导出
+
+- reviewer 可以查看 `GET /api/audit/integrity` 和导出结果
+- admin 可以触发 `POST /api/audit/integrity/verify` 以及 `POST /api/audit/exports`
+- 导出物会落到 `data/audit/exports/`，包含 NDJSON 数据文件和 JSON manifest
+- 运维恢复时可以恢复 `ledger.sqlite`，重新执行 integrity verify，再核对 export manifest hash
 
 ## 法律资料治理
 
@@ -91,7 +100,7 @@ npm run dev
 - 法律资料库基础管理
 - 可解释决策与回放
 - token 级访问控制与角色边界
-- 本地持久化审计历史与 operator activity timeline
+- SQLite 审计账本、integrity verify 和导出链路
 
 仍需继续补齐：
 - SSO 与更强的身份体系
@@ -105,3 +114,4 @@ npm run dev
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
+- [docs/audit-operations.md](./docs/audit-operations.md)

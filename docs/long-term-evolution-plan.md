@@ -21,11 +21,12 @@ Build a finance-and-legal operating system that behaves like a standalone produc
 - local/cloud Ollama runtime abstraction
 - web console
 - legal library foundation
+- token-based RBAC
+- SQLite audit ledger with integrity verify and export manifests
 
 ### Not yet enterprise-complete
 
-- authentication and RBAC
-- immutable audit persistence
+- immutable off-box audit persistence
 - environment separation and deployment hardening
 - official-source governance workflow
 - connector-grade ERP and approval integrations
@@ -65,6 +66,7 @@ Required outcomes:
 - legal library content states such as `draft`, `reviewed`, `approved`, `retired`
 - source provenance visible on all grounded responses
 - pack publishing gates include validation and replay
+- tamper-evident verification on the local audit ledger
 
 Exit criteria:
 
@@ -172,6 +174,7 @@ Backlog:
 - RBAC model
 - session management
 - audit persistence
+- off-box ledger replication
 - secrets segregation
 - environment separation
 

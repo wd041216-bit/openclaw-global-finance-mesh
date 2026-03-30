@@ -1,12 +1,15 @@
 const state = {
   config: null,
   access: null,
+  integrity: null,
   auditRuns: [],
   selectedAuditId: null,
   probeRuns: [],
   selectedProbeId: null,
   activityEvents: [],
   selectedActivityId: null,
+  exportBatches: [],
+  selectedExportId: null,
   sessionToken: sessionStorage.getItem("financeMeshSessionToken") || "",
 };
 
@@ -15,6 +18,7 @@ const sessionForm = document.querySelector("#session-form");
 const bootstrapForm = document.querySelector("#bootstrap-form");
 const accessConfigForm = document.querySelector("#access-config-form");
 const operatorForm = document.querySelector("#operator-form");
+const exportForm = document.querySelector("#export-form");
 const chatForm = document.querySelector("#chat-form");
 const searchForm = document.querySelector("#search-form");
 const reviewForm = document.querySelector("#review-form");
@@ -27,9 +31,15 @@ const citationsOutput = document.querySelector("#citations-output");
 const libraryResults = document.querySelector("#library-results");
 const financeOutput = document.querySelector("#finance-output");
 const accessStatus = document.querySelector("#access-status");
+const integrityPanel = document.querySelector("#integrity-panel");
+const integrityStatus = document.querySelector("#integrity-status");
+const migrationStatus = document.querySelector("#migration-status");
+const verifyIntegrityButton = document.querySelector("#run-integrity-verify");
 const auditPanel = document.querySelector("#audit-panel");
 const auditList = document.querySelector("#audit-list");
 const auditDetail = document.querySelector("#audit-detail");
+const exportList = document.querySelector("#export-list");
+const exportDetail = document.querySelector("#export-detail");
 const probePanel = document.querySelector("#probe-panel");
 const probeHistoryList = document.querySelector("#probe-history-list");
 const probeHistoryDetail = document.querySelector("#probe-history-detail");
@@ -43,10 +53,14 @@ document.querySelector("#probe-runtime").addEventListener("click", probeRuntime)
 document.querySelector("#refresh-library").addEventListener("click", refreshLibrary);
 document.querySelector("#run-decision").addEventListener("click", runDecision);
 document.querySelector("#run-replay").addEventListener("click", runReplay);
+document.querySelector("#refresh-integrity").addEventListener("click", async () => {
+  await Promise.all([refreshAuditIntegrity(), refreshAuditExports()]);
+});
 document.querySelector("#refresh-audit").addEventListener("click", refreshAuditHistory);
 document.querySelector("#refresh-probes").addEventListener("click", refreshProbeHistory);
 document.querySelector("#refresh-activity").addEventListener("click", refreshOperatorActivity);
 document.querySelector("#refresh-access").addEventListener("click", refreshAccessControl);
+verifyIntegrityButton.addEventListener("click", verifyAuditIntegrity);
 document.querySelector("#clear-session").addEventListener("click", async () => {
   setSessionToken("");
   await refreshAllProtectedViews();
@@ -66,7 +80,7 @@ configForm.addEventListener("submit", async (event) => {
     state.config = result.config;
     fillConfigForm(result.config);
     probeOutput.textContent = "Runtime configuration saved.";
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     probeOutput.textContent = String(error.message || error);
   }
@@ -127,7 +141,31 @@ operatorForm.addEventListener("submit", async (event) => {
   });
   operatorForm.reset();
   await refreshAccessControl();
-  await refreshOperatorActivity();
+  await refreshGovernanceTelemetry();
+});
+
+exportForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  exportDetail.textContent = "Creating audit export...";
+  try {
+    const payload = formToObject(exportForm);
+    const result = await api("/api/audit/exports", {
+      method: "POST",
+      body: JSON.stringify({
+        sequenceFrom: payload.sequenceFrom ? Number(payload.sequenceFrom) : undefined,
+        sequenceTo: payload.sequenceTo ? Number(payload.sequenceTo) : undefined,
+        createdFrom: toIsoIfPresent(payload.createdFrom),
+        createdTo: toIsoIfPresent(payload.createdTo),
+      }),
+    });
+    exportForm.reset();
+    state.integrity = result.integrity;
+    await refreshAuditExports(result.exportBatch?.id);
+    renderAuditIntegrity();
+    await refreshGovernanceTelemetry();
+  } catch (error) {
+    exportDetail.textContent = String(error.message || error);
+  }
 });
 
 chatForm.addEventListener("submit", async (event) => {
@@ -186,7 +224,7 @@ reviewForm.addEventListener("submit", async (event) => {
     });
     reviewForm.reset();
     await refreshLibrary();
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
   }
@@ -203,7 +241,7 @@ ingestForm.addEventListener("submit", async (event) => {
     });
     ingestForm.reset();
     await refreshLibrary();
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
   }
@@ -221,8 +259,18 @@ async function refreshAllProtectedViews() {
   await Promise.all([
     refreshRuntimeConfig(),
     refreshLibrary(),
+    refreshAuditIntegrity(),
+    refreshAuditExports(),
     refreshAuditHistory(),
     refreshProbeHistory(),
+    refreshOperatorActivity(),
+  ]);
+}
+
+async function refreshGovernanceTelemetry() {
+  await Promise.all([
+    refreshAuditIntegrity(),
+    refreshAuditExports(),
     refreshOperatorActivity(),
   ]);
 }
@@ -266,9 +314,102 @@ async function probeRuntime() {
       2,
     );
     await refreshProbeHistory(result.auditRun?.id);
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     probeOutput.textContent = String(error.message || error);
+  }
+}
+
+async function refreshAuditIntegrity() {
+  if (!canViewAuditIntegrity()) {
+    state.integrity = null;
+    integrityStatus.textContent = "Reviewer or admin access is required to inspect audit integrity.";
+    migrationStatus.innerHTML = '<p class="empty-state">Integrity details are hidden until a reviewer or admin session is active.</p>';
+    return;
+  }
+
+  try {
+    const result = await api("/api/audit/integrity");
+    state.integrity = result.integrity;
+    renderAuditIntegrity();
+  } catch (error) {
+    state.integrity = null;
+    integrityStatus.textContent = String(error.message || error);
+    migrationStatus.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+  }
+}
+
+async function verifyAuditIntegrity() {
+  if (!canManageAuditIntegrity()) {
+    integrityStatus.textContent = "Admin access is required to verify the audit chain.";
+    return;
+  }
+
+  integrityStatus.textContent = "Verifying ledger hash chain...";
+  try {
+    const result = await api("/api/audit/integrity/verify", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    state.integrity = result.integrity;
+    integrityStatus.textContent = JSON.stringify(
+      {
+        integrity: result.integrity,
+        verification: result.verification,
+      },
+      null,
+      2,
+    );
+    renderMigrationStatus(result.integrity?.migration || null);
+    await refreshAuditExports();
+    await refreshOperatorActivity();
+  } catch (error) {
+    integrityStatus.textContent = String(error.message || error);
+  }
+}
+
+async function refreshAuditExports(preferredId) {
+  if (!canViewAuditIntegrity()) {
+    state.exportBatches = [];
+    state.selectedExportId = null;
+    exportList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view audit exports.</p>';
+    exportDetail.textContent = "Audit exports are hidden until a reviewer or admin session is active.";
+    return;
+  }
+
+  try {
+    const result = await api("/api/audit/exports?limit=12");
+    state.exportBatches = result.exports || [];
+    if (preferredId) {
+      state.selectedExportId = preferredId;
+    } else if (!state.selectedExportId && state.exportBatches.length > 0) {
+      state.selectedExportId = state.exportBatches[0].id;
+    } else if (!state.exportBatches.some((item) => item.id === state.selectedExportId)) {
+      state.selectedExportId = state.exportBatches[0]?.id || null;
+    }
+
+    renderAuditExports();
+    if (state.selectedExportId) {
+      await openAuditExport(state.selectedExportId);
+    } else {
+      exportDetail.textContent = "No audit exports generated yet.";
+    }
+  } catch (error) {
+    state.exportBatches = [];
+    exportList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+    exportDetail.textContent = String(error.message || error);
+  }
+}
+
+async function openAuditExport(exportId) {
+  state.selectedExportId = exportId;
+  renderAuditExports();
+  exportDetail.textContent = "Loading audit export...";
+  try {
+    const result = await api(`/api/audit/exports/${encodeURIComponent(exportId)}`);
+    exportDetail.textContent = JSON.stringify(result.exportBatch, null, 2);
+  } catch (error) {
+    exportDetail.textContent = String(error.message || error);
   }
 }
 
@@ -303,7 +444,7 @@ async function runDecision() {
       2,
     );
     await refreshAuditHistory(result.auditRun?.id);
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     financeOutput.textContent = String(error.message || error);
   }
@@ -325,14 +466,14 @@ async function runReplay() {
       2,
     );
     await refreshAuditHistory(result.auditRun?.id);
-    await refreshOperatorActivity();
+    await refreshGovernanceTelemetry();
   } catch (error) {
     financeOutput.textContent = String(error.message || error);
   }
 }
 
 async function refreshAuditHistory(preferredId) {
-  if (!canViewProbeHistory()) {
+  if (!canViewAuditIntegrity()) {
     state.auditRuns = [];
     state.selectedAuditId = null;
     auditList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view audit history.</p>';
@@ -377,7 +518,7 @@ async function openAuditRun(runId) {
 }
 
 async function refreshProbeHistory(preferredId) {
-  if (!canViewProbeHistory()) {
+  if (!canViewAuditIntegrity()) {
     state.probeRuns = [];
     state.selectedProbeId = null;
     probeHistoryList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view probe history.</p>';
@@ -487,8 +628,11 @@ function renderAccessControl() {
   accessConfigForm.hidden = !(actor && actor.role === "admin");
   operatorForm.hidden = !(actor && actor.role === "admin");
   reviewForm.hidden = !canReviewGovernance();
-  auditPanel.hidden = !canViewProbeHistory();
-  probePanel.hidden = !canViewProbeHistory();
+  integrityPanel.hidden = !canViewAuditIntegrity();
+  verifyIntegrityButton.hidden = !canManageAuditIntegrity();
+  exportForm.hidden = !canManageAuditIntegrity();
+  auditPanel.hidden = !canViewAuditIntegrity();
+  probePanel.hidden = !canViewAuditIntegrity();
   activityPanel.hidden = !canViewOperatorActivity();
 
   accessStatus.textContent = JSON.stringify(
@@ -560,6 +704,75 @@ function renderAuditRuns() {
   for (const element of auditList.querySelectorAll("[data-run-id]")) {
     element.addEventListener("click", () => {
       void openAuditRun(element.getAttribute("data-run-id"));
+    });
+  }
+}
+
+function renderAuditIntegrity() {
+  if (!state.integrity) {
+    integrityStatus.textContent = "No integrity data loaded yet.";
+    migrationStatus.innerHTML = '<p class="empty-state">SQLite ledger state will appear here.</p>';
+    return;
+  }
+
+  integrityStatus.textContent = JSON.stringify(state.integrity, null, 2);
+  renderMigrationStatus(state.integrity.migration || null);
+}
+
+function renderMigrationStatus(migration) {
+  if (!migration) {
+    migrationStatus.innerHTML = `
+      <article class="library-card">
+        <div class="library-head">
+          <strong>SQLite Source Of Truth</strong>
+          <span>live</span>
+        </div>
+        <p>No legacy JSON migration metadata was found. The ledger is operating as the primary audit store.</p>
+      </article>
+    `;
+    return;
+  }
+
+  migrationStatus.innerHTML = `
+    <article class="library-card">
+      <div class="library-head">
+        <strong>Migration Status</strong>
+        <span>${escapeHtml(migration.sourceOfTruth)}</span>
+      </div>
+      <p>Imported ${escapeHtml(migration.importedEntries)} legacy entries into SQLite on ${escapeHtml(new Date(migration.migratedAt).toLocaleString())}.</p>
+      <small>${escapeHtml(migration.legacyPaths.runs)} | ${escapeHtml(migration.legacyPaths.activity)}</small>
+    </article>
+  `;
+}
+
+function renderAuditExports() {
+  if (state.exportBatches.length === 0) {
+    exportList.innerHTML = '<p class="empty-state">Create an export to generate an NDJSON ledger slice and manifest.</p>';
+    return;
+  }
+
+  exportList.innerHTML = state.exportBatches
+    .map(
+      (item) => `
+        <button
+          type="button"
+          class="audit-item ${item.id === state.selectedExportId ? "active" : ""}"
+          data-export-id="${escapeHtml(item.id)}"
+        >
+          <div class="audit-item-head">
+            <strong>${escapeHtml(`Export #${item.sequence}`)}</strong>
+            <span>${escapeHtml(item.chainStatus)}</span>
+          </div>
+          <p>${escapeHtml(`${item.entryCount} entries | ${item.dataFile}`)}</p>
+          <small>${escapeHtml(formatExportMeta(item))}</small>
+        </button>
+      `,
+    )
+    .join("");
+
+  for (const element of exportList.querySelectorAll("[data-export-id]")) {
+    element.addEventListener("click", () => {
+      void openAuditExport(element.getAttribute("data-export-id"));
     });
   }
 }
@@ -730,20 +943,25 @@ function escapeHtml(value) {
 function formatAuditMeta(item) {
   const createdAt = new Date(item.createdAt).toLocaleString();
   if (item.type === "decision") {
-    return `${createdAt} | ${item.riskRating || "unknown"} risk | ${item.actorName || "anonymous"} | confidence ${Number(item.confidence || 0).toFixed(2)}`;
+    return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.riskRating || "unknown"} risk | ${item.actorName || "anonymous"} | confidence ${Number(item.confidence || 0).toFixed(2)}`;
   }
-  return `${createdAt} | ${item.changedEvents || 0} changed | ${item.actorName || "anonymous"} | ${item.higherRiskEvents || 0} higher risk`;
+  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.changedEvents || 0} changed | ${item.actorName || "anonymous"} | ${item.higherRiskEvents || 0} higher risk`;
 }
 
 function formatProbeMeta(item) {
   const createdAt = new Date(item.createdAt).toLocaleString();
   const status = item.probeOk ? "healthy" : "degraded";
-  return `${createdAt} | ${status} | ${item.actorName || "anonymous"} | ${item.availableModelCount || 0} models`;
+  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${status} | ${item.actorName || "anonymous"} | ${item.availableModelCount || 0} models`;
 }
 
 function formatActivityMeta(item) {
   const createdAt = new Date(item.createdAt).toLocaleString();
-  return `${createdAt} | ${item.actorName || "anonymous"} | ${item.subject || "system"}${item.relatedRunId ? ` | run ${item.relatedRunId}` : ""}`;
+  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.actorName || "anonymous"} | ${item.subject || "system"}${item.relatedRunId ? ` | run ${item.relatedRunId}` : ""}`;
+}
+
+function formatExportMeta(item) {
+  const createdAt = new Date(item.createdAt).toLocaleString();
+  return `${createdAt} | ${item.environment}/${item.teamScope} | ${item.sequenceFrom || 0}-${item.sequenceTo || 0} | sha ${String(item.dataSha256 || "").slice(0, 12)}`;
 }
 
 function setSessionToken(value) {
@@ -769,10 +987,29 @@ function canReviewGovernance() {
   return !state.access?.config?.enabled || isReviewerSession();
 }
 
+function canViewAuditIntegrity() {
+  return !state.access?.config?.enabled || isReviewerSession();
+}
+
+function canManageAuditIntegrity() {
+  return !state.access?.config?.enabled || isAdminSession();
+}
+
 function canViewProbeHistory() {
   return !state.access?.config?.enabled || isReviewerSession();
 }
 
 function canViewOperatorActivity() {
   return !state.access?.config?.enabled || isAdminSession();
+}
+
+function toIsoIfPresent(value) {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  return parsed.toISOString();
 }

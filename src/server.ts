@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { AccessControlStore, isAccessRole } from "./access-control.ts";
 import { OperatorActivityStore } from "./activity-store.ts";
+import { AuditLedgerStore } from "./audit-ledger.ts";
 import { AuditRunStore } from "./audit-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
@@ -22,9 +23,10 @@ const PORT = Number(process.env.FINANCE_MESH_PORT || 3030);
 const runtimeStore = new RuntimeConfigStore();
 const brain = new OllamaBrainRuntime();
 const legalLibrary = new LegalLibraryStore();
-const auditRuns = new AuditRunStore();
+const auditLedger = new AuditLedgerStore();
+const auditRuns = new AuditRunStore({ ledger: auditLedger });
 const accessControl = new AccessControlStore();
-const operatorActivity = new OperatorActivityStore();
+const operatorActivity = new OperatorActivityStore({ ledger: auditLedger });
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -591,6 +593,96 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     return;
   }
 
+  if (req.method === "GET" && requestUrl.pathname === "/api/audit/integrity") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      integrity: await auditLedger.getIntegrityStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/audit/integrity/verify") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const verification = await auditLedger.verifyIntegrity(auth.actor);
+    sendJson(res, 200, {
+      ok: true,
+      verification,
+      integrity: await auditLedger.getIntegrityStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/audit/exports") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+    const limit = Number(requestUrl.searchParams.get("limit") || 12);
+    sendJson(res, 200, {
+      ok: true,
+      exports: await auditLedger.listExportBatches(Number.isFinite(limit) ? limit : 12),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/audit/exports") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const body = await readJsonBody(req);
+    let exportBatch;
+    try {
+      exportBatch = await auditLedger.createExportBatch({
+        actor: auth.actor,
+        sequenceFrom: normalizeOptionalNumber(body.sequenceFrom),
+        sequenceTo: normalizeOptionalNumber(body.sequenceTo),
+        createdFrom: typeof body.createdFrom === "string" ? body.createdFrom : undefined,
+        createdTo: typeof body.createdTo === "string" ? body.createdTo : undefined,
+      });
+    } catch (error) {
+      sendJson(res, 400, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      exportBatch,
+      integrity: await auditLedger.getIntegrityStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/api/audit/exports/")) {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+    const id = requestUrl.pathname.slice("/api/audit/exports/".length).trim();
+    if (!id) {
+      sendJson(res, 400, { ok: false, error: "export id is required" });
+      return;
+    }
+
+    const exportBatch = await auditLedger.getExportBatch(id);
+    if (!exportBatch) {
+      sendJson(res, 404, { ok: false, error: "Audit export not found" });
+      return;
+    }
+
+    sendJson(res, 200, { ok: true, exportBatch });
+    return;
+  }
+
   if (req.method === "GET" && requestUrl.pathname === "/api/access-control/activity") {
     const auth = await requireRole(req, res, "admin");
     if (!auth) {
@@ -667,6 +759,14 @@ function normalizeMode(value: unknown): "L0" | "L1" | "L2" | "L3" {
     return value;
   }
   return "L1";
+}
+
+function normalizeOptionalNumber(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric;
+  }
+  return undefined;
 }
 
 async function requireRole(
