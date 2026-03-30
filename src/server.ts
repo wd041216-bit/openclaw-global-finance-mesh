@@ -1,5 +1,6 @@
 import http from "node:http";
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,11 +8,15 @@ import { AccessControlStore, isAccessRole, isIdentityBindingMatchType } from "./
 import { OperatorActivityStore } from "./activity-store.ts";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 import { AuditRunStore } from "./audit-store.ts";
+import { BackupReplicationStore } from "./backup-store.ts";
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "./auth-session-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
 import { loadFinancePacksFromPaths } from "./fs.ts";
 import { LegalLibraryStore } from "./legal-library.ts";
+import { FinanceMeshLogger } from "./logging.ts";
+import { FinanceMeshMetrics } from "./metrics.ts";
+import { OperationsService } from "./operations-service.ts";
 import { runReplay } from "./replay.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
 import { validatePackCollection } from "./validation.ts";
@@ -20,6 +25,9 @@ const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, "..");
 const WEB_ROOT = path.join(REPO_ROOT, "web");
 const PORT = Number(process.env.FINANCE_MESH_PORT || 3030);
+const require = createRequire(import.meta.url);
+const packageJson = require("../package.json") as { version?: string };
+const SERVICE_VERSION = packageJson.version || "0.0.0";
 
 const runtimeStore = new RuntimeConfigStore();
 const brain = new OllamaBrainRuntime();
@@ -28,37 +36,116 @@ const auditLedger = new AuditLedgerStore();
 const auditRuns = new AuditRunStore({ ledger: auditLedger });
 const accessControl = new AccessControlStore();
 const operatorActivity = new OperatorActivityStore({ ledger: auditLedger });
+const backups = new BackupReplicationStore({ ledger: auditLedger });
+const logger = new FinanceMeshLogger();
+const metrics = new FinanceMeshMetrics();
+const operations = new OperationsService({
+  version: SERVICE_VERSION,
+  accessControl,
+  runtimeStore,
+  legalLibrary,
+  auditLedger,
+  auditRuns,
+  backups,
+});
+
+let scheduledBackupInFlight = false;
+const scheduledBackupIntervalMinutes = normalizePositiveInteger(process.env.FINANCE_MESH_BACKUP_INTERVAL_MINUTES);
 
 const server = http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
+  const requestContext = attachRequestContext(req, requestUrl);
+  res.setHeader("X-Request-Id", requestContext.requestId);
   try {
-    const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
-
     if (requestUrl.pathname.startsWith("/api/")) {
       await handleApi(req, res, requestUrl);
-      return;
+    } else {
+      await serveStatic(requestUrl.pathname, res);
     }
-
-    await serveStatic(requestUrl.pathname, res);
   } catch (error) {
+    logger.error("request.failed", {
+      requestId: requestContext.requestId,
+      method: req.method || "GET",
+      path: requestUrl.pathname,
+      workspace: requestContext.workspace,
+      actorId: requestContext.actor?.id,
+      actorRole: requestContext.actor?.role,
+      error,
+    });
     sendJson(res, 500, {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    const durationMs = Date.now() - requestContext.startedAt;
+    const route = normalizeRouteForMetrics(req.method || "GET", requestUrl.pathname);
+    metrics.recordHttpRequest({
+      method: req.method || "GET",
+      route,
+      status: res.statusCode || 200,
+    });
+    logger.info("request.completed", {
+      requestId: requestContext.requestId,
+      method: req.method || "GET",
+      path: requestUrl.pathname,
+      route,
+      status: res.statusCode || 200,
+      durationMs,
+      workspace: requestContext.workspace,
+      actorId: requestContext.actor?.id,
+      actorRole: requestContext.actor?.role,
+      runId: requestContext.runId,
+      backupId: requestContext.backupId,
     });
   }
 });
 
 server.listen(PORT, () => {
   console.log(`Zhouheng Global Finance Mesh UI running at http://127.0.0.1:${PORT}`);
+  if (scheduledBackupIntervalMinutes) {
+    logger.info("backup.scheduler.started", {
+      intervalMinutes: scheduledBackupIntervalMinutes,
+      backupRoot: backups.getConfigurationStatus().backupRoot,
+    });
+    setInterval(() => {
+      void runScheduledBackup();
+    }, scheduledBackupIntervalMinutes * 60_000);
+  }
 });
 
 async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, requestUrl: URL): Promise<void> {
   if (req.method === "GET" && requestUrl.pathname === "/api/health") {
-    sendJson(res, 200, { ok: true, service: "zhouheng-global-finance-mesh" });
+    sendJson(res, 200, {
+      ok: true,
+      service: "zhouheng-global-finance-mesh",
+      version: SERVICE_VERSION,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/operations/health") {
+    sendJson(res, 200, {
+      ok: true,
+      health: await operations.getHealthStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/metrics") {
+    metrics.setActiveSessions(await accessControl.countActiveSessions());
+    metrics.setBackupTargetsConfigured(backups.getConfigurationStatus().configuredTargetCount);
+    res.writeHead(200, {
+      "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+    });
+    res.end(metrics.render());
     return;
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/access-control") {
     const session = await accessControl.getSession(req.headers);
+    if (session.actor) {
+      setRequestActor(req, session.actor);
+    }
     if (session.clearSessionCookies) {
       res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
     }
@@ -66,6 +153,21 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       ok: true,
       config: await accessControl.getPublicConfig(session.actor),
       session,
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/dashboard/overview") {
+    const session = await accessControl.getSession(req.headers);
+    if (session.actor) {
+      setRequestActor(req, session.actor);
+    }
+    if (session.clearSessionCookies) {
+      res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
+    }
+    sendJson(res, 200, {
+      ok: true,
+      overview: await operations.getDashboardOverview(session),
     });
     return;
   }
@@ -78,7 +180,11 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       enableAuth: body.enableAuth !== false,
     });
     const actor = actorFromOperator(operator);
+    setRequestActor(req, actor);
     const login = await accessControl.loginWithToken(String(body.token ?? ""));
+    setRequestRunReference(req, {
+      actor: login.actor,
+    });
     res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
     const config = await accessControl.getPublicConfig(login.actor);
     await operatorActivity.record({
@@ -110,6 +216,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     const body = await readJsonBody(req);
     try {
       const login = await accessControl.loginWithToken(String(body.token ?? ""));
+      setRequestActor(req, login.actor);
       res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
       const config = await accessControl.getPublicConfig(login.actor);
       await operatorActivity.record({
@@ -200,6 +307,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
 
     try {
       const login = await accessControl.completeOidcLogin({ state, code });
+      setRequestActor(req, login.actor);
       res.setHeader("Set-Cookie", buildAuthCookies(req, login.currentSession, login.csrfToken));
       await operatorActivity.record({
         action: "access.login_oidc",
@@ -233,6 +341,9 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
 
   if (req.method === "POST" && requestUrl.pathname === "/api/access-control/logout") {
     const sessionState = await accessControl.getSession(req.headers);
+    if (sessionState.actor) {
+      setRequestActor(req, sessionState.actor);
+    }
     const logout = await accessControl.logout(req.headers);
     res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
     if (sessionState.actor) {
@@ -546,6 +657,11 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
         probe,
       },
     });
+    metrics.recordRun("probe", probe.ok ? "success" : "failure");
+    setRequestRunReference(req, {
+      actor: auth.actor,
+      runId: auditRun.id,
+    });
     sendJson(res, 200, { ok: true, probe, auditRun });
     return;
   }
@@ -727,6 +843,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     const loadedPacks = await loadFinancePacksFromPaths(packPaths, REPO_ROOT);
     const validation = validatePackCollection(loadedPacks);
     if (!validation.ok) {
+      metrics.recordRun("decision", "failure");
       sendJson(res, 400, { ok: false, validation });
       return;
     }
@@ -765,6 +882,11 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
         confidence: result.decisionPacket.confidence,
       },
     });
+    metrics.recordRun("decision", "success");
+    setRequestRunReference(req, {
+      actor: auth.actor,
+      runId: auditRun.id,
+    });
 
     sendJson(res, 200, { ok: true, decision: result, auditRun });
     return;
@@ -784,6 +906,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     ]);
     const validation = validatePackCollection([...baseline, ...candidate]);
     if (!validation.ok) {
+      metrics.recordRun("replay", "failure");
       sendJson(res, 400, { ok: false, validation });
       return;
     }
@@ -822,6 +945,11 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
         higherRiskEvents: replay.higher_risk_events,
         lowerConfidenceEvents: replay.lower_confidence_events,
       },
+    });
+    metrics.recordRun("replay", "success");
+    setRequestRunReference(req, {
+      actor: auth.actor,
+      runId: auditRun.id,
     });
     sendJson(res, 200, { ok: true, replay, auditRun });
     return;
@@ -917,6 +1045,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       return;
     }
     const verification = await auditLedger.verifyIntegrity(auth.actor);
+    metrics.recordIntegrityVerification(verification.status);
     sendJson(res, 200, {
       ok: true,
       verification,
@@ -986,6 +1115,72 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     }
 
     sendJson(res, 200, { ok: true, exportBatch });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/operations/backups") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+    const limit = Number(requestUrl.searchParams.get("limit") || 12);
+    sendJson(res, 200, {
+      ok: true,
+      config: backups.getConfigurationStatus(),
+      backups: await backups.list(Number.isFinite(limit) ? limit : 12),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/operations/backups/run") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const backup = await backups.runBackup({
+      actor: auth.actor,
+      trigger: "manual",
+    });
+    metrics.recordBackup(backup.status);
+    setRequestRunReference(req, {
+      actor: auth.actor,
+      backupId: backup.backupId,
+    });
+    logger.info("backup.manual.completed", {
+      requestId: getRequestContext(req).requestId,
+      backupId: backup.backupId,
+      actorId: auth.actor?.id,
+      actorRole: auth.actor?.role,
+      status: backup.status,
+      targets: backup.targets,
+    });
+    sendJson(res, 200, {
+      ok: true,
+      backup,
+      health: await operations.getHealthStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/api/operations/backups/")) {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
+    const backupId = requestUrl.pathname.slice("/api/operations/backups/".length).trim();
+    if (!backupId) {
+      sendJson(res, 400, { ok: false, error: "backup id is required" });
+      return;
+    }
+    const backup = await backups.get(backupId);
+    if (!backup) {
+      sendJson(res, 404, { ok: false, error: "Backup job not found" });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      backup,
+    });
     return;
   }
 
@@ -1096,6 +1291,7 @@ async function requireRole(
   if (auth.clearSessionCookies) {
     res.setHeader("Set-Cookie", buildClearedAuthCookies(req));
   }
+  setRequestActor(req, auth.actor);
   return {
     actor: auth.actor,
     currentSession: auth.currentSession,
@@ -1194,6 +1390,35 @@ function sanitizeRedirectTarget(value: string | null | undefined): string {
   return normalized;
 }
 
+async function runScheduledBackup(): Promise<void> {
+  if (scheduledBackupInFlight) {
+    logger.warn("backup.scheduler.skipped", {
+      reason: "backup already in flight",
+    });
+    return;
+  }
+  scheduledBackupInFlight = true;
+  try {
+    const backup = await backups.runBackup({
+      actor: null,
+      trigger: "scheduled",
+    });
+    metrics.recordBackup(backup.status);
+    logger.info("backup.scheduler.completed", {
+      backupId: backup.backupId,
+      status: backup.status,
+      targets: backup.targets,
+    });
+  } catch (error) {
+    logger.error("backup.scheduler.failed", {
+      error,
+    });
+    metrics.recordBackup("failure");
+  } finally {
+    scheduledBackupInFlight = false;
+  }
+}
+
 function sendJson(res: http.ServerResponse, statusCode: number, payload: Record<string, unknown>): void {
   res.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
@@ -1224,5 +1449,126 @@ function contentType(filePath: string): string {
   if (filePath.endsWith(".json")) {
     return "application/json; charset=utf-8";
   }
+  if (filePath.endsWith(".svg")) {
+    return "image/svg+xml";
+  }
+  if (filePath.endsWith(".png")) {
+    return "image/png";
+  }
+  if (filePath.endsWith(".yaml") || filePath.endsWith(".yml")) {
+    return "application/yaml; charset=utf-8";
+  }
   return "text/html; charset=utf-8";
+}
+
+type RequestContext = {
+  requestId: string;
+  startedAt: number;
+  workspace: string;
+  actor: import("./access-control.ts").AuthenticatedActor | null;
+  runId?: string;
+  backupId?: string;
+};
+
+function attachRequestContext(req: http.IncomingMessage, requestUrl: URL): RequestContext {
+  const existing = getExistingRequestContext(req);
+  if (existing) {
+    return existing;
+  }
+  const context: RequestContext = {
+    requestId: logger.createRequestId(),
+    startedAt: Date.now(),
+    workspace: inferWorkspace(req, requestUrl.pathname),
+    actor: null,
+  };
+  (req as typeof req & { __financeMeshContext?: RequestContext }).__financeMeshContext = context;
+  return context;
+}
+
+function getRequestContext(req: http.IncomingMessage): RequestContext {
+  return getExistingRequestContext(req) ?? attachRequestContext(req, new URL(req.url || "/", "http://finance-mesh.local"));
+}
+
+function setRequestActor(req: http.IncomingMessage, actor: import("./access-control.ts").AuthenticatedActor | null): void {
+  const context = getRequestContext(req);
+  context.actor = actor;
+}
+
+function setRequestRunReference(
+  req: http.IncomingMessage,
+  value: {
+    actor?: import("./access-control.ts").AuthenticatedActor | null;
+    runId?: string;
+    backupId?: string;
+  },
+): void {
+  const context = getRequestContext(req);
+  if (value.actor !== undefined) {
+    context.actor = value.actor;
+  }
+  if (value.runId) {
+    context.runId = value.runId;
+  }
+  if (value.backupId) {
+    context.backupId = value.backupId;
+  }
+}
+
+function getExistingRequestContext(req: http.IncomingMessage): RequestContext | null {
+  return (req as typeof req & { __financeMeshContext?: RequestContext }).__financeMeshContext ?? null;
+}
+
+function inferWorkspace(req: http.IncomingMessage, pathname: string): string {
+  const headerWorkspace = req.headers["x-finance-mesh-workspace"];
+  if (typeof headerWorkspace === "string" && headerWorkspace.trim()) {
+    return headerWorkspace.trim();
+  }
+  if (pathname.startsWith("/api/legal-library")) {
+    return "library";
+  }
+  if (pathname.startsWith("/api/audit") || pathname.startsWith("/api/operations/backups") || pathname.startsWith("/api/access-control/activity")) {
+    return "governance";
+  }
+  if (
+    pathname.startsWith("/api/access-control")
+    || pathname.startsWith("/api/runtime")
+    || pathname.startsWith("/api/operations")
+    || pathname.startsWith("/api/metrics")
+  ) {
+    return "system";
+  }
+  return "workbench";
+}
+
+function normalizeRouteForMetrics(method: string, pathname: string): string {
+  if (pathname.startsWith("/api/access-control/sessions/") && pathname.endsWith("/revoke")) {
+    return `${method.toUpperCase()} /api/access-control/sessions/:id/revoke`;
+  }
+  if (pathname.startsWith("/api/access-control/bindings/") && pathname.endsWith("/deactivate")) {
+    return `${method.toUpperCase()} /api/access-control/bindings/:id/deactivate`;
+  }
+  if (pathname.startsWith("/api/audit/runs/")) {
+    return `${method.toUpperCase()} /api/audit/runs/:id`;
+  }
+  if (pathname.startsWith("/api/runtime/probes/")) {
+    return `${method.toUpperCase()} /api/runtime/probes/:id`;
+  }
+  if (pathname.startsWith("/api/audit/exports/")) {
+    return `${method.toUpperCase()} /api/audit/exports/:id`;
+  }
+  if (pathname.startsWith("/api/operations/backups/")) {
+    return `${method.toUpperCase()} /api/operations/backups/:id`;
+  }
+  if (pathname.startsWith("/api/access-control/activity/")) {
+    return `${method.toUpperCase()} /api/access-control/activity/:id`;
+  }
+  return `${method.toUpperCase()} ${pathname}`;
+}
+
+function normalizePositiveInteger(value: unknown): number | undefined {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return Math.floor(numeric);
+  }
+  return undefined;
 }

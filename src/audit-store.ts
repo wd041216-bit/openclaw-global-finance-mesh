@@ -85,6 +85,16 @@ export class AuditRunStore {
     return this.toRecord(entry.payload, entry);
   }
 
+  async countSince(
+    createdFrom: string,
+    options?: { types?: AuditRunType[] },
+  ): Promise<number> {
+    return this.ledger.countEntries({
+      createdFrom,
+      kinds: (options?.types?.length ? options.types : ["decision", "replay", "probe"]).map(toLedgerKind),
+    });
+  }
+
   async recordDecision(input: {
     mode: Mode;
     packPaths: string[];

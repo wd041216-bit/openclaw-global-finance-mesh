@@ -12,7 +12,8 @@ export type LedgerKind =
   | "probe_run"
   | "operator_activity"
   | "integrity_verification"
-  | "export_batch";
+  | "export_batch"
+  | "backup_replication";
 
 export type LedgerChainStatus = "verified" | "pending" | "mismatch";
 
@@ -219,6 +220,11 @@ export class AuditLedgerStore {
   async getIntegrityStatus(): Promise<AuditIntegrityStatus> {
     await this.ensureReady();
     return this.buildIntegrityStatus();
+  }
+
+  async countEntries(options?: { kinds?: LedgerKind[]; createdFrom?: string }): Promise<number> {
+    await this.ensureReady();
+    return this.countRows(options);
   }
 
   async verifyIntegrity(actor: AuthenticatedActor | null): Promise<IntegrityVerificationSummary> {
@@ -635,6 +641,30 @@ export class AuditLedgerStore {
         LIMIT ?
       `,
     ).all(limit) as LedgerRow[];
+  }
+
+  private countRows(options?: { kinds?: LedgerKind[]; createdFrom?: string }): number {
+    const db = this.getDb();
+    const filters: string[] = [];
+    const values: Array<string> = [];
+
+    if (options?.kinds?.length) {
+      filters.push(`kind IN (${options.kinds.map(() => "?").join(", ")})`);
+      values.push(...options.kinds);
+    }
+    if (options?.createdFrom) {
+      filters.push("created_at >= ?");
+      values.push(options.createdFrom);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const row = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM ledger_entries
+      ${whereClause}
+    `).get(...values) as { count?: number } | undefined;
+
+    return Number(row?.count ?? 0);
   }
 
   private selectRowsForExport(input: {

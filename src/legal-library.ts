@@ -26,6 +26,12 @@ export interface SearchResult {
   excerpt: string;
 }
 
+export interface LegalLibraryStats {
+  totalDocuments: number;
+  byStatus: Record<LegalDocument["status"], number>;
+  latestUpdatedAt?: string;
+}
+
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, "..");
 const LIBRARY_PATH = path.join(REPO_ROOT, "data", "legal-library", "library.json");
@@ -40,6 +46,20 @@ export class LegalLibraryStore {
   async listDocuments(): Promise<LegalDocument[]> {
     const payload = await this.load();
     return payload.documents.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
+  async getStats(): Promise<LegalLibraryStats> {
+    const documents = await this.listDocuments();
+    return {
+      totalDocuments: documents.length,
+      byStatus: {
+        draft: documents.filter((item) => item.status === "draft").length,
+        reviewed: documents.filter((item) => item.status === "reviewed").length,
+        approved: documents.filter((item) => item.status === "approved").length,
+        retired: documents.filter((item) => item.status === "retired").length,
+      },
+      latestUpdatedAt: documents[0]?.updatedAt,
+    };
   }
 
   async search(

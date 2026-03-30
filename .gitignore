@@ -12,3 +12,4 @@ data/audit/*.json
 data/audit/*.sqlite
 data/audit/*.sqlite-*
 data/audit/exports/
+data/backups/

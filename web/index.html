@@ -1,346 +1,438 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zhouheng Finance Mesh Console</title>
+    <title>周衡全球财务网格控制台</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <div class="shell">
-      <header class="masthead">
-        <div>
-          <p class="eyebrow">Finance Operating Console</p>
-          <h1>Zhouheng Finance Mesh Atlas</h1>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <p class="eyebrow">Enterprise Beta Finance Control Plane</p>
+          <h1>周衡全球财务网格</h1>
           <p class="lede">
-            A standalone Pack-driven finance control plane with pluggable LLM brains, governed legal-library grounding,
-            auditable decision flows, and a tamper-evident SQLite ledger.
+            面向财务、法务与风控团队的业务控制台。先看摘要，再执行动作；审计、备份、会话和法规依据都能在同一界面里完成。
           </p>
         </div>
-        <div class="status-card">
-          <span class="status-dot"></span>
-          <div>
-            <strong>Operator-ready baseline</strong>
-            <p>Local Ollama or Ollama Cloud, plus a shared audit ledger for runs, probes, exports, and governance telemetry.</p>
+        <div class="topbar-side">
+          <div id="identity-pill" class="identity-pill">正在读取控制台状态…</div>
+          <div class="topbar-actions">
+            <button id="refresh-overview" type="button" class="ghost">刷新总览</button>
+            <button id="toggle-advanced" type="button" class="ghost">显示高级详情</button>
           </div>
+          <div id="flash-banner" class="flash-banner" hidden></div>
         </div>
       </header>
 
-      <main class="grid">
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Brain Runtime</h2>
-            <div class="actions compact">
-              <button id="probe-runtime" type="button" class="ghost">Probe Runtime</button>
-              <button id="load-models" type="button" class="ghost">Refresh Models</button>
-            </div>
+      <nav class="workspace-nav" aria-label="控制台工作区">
+        <button type="button" class="workspace-tab active" data-workspace="workbench">
+          <span>工作台</span>
+          <small>运行决策、回放影响、法规问答</small>
+        </button>
+        <button type="button" class="workspace-tab" data-workspace="library">
+          <span>依据库</span>
+          <small>搜索、治理、资料采集</small>
+        </button>
+        <button type="button" class="workspace-tab" data-workspace="governance">
+          <span>治理中心</span>
+          <small>审计链、导出、备份与时间线</small>
+        </button>
+        <button type="button" class="workspace-tab" data-workspace="system">
+          <span>系统设置</span>
+          <small>身份、运行时与部署观测</small>
+        </button>
+      </nav>
+
+      <section class="hero-grid">
+        <article class="hero-card" id="hero-identity"></article>
+        <article class="hero-card" id="hero-runtime"></article>
+        <article class="hero-card" id="hero-governance"></article>
+        <article class="hero-card" id="hero-last-action"></article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="section-kicker">推荐动作</p>
+            <h2>下一步最有价值的操作</h2>
           </div>
-          <form id="config-form" class="stack">
-            <label>
-              Mode
-              <select name="mode">
-                <option value="local">Local Ollama</option>
-                <option value="cloud">Ollama Cloud</option>
-              </select>
-            </label>
-            <label>
-              Model
-              <input name="model" placeholder="qwen3:8b" />
-            </label>
-            <label>
-              Local Base URL
-              <input name="localBaseUrl" placeholder="http://127.0.0.1:11434" />
-            </label>
-            <label>
-              Cloud Base URL
-              <input name="cloudBaseUrl" placeholder="https://ollama.com" />
-            </label>
-            <label>
-              API Key
-              <input name="apiKey" type="password" placeholder="Only used for cloud mode" />
-            </label>
-            <label>
-              Temperature
-              <input name="temperature" type="number" min="0" max="2" step="0.1" />
-            </label>
-            <label>
-              System Prompt
-              <textarea name="systemPrompt" rows="4"></textarea>
-            </label>
-            <label class="inline">
-              <input name="persistSecret" type="checkbox" />
-              Persist API key to local ignored secrets file
-            </label>
-            <div class="actions">
-              <button type="submit">Save Runtime</button>
-            </div>
-          </form>
-          <pre id="probe-output" class="output small"></pre>
-          <pre id="models-output" class="output small"></pre>
-        </section>
+        </div>
+        <div id="quick-actions" class="action-grid"></div>
+      </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Access Control</h2>
-            <button id="refresh-access" type="button" class="ghost">Refresh Access</button>
-          </div>
-          <div class="stack">
-            <div class="response-block">
-              <h3>Current Session</h3>
-              <pre id="current-session" class="output small"></pre>
+      <main class="workspace-stack">
+        <section class="workspace-panel active" data-workspace-panel="workbench">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">工作台</p>
+              <h2>把常用业务动作放到第一屏</h2>
             </div>
-
-            <form id="session-form" class="stack">
-              <label>
-                Break-Glass Local Token
-                <input name="sessionToken" type="password" placeholder="Use a local operator token to mint a server session" />
-              </label>
-              <div class="actions">
-                <button type="submit">Login With Local Token</button>
-                <button id="start-oidc-login" type="button" class="ghost">Continue With SSO</button>
-                <button id="clear-session" type="button" class="ghost">Logout</button>
-              </div>
-            </form>
-          </div>
-          <pre id="access-status" class="output small"></pre>
-
-          <form id="bootstrap-form" class="stack" hidden>
-            <label>
-              First Admin Name
-              <input name="name" placeholder="Finance Platform Admin" />
-            </label>
-            <label>
-              First Admin Token
-              <input name="token" type="password" placeholder="Bootstrap admin token" />
-            </label>
-            <label class="inline">
-              <input type="checkbox" name="enableAuth" checked />
-              Enable auth immediately after bootstrap
-            </label>
-            <div class="actions">
-              <button type="submit">Bootstrap Admin</button>
-            </div>
-          </form>
-
-          <form id="access-config-form" class="stack" hidden>
-            <label class="inline">
-              <input type="checkbox" name="enabled" />
-              Require authentication and role checks
-            </label>
-            <div class="actions">
-              <button type="submit">Save Access Policy</button>
-            </div>
-          </form>
-
-          <form id="operator-form" class="stack" hidden>
-            <label>
-              Operator Name
-              <input name="name" placeholder="Reviewer or operator display name" />
-            </label>
-            <label>
-              Role
-              <select name="role">
-                <option value="operator">Operator</option>
-                <option value="reviewer">Reviewer</option>
-                <option value="admin">Admin</option>
-                <option value="viewer">Viewer</option>
-              </select>
-            </label>
-            <label>
-              Token
-              <input name="token" type="password" placeholder="Issue a token for this operator" />
-            </label>
-            <label class="inline">
-              <input type="checkbox" name="active" checked />
-              Operator starts active
-            </label>
-            <div class="actions">
-              <button type="submit">Create Operator</button>
-            </div>
-          </form>
-
-          <form id="binding-form" class="stack" hidden>
-            <label>
-              Binding Label
-              <input name="label" placeholder="APAC reviewer SSO binding" />
-            </label>
-            <div class="dual">
-              <label>
-                Match Type
-                <select name="matchType">
-                  <option value="subject">Issuer + Subject</option>
-                  <option value="email">Verified Email</option>
-                </select>
-              </label>
-              <label>
-                Role
-                <select name="role">
-                  <option value="operator">Operator</option>
-                  <option value="reviewer">Reviewer</option>
-                  <option value="admin">Admin</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-              </label>
-            </div>
-            <label>
-              Issuer
-              <input name="issuer" placeholder="Required for subject bindings" />
-            </label>
-            <label>
-              Subject
-              <input name="subject" placeholder="OIDC subject claim for subject bindings" />
-            </label>
-            <label>
-              Verified Email
-              <input name="email" type="email" placeholder="Used only for email bindings" />
-            </label>
-            <div class="actions">
-              <button type="submit">Create Identity Binding</button>
-            </div>
-          </form>
-
-          <div class="response-block">
-            <h3>Identity Bindings</h3>
-            <div id="binding-list" class="library-list"></div>
+            <p class="workspace-copy">默认给出示例决策、回放、法规问答和系统快照。原始 JSON 会收进高级详情。</p>
           </div>
 
-          <div class="response-block">
-            <h3>Active Sessions</h3>
-            <div id="active-session-list" class="library-list"></div>
-          </div>
-
-          <div class="response-block">
-            <h3>Local Operators</h3>
-            <div id="operator-list" class="library-list"></div>
-          </div>
-
-        </section>
-
-        <section class="panel chat-panel">
-          <div class="panel-head">
-            <h2>Agent Console</h2>
-            <span class="chip">Ground with legal sources</span>
-          </div>
-          <form id="chat-form" class="stack">
-            <label>
-              Prompt
-              <textarea name="prompt" rows="6" placeholder="Ask about a finance scenario, legal requirement, or implementation question."></textarea>
-            </label>
-            <label class="inline">
-              <input type="checkbox" name="useLegalLibrary" checked />
-              Use legal-library context
-            </label>
-            <div class="actions">
-              <button type="submit">Run Agent</button>
-            </div>
-          </form>
-          <div class="response-block">
-            <h3>Reply</h3>
-            <pre id="chat-output" class="output"></pre>
-          </div>
-          <div class="response-block">
-            <h3>Citations</h3>
-            <div id="citations-output" class="citations"></div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Legal Library</h2>
-            <button id="refresh-library" class="ghost">Refresh Library</button>
-          </div>
-          <form id="search-form" class="search-row">
-            <input name="query" placeholder="Search library by jurisdiction, topic, or obligation" />
-            <button type="submit">Search</button>
-          </form>
-          <div id="library-results" class="library-list"></div>
-          <hr />
-          <form id="review-form" class="stack" hidden>
-            <label>
-              Document ID
-              <input name="documentId" placeholder="Paste a legal-library document id" />
-            </label>
-            <label>
-              Status
-              <select name="status">
-                <option value="draft">Draft</option>
-                <option value="reviewed">Reviewed</option>
-                <option value="approved">Approved</option>
-                <option value="retired">Retired</option>
-              </select>
-            </label>
-            <div class="actions">
-              <button type="submit">Update Status</button>
-            </div>
-          </form>
-          <hr />
-          <form id="ingest-form" class="stack">
-            <label>
-              Title
-              <input name="title" placeholder="Document title" />
-            </label>
-            <label>
-              Jurisdiction
-              <input name="jurisdiction" placeholder="CN / EU / GLOBAL" />
-            </label>
-            <label>
-              Domain
-              <input name="domain" placeholder="tax / accounting / control" />
-            </label>
-            <label>
-              Source URL
-              <input name="url" placeholder="https://official-source.example" />
-            </label>
-            <label>
-              Local File Path
-              <input name="filePath" placeholder="/absolute/path/to/file.txt" />
-            </label>
-            <label>
-              Tags
-              <input name="tags" placeholder="comma,separated,tags" />
-            </label>
-            <label>
-              Raw Text
-              <textarea name="body" rows="5" placeholder="Paste statute excerpts, regulations, or internal legal notes."></textarea>
-            </label>
-            <div class="actions">
-              <button type="submit">Ingest Into Library</button>
-            </div>
-          </form>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Decision Workbench</h2>
-            <span class="chip">Example packs wired in</span>
-          </div>
-          <div class="actions dual">
-            <button id="run-decision">Run Example Decision</button>
-            <button id="run-replay" class="ghost">Run Example Replay</button>
-          </div>
-          <pre id="finance-output" class="output"></pre>
-        </section>
-
-        <section id="integrity-panel" class="panel span-2">
-          <div class="panel-head">
-            <h2>Audit Integrity</h2>
-            <div class="actions compact">
-              <button id="refresh-integrity" type="button" class="ghost">Refresh Integrity</button>
-              <button id="run-integrity-verify" type="button" class="ghost">Verify Chain</button>
-            </div>
-          </div>
-          <div class="integrity-layout">
-            <div class="stack">
-              <pre id="integrity-status" class="output small"></pre>
-              <div id="migration-status" class="library-list"></div>
-            </div>
-            <div class="stack">
-              <form id="export-form" class="stack">
-                <div class="panel-head subhead">
-                  <h3>Export Ledger Slice</h3>
-                  <span class="chip">Admin only</span>
+          <div class="workspace-grid workbench-grid">
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">快捷入口</p>
+                  <h3>最近摘要</h3>
                 </div>
-                <div class="export-grid">
+              </div>
+              <div id="workbench-summary" class="summary-stack"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">业务决策</p>
+                  <h3>运行示例决策</h3>
+                </div>
+                <span class="chip">默认使用示例 Pack</span>
+              </div>
+              <form id="decision-form" class="stack">
+                <div class="form-grid compact-grid">
+                  <label>
+                    决策等级
+                    <select name="mode">
+                      <option value="L1">L1</option>
+                      <option value="L0">L0</option>
+                      <option value="L2">L2</option>
+                      <option value="L3">L3</option>
+                    </select>
+                  </label>
+                  <label>
+                    Pack 路径
+                    <input name="packPaths" value="examples/packs" placeholder="examples/packs" />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button id="run-decision" type="submit">运行示例决策</button>
+                </div>
+              </form>
+              <div id="decision-summary" class="summary-stack"></div>
+              <details class="technical-details advanced-only">
+                <summary>查看技术详情</summary>
+                <pre id="finance-output" class="output"></pre>
+              </details>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">变更影响</p>
+                  <h3>回放规则差异</h3>
+                </div>
+              </div>
+              <form id="replay-form" class="stack">
+                <div class="form-grid">
+                  <label>
+                    决策等级
+                    <select name="mode">
+                      <option value="L1">L1</option>
+                      <option value="L0">L0</option>
+                      <option value="L2">L2</option>
+                      <option value="L3">L3</option>
+                    </select>
+                  </label>
+                  <label>
+                    基线 Pack 路径
+                    <input name="baselinePackPaths" value="examples/packs" placeholder="examples/packs" />
+                  </label>
+                  <label>
+                    候选 Pack 路径
+                    <input name="candidatePackPaths" value="examples/packs" placeholder="examples/packs" />
+                  </label>
+                </div>
+                <div class="actions">
+                  <button id="run-replay" type="submit">运行示例回放</button>
+                </div>
+              </form>
+              <div id="replay-summary" class="summary-stack"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">法规问答</p>
+                  <h3>带依据的说明助手</h3>
+                </div>
+                <span class="chip">引用已审核资料</span>
+              </div>
+              <form id="chat-form" class="stack">
+                <label>
+                  你想确认什么业务问题？
+                  <textarea
+                    name="prompt"
+                    rows="5"
+                    placeholder="例如：年度 SaaS 预收款在当前规则下为什么被判为中风险？"
+                  ></textarea>
+                </label>
+                <label class="inline-toggle">
+                  <input type="checkbox" name="useLegalLibrary" checked />
+                  优先引用依据库中的 reviewed / approved 资料
+                </label>
+                <div class="actions">
+                  <button type="submit">生成说明</button>
+                </div>
+              </form>
+              <div id="assistant-summary" class="summary-stack"></div>
+              <div id="assistant-citations" class="citation-grid"></div>
+              <details class="technical-details advanced-only">
+                <summary>查看技术详情</summary>
+                <pre id="chat-output" class="output"></pre>
+              </details>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">系统快照</p>
+                  <h3>运行时、审计链和备份状态</h3>
+                </div>
+              </div>
+              <div id="workbench-health" class="summary-stack summary-stack-wide"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace-panel" data-workspace-panel="library">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">依据库</p>
+              <h2>给业务人员看的法规与治理资料库</h2>
+            </div>
+            <p class="workspace-copy">搜索结果先展示是否可直接引用，再决定是否进入审核、补录或更新状态。</p>
+          </div>
+
+          <div class="workspace-grid library-grid">
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">搜索</p>
+                  <h3>查询法规依据</h3>
+                </div>
+                <button id="refresh-library" type="button" class="ghost">刷新依据库</button>
+              </div>
+              <form id="search-form" class="stack">
+                <div class="search-bar">
+                  <input name="query" placeholder="按 jurisdiction、topic、title 或 obligation 搜索" />
+                  <button type="submit">搜索</button>
+                </div>
+                <label class="inline-toggle advanced-only">
+                  <input id="search-include-drafts" type="checkbox" name="includeDrafts" />
+                  在高级模式下包含 draft 资料
+                </label>
+              </form>
+              <div id="library-summary" class="summary-stack"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">结果列表</p>
+                  <h3>优先看可直接引用的资料</h3>
+                </div>
+              </div>
+              <div id="library-results" class="record-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">资料详情</p>
+                  <h3>当前选中条目</h3>
+                </div>
+              </div>
+              <div id="library-detail" class="summary-stack"></div>
+            </section>
+
+            <section id="review-tools" class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">治理</p>
+                  <h3>状态评审</h3>
+                </div>
+                <span class="chip">Reviewer / Admin</span>
+              </div>
+              <form id="review-form" class="stack">
+                <label>
+                  Document ID
+                  <input name="documentId" placeholder="legal-library document id" />
+                </label>
+                <label>
+                  目标状态
+                  <select name="status">
+                    <option value="draft">draft</option>
+                    <option value="reviewed">reviewed</option>
+                    <option value="approved">approved</option>
+                    <option value="retired">retired</option>
+                  </select>
+                </label>
+                <div class="actions">
+                  <button type="submit">更新资料状态</button>
+                </div>
+              </form>
+            </section>
+
+            <section id="create-document-panel" class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">治理</p>
+                  <h3>新建资料</h3>
+                </div>
+                <span class="chip">Reviewer / Admin</span>
+              </div>
+              <form id="create-document-form" class="stack">
+                <label>
+                  标题
+                  <input name="title" placeholder="例如：欧盟 VAT 处理备忘" />
+                </label>
+                <div class="form-grid compact-grid">
+                  <label>
+                    Jurisdiction
+                    <input name="jurisdiction" placeholder="GLOBAL / EU / CN" />
+                  </label>
+                  <label>
+                    Domain
+                    <input name="domain" placeholder="tax / accounting / control" />
+                  </label>
+                </div>
+                <div class="form-grid compact-grid">
+                  <label>
+                    Source Type
+                    <input name="sourceType" placeholder="manual / official_url" />
+                  </label>
+                  <label>
+                    Source Ref
+                    <input name="sourceRef" placeholder="https://official-source.example" />
+                  </label>
+                </div>
+                <label>
+                  Tags
+                  <input name="tags" placeholder="comma,separated,tags" />
+                </label>
+                <label>
+                  Summary
+                  <textarea name="summary" rows="3" placeholder="用业务语言概括这份资料为什么重要。"></textarea>
+                </label>
+                <label>
+                  Body
+                  <textarea name="body" rows="6" placeholder="粘贴法规原文、内部解释或治理说明。"></textarea>
+                </label>
+                <div class="actions">
+                  <button type="submit">新建资料</button>
+                </div>
+              </form>
+            </section>
+
+            <section id="ingest-panel" class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">采集</p>
+                  <h3>从 URL 或本地文件补录依据</h3>
+                </div>
+                <span class="chip">Reviewer / Admin</span>
+              </div>
+              <form id="ingest-form" class="stack">
+                <div class="form-grid">
+                  <label>
+                    标题
+                    <input name="title" placeholder="Document title" />
+                  </label>
+                  <label>
+                    Jurisdiction
+                    <input name="jurisdiction" placeholder="CN / EU / GLOBAL" />
+                  </label>
+                  <label>
+                    Domain
+                    <input name="domain" placeholder="tax / accounting / control" />
+                  </label>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Source URL
+                    <input name="url" placeholder="https://official-source.example" />
+                  </label>
+                  <label>
+                    Local File Path
+                    <input name="filePath" placeholder="/absolute/path/to/file.txt" />
+                  </label>
+                  <label>
+                    Tags
+                    <input name="tags" placeholder="comma,separated,tags" />
+                  </label>
+                </div>
+                <label>
+                  Raw Text
+                  <textarea name="body" rows="6" placeholder="也可以直接粘贴法规节选或内部审阅笔记。"></textarea>
+                </label>
+                <div class="actions">
+                  <button type="submit">采集到依据库</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace-panel" data-workspace-panel="governance">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">治理中心</p>
+              <h2>先看链路健康，再看明细记录</h2>
+            </div>
+            <p class="workspace-copy">审计链、导出、备份和操作时间线都按摘要优先展示，异常会优先上浮。</p>
+          </div>
+
+          <div class="workspace-grid governance-grid">
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">完整性</p>
+                  <h3>审计链状态</h3>
+                </div>
+                <div class="actions compact">
+                  <button id="refresh-integrity" type="button" class="ghost">刷新状态</button>
+                  <button id="run-integrity-verify" type="button" class="ghost">执行完整校验</button>
+                </div>
+              </div>
+              <div id="integrity-summary" class="summary-stack summary-stack-wide"></div>
+              <div id="migration-status" class="summary-stack"></div>
+              <details class="technical-details advanced-only">
+                <summary>查看技术详情</summary>
+                <pre id="integrity-status" class="output"></pre>
+              </details>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">异地备份</p>
+                  <h3>快照与复制状态</h3>
+                </div>
+                <div class="actions compact">
+                  <button id="refresh-backups" type="button" class="ghost">刷新备份</button>
+                  <button id="run-backup" type="button">立即执行备份</button>
+                </div>
+              </div>
+              <div id="backups-summary" class="summary-stack summary-stack-wide"></div>
+              <div class="detail-layout">
+                <div id="backup-list" class="record-list"></div>
+                <div id="backup-detail" class="detail-card"></div>
+              </div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">导出</p>
+                  <h3>导出审计切片</h3>
+                </div>
+                <span class="chip">Admin only</span>
+              </div>
+              <form id="export-form" class="stack">
+                <div class="form-grid">
                   <label>
                     Sequence From
                     <input name="sequenceFrom" type="number" min="1" placeholder="1" />
@@ -359,47 +451,316 @@
                   </label>
                 </div>
                 <div class="actions">
-                  <button type="submit">Create Export</button>
+                  <button type="submit">创建导出</button>
                 </div>
               </form>
-              <div class="audit-layout split-layout">
-                <div id="export-list" class="audit-list"></div>
-                <pre id="export-detail" class="output"></pre>
+              <div class="detail-layout">
+                <div id="export-list" class="record-list"></div>
+                <div id="export-detail" class="detail-card"></div>
               </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">审计历史</p>
+                  <h3>决策与回放</h3>
+                </div>
+                <button id="refresh-audit" type="button" class="ghost">刷新历史</button>
+              </div>
+              <div class="detail-layout single-column">
+                <div id="audit-list" class="record-list"></div>
+                <div id="audit-detail" class="detail-card"></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">运行时探测</p>
+                  <h3>Probe History</h3>
+                </div>
+                <button id="refresh-probes" type="button" class="ghost">刷新探测</button>
+              </div>
+              <div class="detail-layout single-column">
+                <div id="probe-history-list" class="record-list"></div>
+                <div id="probe-history-detail" class="detail-card"></div>
+              </div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">操作时间线</p>
+                  <h3>Operator Activity</h3>
+                </div>
+                <button id="refresh-activity" type="button" class="ghost">刷新时间线</button>
+              </div>
+              <div class="detail-layout">
+                <div id="activity-list" class="record-list"></div>
+                <div id="activity-detail" class="detail-card"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="workspace-panel" data-workspace-panel="system">
+          <div class="workspace-head">
+            <div>
+              <p class="section-kicker">系统设置</p>
+              <h2>身份、运行时与部署观测</h2>
             </div>
+            <p class="workspace-copy">主登录路径是服务端 session；本地 token 只作为应急入口，管理员能力都放在这里。</p>
           </div>
-        </section>
 
-        <section id="audit-panel" class="panel span-2">
-          <div class="panel-head">
-            <h2>Decision Audit History</h2>
-            <button id="refresh-audit" class="ghost">Refresh History</button>
-          </div>
-          <div class="audit-layout">
-            <div id="audit-list" class="audit-list"></div>
-            <pre id="audit-detail" class="output"></pre>
-          </div>
-        </section>
+          <div class="workspace-grid system-grid">
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">身份与会话</p>
+                  <h3>当前访问状态</h3>
+                </div>
+                <button id="refresh-access" type="button" class="ghost">刷新身份状态</button>
+              </div>
+              <div id="access-summary" class="summary-stack summary-stack-wide"></div>
+              <details class="technical-details advanced-only">
+                <summary>查看技术详情</summary>
+                <pre id="current-session" class="output small"></pre>
+                <pre id="access-status" class="output small"></pre>
+              </details>
+            </section>
 
-        <section id="probe-panel" class="panel">
-          <div class="panel-head">
-            <h2>Probe History</h2>
-            <button id="refresh-probes" class="ghost">Refresh Probes</button>
-          </div>
-          <div class="audit-layout split-layout">
-            <div id="probe-history-list" class="audit-list"></div>
-            <pre id="probe-history-detail" class="output"></pre>
-          </div>
-        </section>
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">登录</p>
+                  <h3>本地应急入口</h3>
+                </div>
+              </div>
+              <form id="session-form" class="stack">
+                <label>
+                  Break-glass Local Token
+                  <input name="sessionToken" type="password" placeholder="用本地 operator token 换取受控 session" />
+                </label>
+                <div class="actions wrap">
+                  <button type="submit">用本地令牌登录</button>
+                  <button id="start-oidc-login" type="button" class="ghost">使用企业身份登录</button>
+                  <button id="clear-session" type="button" class="ghost">退出当前会话</button>
+                </div>
+              </form>
+            </section>
 
-        <section id="activity-panel" class="panel">
-          <div class="panel-head">
-            <h2>Operator Activity</h2>
-            <button id="refresh-activity" class="ghost">Refresh Activity</button>
-          </div>
-          <div class="audit-layout split-layout">
-            <div id="activity-list" class="audit-list"></div>
-            <pre id="activity-detail" class="output"></pre>
+            <section class="panel" id="bootstrap-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">初始化</p>
+                  <h3>创建首个管理员</h3>
+                </div>
+              </div>
+              <form id="bootstrap-form" class="stack" hidden>
+                <label>
+                  First Admin Name
+                  <input name="name" placeholder="Finance Platform Admin" />
+                </label>
+                <label>
+                  First Admin Token
+                  <input name="token" type="password" placeholder="Bootstrap admin token" />
+                </label>
+                <label class="inline-toggle">
+                  <input type="checkbox" name="enableAuth" checked />
+                  创建后立即启用身份校验
+                </label>
+                <div class="actions">
+                  <button type="submit">创建首个管理员</button>
+                </div>
+              </form>
+              <div id="bootstrap-hint" class="summary-stack"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">访问策略</p>
+                  <h3>开关与角色</h3>
+                </div>
+              </div>
+              <form id="access-config-form" class="stack" hidden>
+                <label class="inline-toggle">
+                  <input type="checkbox" name="enabled" />
+                  启用身份认证与角色校验
+                </label>
+                <div class="actions">
+                  <button type="submit">保存访问策略</button>
+                </div>
+              </form>
+
+              <form id="operator-form" class="stack" hidden>
+                <div class="form-grid compact-grid">
+                  <label>
+                    Operator Name
+                    <input name="name" placeholder="Reviewer or operator display name" />
+                  </label>
+                  <label>
+                    Role
+                    <select name="role">
+                      <option value="operator">operator</option>
+                      <option value="reviewer">reviewer</option>
+                      <option value="admin">admin</option>
+                      <option value="viewer">viewer</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Token
+                  <input name="token" type="password" placeholder="Issue a token for this operator" />
+                </label>
+                <label class="inline-toggle">
+                  <input type="checkbox" name="active" checked />
+                  账户创建后立即生效
+                </label>
+                <div class="actions">
+                  <button type="submit">新增本地操作员</button>
+                </div>
+              </form>
+
+              <div id="operator-list" class="record-list compact-list"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">OIDC Binding</p>
+                  <h3>身份绑定</h3>
+                </div>
+              </div>
+              <form id="binding-form" class="stack" hidden>
+                <label>
+                  Binding Label
+                  <input name="label" placeholder="APAC reviewer SSO binding" />
+                </label>
+                <div class="form-grid compact-grid">
+                  <label>
+                    Match Type
+                    <select name="matchType">
+                      <option value="subject">Issuer + Subject</option>
+                      <option value="email">Verified Email</option>
+                    </select>
+                  </label>
+                  <label>
+                    Role
+                    <select name="role">
+                      <option value="operator">operator</option>
+                      <option value="reviewer">reviewer</option>
+                      <option value="admin">admin</option>
+                      <option value="viewer">viewer</option>
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Issuer
+                  <input name="issuer" placeholder="Required for subject bindings" />
+                </label>
+                <label>
+                  Subject
+                  <input name="subject" placeholder="OIDC subject claim for subject bindings" />
+                </label>
+                <label>
+                  Verified Email
+                  <input name="email" type="email" placeholder="Used only for email bindings" />
+                </label>
+                <div class="actions">
+                  <button type="submit">创建身份绑定</button>
+                </div>
+              </form>
+              <div id="binding-list" class="record-list compact-list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">Session</p>
+                  <h3>活跃会话</h3>
+                </div>
+              </div>
+              <div id="active-session-list" class="record-list"></div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">运行时</p>
+                  <h3>模型与推理配置</h3>
+                </div>
+                <div class="actions compact">
+                  <button id="probe-runtime" type="button" class="ghost">执行运行时探测</button>
+                  <button id="load-models" type="button" class="ghost">刷新模型列表</button>
+                </div>
+              </div>
+              <div id="runtime-summary" class="summary-stack summary-stack-wide"></div>
+              <form id="config-form" class="stack">
+                <div class="form-grid">
+                  <label>
+                    Mode
+                    <select name="mode">
+                      <option value="local">Local Ollama</option>
+                      <option value="cloud">Ollama Cloud</option>
+                    </select>
+                  </label>
+                  <label>
+                    Model
+                    <input name="model" placeholder="qwen3:8b" />
+                  </label>
+                  <label>
+                    Temperature
+                    <input name="temperature" type="number" min="0" max="2" step="0.1" />
+                  </label>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Local Base URL
+                    <input name="localBaseUrl" placeholder="http://127.0.0.1:11434" />
+                  </label>
+                  <label>
+                    Cloud Base URL
+                    <input name="cloudBaseUrl" placeholder="https://ollama.com" />
+                  </label>
+                  <label>
+                    API Key
+                    <input name="apiKey" type="password" placeholder="Only used for cloud mode" />
+                  </label>
+                </div>
+                <label>
+                  System Prompt
+                  <textarea name="systemPrompt" rows="4"></textarea>
+                </label>
+                <label class="inline-toggle">
+                  <input name="persistSecret" type="checkbox" />
+                  将 API Key 写入本地 secrets 文件
+                </label>
+                <div class="actions">
+                  <button type="submit">保存运行时配置</button>
+                </div>
+              </form>
+              <details class="technical-details advanced-only">
+                <summary>查看运行时原始输出</summary>
+                <pre id="probe-output" class="output small"></pre>
+                <pre id="models-output" class="output small"></pre>
+              </details>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">部署与观测</p>
+                  <h3>健康检查、指标与备份配置</h3>
+                </div>
+              </div>
+              <div id="operations-summary" class="summary-stack summary-stack-wide"></div>
+              <details class="technical-details advanced-only">
+                <summary>查看 Prometheus 指标预览</summary>
+                <pre id="metrics-output" class="output"></pre>
+              </details>
+            </section>
           </div>
         </section>
       </main>

@@ -1,171 +1,1146 @@
+const STORAGE_KEYS = {
+  workspace: "financeMesh.currentWorkspace",
+  advancedMode: "financeMesh.advancedMode",
+  lastAction: "financeMesh.lastAction",
+};
+
+const WORKSPACE_LABELS = {
+  workbench: "工作台",
+  library: "依据库",
+  governance: "治理中心",
+  system: "系统设置",
+};
+
 const state = {
-  config: null,
+  prefs: {
+    currentWorkspace: loadStoredWorkspace(),
+    advancedMode: loadStoredAdvancedMode(),
+    lastAction: window.localStorage.getItem(STORAGE_KEYS.lastAction) || "",
+  },
   access: null,
-  authFlash: null,
-  csrfToken: "",
+  overview: null,
+  operationsHealth: null,
+  runtimeConfig: null,
+  metricsPreview: "",
+  models: [],
   integrity: null,
   auditRuns: [],
   selectedAuditId: null,
+  selectedAuditDetail: null,
   probeRuns: [],
   selectedProbeId: null,
+  selectedProbeDetail: null,
   activityEvents: [],
   selectedActivityId: null,
+  selectedActivityDetail: null,
   exportBatches: [],
   selectedExportId: null,
+  selectedExportDetail: null,
+  backupJobs: [],
+  backupConfig: null,
+  selectedBackupId: null,
+  selectedBackupDetail: null,
+  libraryDocuments: [],
+  libraryResults: [],
+  selectedLibraryDocumentId: null,
+  config: null,
+  csrfToken: "",
+  authFlash: null,
+  decisionResult: null,
+  replayResult: null,
+  chatResult: null,
+  probeResult: null,
   accessSessions: [],
 };
 
-const configForm = document.querySelector("#config-form");
-const sessionForm = document.querySelector("#session-form");
-const bootstrapForm = document.querySelector("#bootstrap-form");
-const accessConfigForm = document.querySelector("#access-config-form");
-const operatorForm = document.querySelector("#operator-form");
-const bindingForm = document.querySelector("#binding-form");
-const exportForm = document.querySelector("#export-form");
-const chatForm = document.querySelector("#chat-form");
-const searchForm = document.querySelector("#search-form");
-const reviewForm = document.querySelector("#review-form");
-const ingestForm = document.querySelector("#ingest-form");
+const elements = {
+  body: document.body,
+  flashBanner: byId("flash-banner"),
+  identityPill: byId("identity-pill"),
+  refreshOverviewButton: byId("refresh-overview"),
+  toggleAdvancedButton: byId("toggle-advanced"),
+  workspaceTabs: Array.from(document.querySelectorAll("[data-workspace]")),
+  workspacePanels: Array.from(document.querySelectorAll("[data-workspace-panel]")),
+  heroIdentity: byId("hero-identity"),
+  heroRuntime: byId("hero-runtime"),
+  heroGovernance: byId("hero-governance"),
+  heroLastAction: byId("hero-last-action"),
+  quickActions: byId("quick-actions"),
+  workbenchSummary: byId("workbench-summary"),
+  workbenchHealth: byId("workbench-health"),
+  decisionForm: byId("decision-form"),
+  replayForm: byId("replay-form"),
+  decisionSummary: byId("decision-summary"),
+  replaySummary: byId("replay-summary"),
+  financeOutput: byId("finance-output"),
+  chatForm: byId("chat-form"),
+  assistantSummary: byId("assistant-summary"),
+  assistantCitations: byId("assistant-citations"),
+  chatOutput: byId("chat-output"),
+  searchForm: byId("search-form"),
+  searchIncludeDrafts: byId("search-include-drafts"),
+  refreshLibraryButton: byId("refresh-library"),
+  librarySummary: byId("library-summary"),
+  libraryResults: byId("library-results"),
+  libraryDetail: byId("library-detail"),
+  reviewTools: byId("review-tools"),
+  reviewForm: byId("review-form"),
+  createDocumentPanel: byId("create-document-panel"),
+  createDocumentForm: byId("create-document-form"),
+  ingestPanel: byId("ingest-panel"),
+  ingestForm: byId("ingest-form"),
+  refreshIntegrityButton: byId("refresh-integrity"),
+  verifyIntegrityButton: byId("run-integrity-verify"),
+  integritySummary: byId("integrity-summary"),
+  integrityStatus: byId("integrity-status"),
+  migrationStatus: byId("migration-status"),
+  exportForm: byId("export-form"),
+  exportList: byId("export-list"),
+  exportDetail: byId("export-detail"),
+  refreshBackupsButton: byId("refresh-backups"),
+  runBackupButton: byId("run-backup"),
+  backupsSummary: byId("backups-summary"),
+  backupList: byId("backup-list"),
+  backupDetail: byId("backup-detail"),
+  refreshAuditButton: byId("refresh-audit"),
+  auditList: byId("audit-list"),
+  auditDetail: byId("audit-detail"),
+  refreshProbesButton: byId("refresh-probes"),
+  probeList: byId("probe-history-list"),
+  probeDetail: byId("probe-history-detail"),
+  refreshActivityButton: byId("refresh-activity"),
+  activityList: byId("activity-list"),
+  activityDetail: byId("activity-detail"),
+  refreshAccessButton: byId("refresh-access"),
+  accessSummary: byId("access-summary"),
+  currentSession: byId("current-session"),
+  accessStatus: byId("access-status"),
+  sessionForm: byId("session-form"),
+  startOidcLoginButton: byId("start-oidc-login"),
+  clearSessionButton: byId("clear-session"),
+  bootstrapPanel: byId("bootstrap-panel"),
+  bootstrapForm: byId("bootstrap-form"),
+  bootstrapHint: byId("bootstrap-hint"),
+  accessConfigForm: byId("access-config-form"),
+  operatorForm: byId("operator-form"),
+  operatorList: byId("operator-list"),
+  bindingForm: byId("binding-form"),
+  bindingList: byId("binding-list"),
+  accessSessionList: byId("active-session-list"),
+  runtimeSummary: byId("runtime-summary"),
+  runtimeConfigForm: byId("config-form"),
+  probeRuntimeButton: byId("probe-runtime"),
+  loadModelsButton: byId("load-models"),
+  probeOutput: byId("probe-output"),
+  modelsOutput: byId("models-output"),
+  operationsSummary: byId("operations-summary"),
+  metricsOutput: byId("metrics-output"),
+};
 
-const modelsOutput = document.querySelector("#models-output");
-const probeOutput = document.querySelector("#probe-output");
-const chatOutput = document.querySelector("#chat-output");
-const citationsOutput = document.querySelector("#citations-output");
-const libraryResults = document.querySelector("#library-results");
-const financeOutput = document.querySelector("#finance-output");
-const currentSessionOutput = document.querySelector("#current-session");
-const accessStatus = document.querySelector("#access-status");
-const integrityPanel = document.querySelector("#integrity-panel");
-const integrityStatus = document.querySelector("#integrity-status");
-const migrationStatus = document.querySelector("#migration-status");
-const verifyIntegrityButton = document.querySelector("#run-integrity-verify");
-const auditPanel = document.querySelector("#audit-panel");
-const auditList = document.querySelector("#audit-list");
-const auditDetail = document.querySelector("#audit-detail");
-const exportList = document.querySelector("#export-list");
-const exportDetail = document.querySelector("#export-detail");
-const probePanel = document.querySelector("#probe-panel");
-const probeHistoryList = document.querySelector("#probe-history-list");
-const probeHistoryDetail = document.querySelector("#probe-history-detail");
-const activityPanel = document.querySelector("#activity-panel");
-const activityList = document.querySelector("#activity-list");
-const activityDetail = document.querySelector("#activity-detail");
-const bindingList = document.querySelector("#binding-list");
-const activeSessionList = document.querySelector("#active-session-list");
-const operatorList = document.querySelector("#operator-list");
-const startOidcLoginButton = document.querySelector("#start-oidc-login");
+bindEvents();
+boot();
 
-document.querySelector("#load-models").addEventListener("click", loadModels);
-document.querySelector("#probe-runtime").addEventListener("click", probeRuntime);
-document.querySelector("#refresh-library").addEventListener("click", refreshLibrary);
-document.querySelector("#run-decision").addEventListener("click", runDecision);
-document.querySelector("#run-replay").addEventListener("click", runReplay);
-document.querySelector("#refresh-integrity").addEventListener("click", async () => {
-  await Promise.all([refreshAuditIntegrity(), refreshAuditExports()]);
-});
-document.querySelector("#refresh-audit").addEventListener("click", refreshAuditHistory);
-document.querySelector("#refresh-probes").addEventListener("click", refreshProbeHistory);
-document.querySelector("#refresh-activity").addEventListener("click", refreshOperatorActivity);
-document.querySelector("#refresh-access").addEventListener("click", refreshAccessControl);
-verifyIntegrityButton.addEventListener("click", verifyAuditIntegrity);
-startOidcLoginButton.addEventListener("click", startOidcLogin);
-document.querySelector("#clear-session").addEventListener("click", logoutCurrentSession);
+async function boot() {
+  consumeAuthFlash();
+  applyPreferences();
+  await refreshAll();
+}
 
-configForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const payload = formToObject(configForm);
-    payload.temperature = Number(payload.temperature);
-    payload.persistSecret = Boolean(payload.persistSecret);
-    const result = await api("/api/runtime/config", {
-      method: "POST",
-      body: JSON.stringify(payload),
+function bindEvents() {
+  window.addEventListener("hashchange", () => {
+    const workspace = readWorkspaceFromHash();
+    if (workspace) {
+      setWorkspace(workspace, { persist: true, replaceHash: false });
+    }
+  });
+
+  elements.refreshOverviewButton.addEventListener("click", async () => {
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshOperationsHealth(),
+      refreshMetricsPreview(),
+      refreshBackups(),
+    ]);
+  });
+  elements.toggleAdvancedButton.addEventListener("click", () => {
+    state.prefs.advancedMode = !state.prefs.advancedMode;
+    window.localStorage.setItem(STORAGE_KEYS.advancedMode, String(state.prefs.advancedMode));
+    applyPreferences();
+  });
+
+  for (const button of elements.workspaceTabs) {
+    button.addEventListener("click", () => {
+      setWorkspace(button.getAttribute("data-workspace"));
     });
-    state.config = result.config;
-    fillConfigForm(result.config);
-    probeOutput.textContent = "Runtime configuration saved.";
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    probeOutput.textContent = String(error.message || error);
   }
-});
 
-sessionForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  accessStatus.textContent = "Establishing a local server session...";
+  elements.quickActions.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-intent]");
+    if (!target) {
+      return;
+    }
+    void handleQuickAction({
+      intent: target.getAttribute("data-intent"),
+      workspace: target.getAttribute("data-workspace"),
+    });
+  });
+
+  elements.decisionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await runDecision();
+  });
+  elements.replayForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await runReplay();
+  });
+  elements.chatForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await runAssistant();
+  });
+  elements.searchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await searchLibrary();
+  });
+  elements.refreshLibraryButton.addEventListener("click", async () => {
+    await refreshLibrary();
+  });
+  elements.reviewForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await updateLibraryStatus();
+  });
+  elements.createDocumentForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await createLibraryDocument();
+  });
+  elements.ingestForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await ingestLibrarySource();
+  });
+
+  elements.refreshIntegrityButton.addEventListener("click", async () => {
+    await Promise.allSettled([refreshAuditIntegrity(), refreshAuditExports()]);
+  });
+  elements.verifyIntegrityButton.addEventListener("click", async () => {
+    await verifyAuditIntegrity();
+  });
+  elements.exportForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await createAuditExport();
+  });
+
+  elements.refreshBackupsButton.addEventListener("click", async () => {
+    await refreshBackups();
+  });
+  elements.runBackupButton.addEventListener("click", async () => {
+    await runBackup();
+  });
+
+  elements.refreshAuditButton.addEventListener("click", async () => {
+    await refreshAuditHistory();
+  });
+  elements.refreshProbesButton.addEventListener("click", async () => {
+    await refreshProbeHistory();
+  });
+  elements.refreshActivityButton.addEventListener("click", async () => {
+    await refreshOperatorActivity();
+  });
+
+  elements.refreshAccessButton.addEventListener("click", async () => {
+    await refreshAccessControl();
+  });
+  elements.sessionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await loginWithLocalToken();
+  });
+  elements.startOidcLoginButton.addEventListener("click", startOidcLogin);
+  elements.clearSessionButton.addEventListener("click", async () => {
+    await logoutCurrentSession();
+  });
+  elements.bootstrapForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await bootstrapAdmin();
+  });
+  elements.accessConfigForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await updateAccessConfig();
+  });
+  elements.operatorForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await createOperator();
+  });
+  elements.bindingForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await createBinding();
+  });
+
+  elements.probeRuntimeButton.addEventListener("click", async () => {
+    await probeRuntime();
+  });
+  elements.loadModelsButton.addEventListener("click", async () => {
+    await loadModels();
+  });
+  elements.runtimeConfigForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await updateRuntimeConfig();
+  });
+
+  elements.libraryResults.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-document-id]");
+    if (!target) {
+      return;
+    }
+    state.selectedLibraryDocumentId = target.getAttribute("data-document-id");
+    renderLibraryDetail();
+    renderLibraryResults();
+  });
+
+  elements.exportList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-export-id]");
+    if (!target) {
+      return;
+    }
+    void openAuditExport(target.getAttribute("data-export-id"));
+  });
+
+  elements.backupList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-backup-id]");
+    if (!target) {
+      return;
+    }
+    void openBackupJob(target.getAttribute("data-backup-id"));
+  });
+
+  elements.auditList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-run-id]");
+    if (!target) {
+      return;
+    }
+    void openAuditRun(target.getAttribute("data-run-id"));
+  });
+
+  elements.probeList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-probe-id]");
+    if (!target) {
+      return;
+    }
+    void openProbeRun(target.getAttribute("data-probe-id"));
+  });
+
+  elements.activityList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-activity-id]");
+    if (!target) {
+      return;
+    }
+    void openOperatorActivity(target.getAttribute("data-activity-id"));
+  });
+
+  elements.bindingList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-binding-id]");
+    if (!target) {
+      return;
+    }
+    void deactivateBinding(target.getAttribute("data-binding-id"));
+  });
+
+  elements.accessSessionList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-session-id]");
+    if (!target) {
+      return;
+    }
+    void revokeAccessSession(target.getAttribute("data-session-id"));
+  });
+}
+
+async function refreshAll() {
+  await refreshAccessControl();
+  await Promise.allSettled([
+    refreshDashboardOverview(),
+    refreshRuntimeConfig(),
+    refreshOperationsHealth(),
+    refreshMetricsPreview(),
+    refreshLibrary(),
+    refreshAuditIntegrity(),
+    refreshAuditExports(),
+    refreshAuditHistory(),
+    refreshProbeHistory(),
+    refreshOperatorActivity(),
+    refreshBackups(),
+  ]);
+  renderAll();
+}
+
+async function refreshDashboardOverview() {
   try {
-    const payload = formToObject(sessionForm);
+    const result = await api("/api/dashboard/overview");
+    state.overview = result.overview;
+  } catch (error) {
+    state.overview = null;
+    rememberAction(`总览读取失败：${String(error.message || error)}`);
+  }
+  renderFrame();
+  renderWorkbenchSummary();
+}
+
+async function refreshAccessControl() {
+  try {
+    const result = await api("/api/access-control");
+    state.access = result;
+    adoptSessionState(result.session);
+    if (canManageIdentitySessions()) {
+      await refreshAccessSessions();
+    } else {
+      state.accessSessions = [];
+    }
+  } catch (error) {
+    state.access = null;
+    state.accessSessions = [];
+    rememberAction(`身份状态读取失败：${String(error.message || error)}`);
+  }
+  renderFrame();
+  renderAccessControl();
+}
+
+async function refreshAccessSessions() {
+  try {
+    const result = await api("/api/access-control/sessions?limit=25");
+    state.accessSessions = result.sessions || [];
+  } catch (_error) {
+    state.accessSessions = [];
+  }
+}
+
+async function refreshRuntimeConfig() {
+  if (!canViewSystemWorkspace()) {
+    state.config = null;
+    renderRuntimeConfig();
+    return;
+  }
+  try {
+    const result = await api("/api/runtime/config");
+    state.config = result.config;
+    fillForm(elements.runtimeConfigForm, result.config);
+    elements.probeOutput.textContent = "";
+  } catch (error) {
+    state.config = null;
+    elements.probeOutput.textContent = String(error.message || error);
+  }
+  renderRuntimeConfig();
+}
+
+async function refreshOperationsHealth() {
+  try {
+    const result = await api("/api/operations/health");
+    state.operationsHealth = result.health;
+  } catch (error) {
+    state.operationsHealth = {
+      service: "zhouheng-global-finance-mesh",
+      version: "unknown",
+      uptimeSeconds: 0,
+      metricsAvailable: false,
+      environment: "unknown",
+      teamScope: "unknown",
+      checks: {
+        runtime: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
+        ledger: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
+        legalLibrary: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
+        backupTargets: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
+      },
+      recent: {
+        probe: null,
+        backup: null,
+      },
+    };
+  }
+  renderFrame();
+  renderWorkbenchHealth();
+  renderOperationsSummary();
+}
+
+async function refreshMetricsPreview() {
+  if (!canViewSystemWorkspace()) {
+    state.metricsPreview = "系统设置对当前角色不可见。";
+    renderOperationsSummary();
+    return;
+  }
+  try {
+    state.metricsPreview = await fetchText("/api/metrics");
+  } catch (error) {
+    state.metricsPreview = String(error.message || error);
+  }
+  renderOperationsSummary();
+}
+
+async function refreshLibrary() {
+  if (!canViewLibrary()) {
+    state.libraryDocuments = [];
+    state.libraryResults = [];
+    state.selectedLibraryDocumentId = null;
+    renderLibrary();
+    return;
+  }
+  try {
+    const result = await api("/api/legal-library/documents");
+    state.libraryDocuments = result.documents || [];
+    if (!state.libraryResults.length) {
+      state.libraryResults = state.libraryDocuments.map((document) => ({
+        document,
+        excerpt: document.summary,
+        score: 0,
+      }));
+    }
+    ensureSelectedLibraryDocument();
+  } catch (error) {
+    state.libraryDocuments = [];
+    state.libraryResults = [];
+    state.selectedLibraryDocumentId = null;
+    rememberAction(`依据库读取失败：${String(error.message || error)}`);
+  }
+  renderLibrary();
+}
+
+async function refreshAuditIntegrity() {
+  if (!canViewGovernanceWorkspace()) {
+    state.integrity = null;
+    renderGovernance();
+    return;
+  }
+  try {
+    const result = await api("/api/audit/integrity");
+    state.integrity = result.integrity;
+  } catch (error) {
+    state.integrity = {
+      status: "pending",
+      mismatchCount: 0,
+      isStale: true,
+      latestSequence: 0,
+      verifiedThroughSequence: 0,
+      verifyWarnHours: 0,
+      environment: "unknown",
+      teamScope: "unknown",
+      sourceOfTruth: "sqlite",
+      lastExport: null,
+      migration: null,
+      summary: String(error.message || error),
+    };
+  }
+  renderGovernance();
+}
+
+async function refreshAuditExports(preferredId) {
+  if (!canViewGovernanceWorkspace()) {
+    state.exportBatches = [];
+    state.selectedExportId = null;
+    state.selectedExportDetail = null;
+    renderAuditExports();
+    return;
+  }
+  try {
+    const result = await api("/api/audit/exports?limit=12");
+    state.exportBatches = result.exports || [];
+    selectPreferred("selectedExportId", state.exportBatches, preferredId);
+    if (state.selectedExportId) {
+      await openAuditExport(state.selectedExportId);
+    } else {
+      state.selectedExportDetail = null;
+    }
+  } catch (error) {
+    state.exportBatches = [];
+    state.selectedExportId = null;
+    state.selectedExportDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderAuditExports();
+}
+
+async function refreshAuditHistory(preferredId) {
+  if (!canViewGovernanceWorkspace()) {
+    state.auditRuns = [];
+    state.selectedAuditId = null;
+    state.selectedAuditDetail = null;
+    renderAuditHistory();
+    return;
+  }
+  try {
+    const result = await api("/api/audit/runs?limit=12");
+    state.auditRuns = result.runs || [];
+    selectPreferred("selectedAuditId", state.auditRuns, preferredId);
+    if (state.selectedAuditId) {
+      await openAuditRun(state.selectedAuditId);
+    } else {
+      state.selectedAuditDetail = null;
+    }
+  } catch (error) {
+    state.auditRuns = [];
+    state.selectedAuditId = null;
+    state.selectedAuditDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderAuditHistory();
+}
+
+async function refreshProbeHistory(preferredId) {
+  if (!canViewGovernanceWorkspace()) {
+    state.probeRuns = [];
+    state.selectedProbeId = null;
+    state.selectedProbeDetail = null;
+    renderProbeHistory();
+    return;
+  }
+  try {
+    const result = await api("/api/runtime/probes?limit=12");
+    state.probeRuns = result.runs || [];
+    selectPreferred("selectedProbeId", state.probeRuns, preferredId);
+    if (state.selectedProbeId) {
+      await openProbeRun(state.selectedProbeId);
+    } else {
+      state.selectedProbeDetail = null;
+    }
+  } catch (error) {
+    state.probeRuns = [];
+    state.selectedProbeId = null;
+    state.selectedProbeDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderProbeHistory();
+}
+
+async function refreshOperatorActivity(preferredId) {
+  if (!canViewOperatorActivity()) {
+    state.activityEvents = [];
+    state.selectedActivityId = null;
+    state.selectedActivityDetail = null;
+    renderOperatorActivity();
+    return;
+  }
+  try {
+    const result = await api("/api/access-control/activity?limit=20");
+    state.activityEvents = result.events || [];
+    selectPreferred("selectedActivityId", state.activityEvents, preferredId);
+    if (state.selectedActivityId) {
+      await openOperatorActivity(state.selectedActivityId);
+    } else {
+      state.selectedActivityDetail = null;
+    }
+  } catch (error) {
+    state.activityEvents = [];
+    state.selectedActivityId = null;
+    state.selectedActivityDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderOperatorActivity();
+}
+
+async function refreshBackups(preferredId) {
+  if (!canViewGovernanceWorkspace()) {
+    state.backupJobs = [];
+    state.backupConfig = null;
+    state.selectedBackupId = null;
+    state.selectedBackupDetail = null;
+    renderBackups();
+    return;
+  }
+  try {
+    const result = await api("/api/operations/backups?limit=12");
+    state.backupConfig = result.config || null;
+    state.backupJobs = result.backups || [];
+    selectPreferred("selectedBackupId", state.backupJobs, preferredId, "backupId");
+    if (state.selectedBackupId) {
+      await openBackupJob(state.selectedBackupId);
+    } else {
+      state.selectedBackupDetail = null;
+    }
+  } catch (error) {
+    state.backupJobs = [];
+    state.backupConfig = null;
+    state.selectedBackupId = null;
+    state.selectedBackupDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderBackups();
+  renderOperationsSummary();
+}
+
+async function runDecision() {
+  if (!canOperateWorkbench()) {
+    renderMessageCard(elements.decisionSummary, "需要 operator 以上角色才能运行决策。");
+    return;
+  }
+  elements.financeOutput.textContent = "正在运行示例决策…";
+  renderMessageCard(elements.decisionSummary, "正在生成决策结果…");
+  try {
+    const payload = formToObject(elements.decisionForm);
+    const result = await api("/api/decision/run", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: payload.mode,
+        packPaths: splitPaths(payload.packPaths),
+      }),
+    });
+    state.decisionResult = result;
+    elements.financeOutput.textContent = JSON.stringify(result, null, 2);
+    rememberAction("已运行示例决策");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshAuditHistory(result.auditRun?.id),
+      refreshAuditIntegrity(),
+      refreshOperatorActivity(),
+      refreshOperationsHealth(),
+    ]);
+  } catch (error) {
+    state.decisionResult = {
+      error: String(error.message || error),
+    };
+    elements.financeOutput.textContent = String(error.message || error);
+    rememberAction(`决策运行失败：${String(error.message || error)}`);
+  }
+  renderDecisionSummary();
+}
+
+async function runReplay() {
+  if (!canOperateWorkbench()) {
+    renderMessageCard(elements.replaySummary, "需要 operator 以上角色才能运行回放。");
+    return;
+  }
+  renderMessageCard(elements.replaySummary, "正在比较基线与候选规则…");
+  try {
+    const payload = formToObject(elements.replayForm);
+    const result = await api("/api/replay/run", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: payload.mode,
+        baselinePackPaths: splitPaths(payload.baselinePackPaths),
+        candidatePackPaths: splitPaths(payload.candidatePackPaths),
+      }),
+    });
+    state.replayResult = result;
+    rememberAction("已运行示例回放");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshAuditHistory(result.auditRun?.id),
+      refreshAuditIntegrity(),
+      refreshOperatorActivity(),
+      refreshOperationsHealth(),
+    ]);
+  } catch (error) {
+    state.replayResult = {
+      error: String(error.message || error),
+    };
+    rememberAction(`回放失败：${String(error.message || error)}`);
+  }
+  renderReplaySummary();
+}
+
+async function runAssistant() {
+  if (!canOperateWorkbench()) {
+    renderMessageCard(elements.assistantSummary, "需要 operator 以上角色才能运行带依据问答。");
+    return;
+  }
+  elements.chatOutput.textContent = "正在生成说明…";
+  renderMessageCard(elements.assistantSummary, "正在检索依据库并生成业务说明…");
+  elements.assistantCitations.innerHTML = "";
+  try {
+    const payload = formToObject(elements.chatForm);
+    const result = await api("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        prompt: payload.prompt,
+        useLegalLibrary: Boolean(payload.useLegalLibrary),
+      }),
+    });
+    state.chatResult = result;
+    elements.chatOutput.textContent = JSON.stringify(result, null, 2);
+    rememberAction("已生成带依据的业务说明");
+  } catch (error) {
+    state.chatResult = {
+      error: String(error.message || error),
+    };
+    elements.chatOutput.textContent = String(error.message || error);
+    rememberAction(`法规问答失败：${String(error.message || error)}`);
+  }
+  renderAssistantSummary();
+}
+
+async function searchLibrary() {
+  if (!canViewLibrary()) {
+    renderMessageCard(elements.libraryResults, "登录后才能查看依据库。");
+    return;
+  }
+  const payload = formToObject(elements.searchForm);
+  try {
+    const includeDrafts =
+      canReviewLibrary() && Boolean(payload.includeDrafts) && state.prefs.advancedMode;
+    const result = await api(
+      `/api/legal-library/search?q=${encodeURIComponent(String(payload.query || ""))}${includeDrafts ? "&includeDrafts=true" : ""}`,
+    );
+    state.libraryResults = result.results || [];
+    ensureSelectedLibraryDocument();
+    rememberAction(`已搜索依据库：${String(payload.query || "全部资料")}`);
+  } catch (error) {
+    state.libraryResults = [];
+    state.selectedLibraryDocumentId = null;
+    rememberAction(`依据库搜索失败：${String(error.message || error)}`);
+  }
+  renderLibrary();
+}
+
+async function updateLibraryStatus() {
+  if (!canReviewLibrary()) {
+    return;
+  }
+  const payload = formToObject(elements.reviewForm);
+  try {
+    await api(`/api/legal-library/documents/${encodeURIComponent(String(payload.documentId || ""))}/status`, {
+      method: "POST",
+      body: JSON.stringify({
+        status: payload.status,
+      }),
+    });
+    elements.reviewForm.reset();
+    rememberAction(`已更新资料状态：${String(payload.documentId || "")}`);
+    await Promise.allSettled([
+      refreshLibrary(),
+      refreshDashboardOverview(),
+      refreshOperatorActivity(),
+      refreshAuditIntegrity(),
+    ]);
+  } catch (error) {
+    rememberAction(`资料状态更新失败：${String(error.message || error)}`);
+    renderMessageCard(elements.libraryDetail, String(error.message || error));
+  }
+}
+
+async function createLibraryDocument() {
+  if (!canReviewLibrary()) {
+    return;
+  }
+  const payload = formToObject(elements.createDocumentForm);
+  try {
+    await api("/api/legal-library/documents", {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.title,
+        jurisdiction: payload.jurisdiction,
+        domain: payload.domain,
+        sourceType: payload.sourceType,
+        sourceRef: payload.sourceRef,
+        tags: splitTags(payload.tags),
+        summary: payload.summary,
+        body: payload.body,
+      }),
+    });
+    elements.createDocumentForm.reset();
+    rememberAction(`已新建依据资料：${String(payload.title || "")}`);
+    await Promise.allSettled([
+      refreshLibrary(),
+      refreshDashboardOverview(),
+      refreshOperatorActivity(),
+    ]);
+  } catch (error) {
+    rememberAction(`新建资料失败：${String(error.message || error)}`);
+    renderMessageCard(elements.libraryDetail, String(error.message || error));
+  }
+}
+
+async function ingestLibrarySource() {
+  if (!canReviewLibrary()) {
+    return;
+  }
+  const payload = formToObject(elements.ingestForm);
+  try {
+    await api("/api/legal-library/ingest", {
+      method: "POST",
+      body: JSON.stringify({
+        title: payload.title,
+        jurisdiction: payload.jurisdiction,
+        domain: payload.domain,
+        url: payload.url,
+        filePath: payload.filePath,
+        tags: splitTags(payload.tags),
+        body: payload.body,
+      }),
+    });
+    elements.ingestForm.reset();
+    rememberAction("已从外部来源补录依据");
+    await Promise.allSettled([
+      refreshLibrary(),
+      refreshDashboardOverview(),
+      refreshOperatorActivity(),
+    ]);
+  } catch (error) {
+    rememberAction(`资料采集失败：${String(error.message || error)}`);
+    renderMessageCard(elements.libraryDetail, String(error.message || error));
+  }
+}
+
+async function verifyAuditIntegrity() {
+  if (!canManageAuditIntegrity()) {
+    renderMessageCard(elements.integritySummary, "只有管理员可以执行完整审计链校验。");
+    return;
+  }
+  renderMessageCard(elements.integritySummary, "正在执行完整校验…");
+  try {
+    const result = await api("/api/audit/integrity/verify", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    state.integrity = result.integrity;
+    elements.integrityStatus.textContent = JSON.stringify(result, null, 2);
+    rememberAction("已执行审计链完整校验");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshAuditExports(),
+      refreshOperatorActivity(),
+      refreshOperationsHealth(),
+    ]);
+  } catch (error) {
+    rememberAction(`审计链校验失败：${String(error.message || error)}`);
+    elements.integrityStatus.textContent = String(error.message || error);
+  }
+  renderGovernance();
+}
+
+async function createAuditExport() {
+  if (!canManageAuditIntegrity()) {
+    renderMessageCard(elements.exportDetail, "只有管理员可以创建导出切片。");
+    return;
+  }
+  renderMessageCard(elements.exportDetail, "正在创建导出文件…");
+  try {
+    const payload = formToObject(elements.exportForm);
+    const result = await api("/api/audit/exports", {
+      method: "POST",
+      body: JSON.stringify({
+        sequenceFrom: payload.sequenceFrom ? Number(payload.sequenceFrom) : undefined,
+        sequenceTo: payload.sequenceTo ? Number(payload.sequenceTo) : undefined,
+        createdFrom: toIsoIfPresent(payload.createdFrom),
+        createdTo: toIsoIfPresent(payload.createdTo),
+      }),
+    });
+    elements.exportForm.reset();
+    state.integrity = result.integrity;
+    rememberAction("已创建审计切片导出");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshAuditExports(result.exportBatch?.id),
+      refreshAuditIntegrity(),
+    ]);
+  } catch (error) {
+    rememberAction(`导出失败：${String(error.message || error)}`);
+    renderMessageCard(elements.exportDetail, String(error.message || error));
+  }
+}
+
+async function runBackup() {
+  if (!canManageIdentitySessions()) {
+    renderMessageCard(elements.backupsSummary, "只有管理员可以手动触发备份。");
+    return;
+  }
+  renderMessageCard(elements.backupsSummary, "正在生成快照并复制到已配置目标…");
+  try {
+    const result = await api("/api/operations/backups/run", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    rememberAction("已手动触发异地备份");
+    await Promise.allSettled([
+      refreshBackups(result.backup?.backupId),
+      refreshDashboardOverview(),
+      refreshAuditIntegrity(),
+      refreshOperationsHealth(),
+    ]);
+  } catch (error) {
+    rememberAction(`备份失败：${String(error.message || error)}`);
+    renderMessageCard(elements.backupDetail, String(error.message || error));
+  }
+}
+
+async function openAuditRun(runId) {
+  if (!runId) {
+    return;
+  }
+  state.selectedAuditId = runId;
+  renderAuditHistory();
+  try {
+    const result = await api(`/api/audit/runs/${encodeURIComponent(runId)}`);
+    state.selectedAuditDetail = result.run;
+  } catch (error) {
+    state.selectedAuditDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderAuditHistory();
+}
+
+async function openProbeRun(runId) {
+  if (!runId) {
+    return;
+  }
+  state.selectedProbeId = runId;
+  renderProbeHistory();
+  try {
+    const result = await api(`/api/runtime/probes/${encodeURIComponent(runId)}`);
+    state.selectedProbeDetail = result.run;
+  } catch (error) {
+    state.selectedProbeDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderProbeHistory();
+}
+
+async function openOperatorActivity(eventId) {
+  if (!eventId) {
+    return;
+  }
+  state.selectedActivityId = eventId;
+  renderOperatorActivity();
+  try {
+    const result = await api(`/api/access-control/activity/${encodeURIComponent(eventId)}`);
+    state.selectedActivityDetail = result.event;
+  } catch (error) {
+    state.selectedActivityDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderOperatorActivity();
+}
+
+async function openAuditExport(exportId) {
+  if (!exportId) {
+    return;
+  }
+  state.selectedExportId = exportId;
+  renderAuditExports();
+  try {
+    const result = await api(`/api/audit/exports/${encodeURIComponent(exportId)}`);
+    state.selectedExportDetail = result.exportBatch;
+  } catch (error) {
+    state.selectedExportDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderAuditExports();
+}
+
+async function openBackupJob(backupId) {
+  if (!backupId) {
+    return;
+  }
+  state.selectedBackupId = backupId;
+  renderBackups();
+  try {
+    const result = await api(`/api/operations/backups/${encodeURIComponent(backupId)}`);
+    state.selectedBackupDetail = result.backup;
+  } catch (error) {
+    state.selectedBackupDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderBackups();
+}
+
+async function loginWithLocalToken() {
+  renderMessageCard(elements.accessSummary, "正在建立本地应急会话…");
+  try {
+    const payload = formToObject(elements.sessionForm);
     const result = await api("/api/access-control/login/token", {
       method: "POST",
       body: JSON.stringify({
         token: payload.sessionToken,
       }),
     });
-    sessionForm.reset();
+    elements.sessionForm.reset();
     state.access = result;
     adoptSessionState(result.session);
-    renderAccessControl();
-    await refreshAllProtectedViews();
-    await refreshAccessControl();
+    rememberAction("已通过本地应急令牌登录");
+    await refreshAll();
   } catch (error) {
-    accessStatus.textContent = String(error.message || error);
+    rememberAction(`本地登录失败：${String(error.message || error)}`);
+    renderMessageCard(elements.accessSummary, String(error.message || error));
   }
-});
+}
 
-bootstrapForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  accessStatus.textContent = "Bootstrapping first admin...";
-  const payload = formToObject(bootstrapForm);
-  const result = await api("/api/access-control/bootstrap", {
-    method: "POST",
-    body: JSON.stringify({
-      name: payload.name,
-      token: payload.token,
-      enableAuth: Boolean(payload.enableAuth),
-    }),
-  });
-  bootstrapForm.reset();
-  state.access = result;
-  adoptSessionState(result.session);
-  renderAccessControl();
-  await refreshAllProtectedViews();
-  await refreshAccessControl();
-});
-
-accessConfigForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = formToObject(accessConfigForm);
-  await api("/api/access-control/config", {
-    method: "POST",
-    body: JSON.stringify({
-      enabled: Boolean(payload.enabled),
-    }),
-  });
-  await refreshAccessControl();
-  await refreshAllProtectedViews();
-});
-
-operatorForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const payload = formToObject(operatorForm);
-  await api("/api/access-control/operators", {
-    method: "POST",
-    body: JSON.stringify({
-      name: payload.name,
-      role: payload.role,
-      token: payload.token,
-      active: Boolean(payload.active),
-    }),
-  });
-  operatorForm.reset();
-  await refreshAccessControl();
-  await refreshGovernanceTelemetry();
-});
-
-bindingForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
+async function logoutCurrentSession() {
   try {
-    const payload = formToObject(bindingForm);
+    await api("/api/access-control/logout", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+  } catch (_error) {
+    // Session may already be gone.
+  }
+  state.csrfToken = "";
+  state.accessSessions = [];
+  rememberAction("已退出当前会话");
+  await refreshAll();
+}
+
+async function bootstrapAdmin() {
+  try {
+    const payload = formToObject(elements.bootstrapForm);
+    const result = await api("/api/access-control/bootstrap", {
+      method: "POST",
+      body: JSON.stringify({
+        name: payload.name,
+        token: payload.token,
+        enableAuth: Boolean(payload.enableAuth),
+      }),
+    });
+    elements.bootstrapForm.reset();
+    state.access = result;
+    adoptSessionState(result.session);
+    rememberAction("已创建首个管理员");
+    await refreshAll();
+  } catch (error) {
+    rememberAction(`管理员初始化失败：${String(error.message || error)}`);
+    renderMessageCard(elements.bootstrapHint, String(error.message || error));
+  }
+}
+
+async function updateAccessConfig() {
+  try {
+    const payload = formToObject(elements.accessConfigForm);
+    await api("/api/access-control/config", {
+      method: "POST",
+      body: JSON.stringify({
+        enabled: Boolean(payload.enabled),
+      }),
+    });
+    rememberAction("已更新访问策略");
+    await refreshAll();
+  } catch (error) {
+    rememberAction(`访问策略更新失败：${String(error.message || error)}`);
+  }
+}
+
+async function createOperator() {
+  try {
+    const payload = formToObject(elements.operatorForm);
+    await api("/api/access-control/operators", {
+      method: "POST",
+      body: JSON.stringify({
+        name: payload.name,
+        role: payload.role,
+        token: payload.token,
+        active: Boolean(payload.active),
+      }),
+    });
+    elements.operatorForm.reset();
+    rememberAction(`已新增本地操作员：${String(payload.name || "")}`);
+    await Promise.allSettled([refreshAccessControl(), refreshDashboardOverview(), refreshOperatorActivity()]);
+  } catch (error) {
+    rememberAction(`新增操作员失败：${String(error.message || error)}`);
+  }
+}
+
+async function createBinding() {
+  try {
+    const payload = formToObject(elements.bindingForm);
     await api("/api/access-control/bindings", {
       method: "POST",
       body: JSON.stringify({
@@ -177,496 +1152,46 @@ bindingForm.addEventListener("submit", async (event) => {
         email: payload.email,
       }),
     });
-    bindingForm.reset();
-    await refreshAccessControl();
-    await refreshOperatorActivity();
+    elements.bindingForm.reset();
+    rememberAction(`已创建身份绑定：${String(payload.label || "")}`);
+    await Promise.allSettled([refreshAccessControl(), refreshOperatorActivity()]);
   } catch (error) {
-    accessStatus.textContent = String(error.message || error);
-  }
-});
-
-exportForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  exportDetail.textContent = "Creating audit export...";
-  try {
-    const payload = formToObject(exportForm);
-    const result = await api("/api/audit/exports", {
-      method: "POST",
-      body: JSON.stringify({
-        sequenceFrom: payload.sequenceFrom ? Number(payload.sequenceFrom) : undefined,
-        sequenceTo: payload.sequenceTo ? Number(payload.sequenceTo) : undefined,
-        createdFrom: toIsoIfPresent(payload.createdFrom),
-        createdTo: toIsoIfPresent(payload.createdTo),
-      }),
-    });
-    exportForm.reset();
-    state.integrity = result.integrity;
-    await refreshAuditExports(result.exportBatch?.id);
-    renderAuditIntegrity();
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    exportDetail.textContent = String(error.message || error);
-  }
-});
-
-chatForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  chatOutput.textContent = "Running...";
-  citationsOutput.innerHTML = "";
-
-  try {
-    const payload = formToObject(chatForm);
-    payload.useLegalLibrary = Boolean(payload.useLegalLibrary);
-    const result = await api("/api/chat", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    chatOutput.textContent = result.reply;
-    citationsOutput.innerHTML = (result.citations || [])
-      .map(
-        (item) => `
-          <article class="citation">
-            <h4>${escapeHtml(item.title)}</h4>
-            <p>${escapeHtml(item.excerpt || "")}</p>
-            <small>${escapeHtml(item.sourceRef || "")}</small>
-          </article>
-        `,
-      )
-      .join("");
-  } catch (error) {
-    chatOutput.textContent = String(error.message || error);
-  }
-});
-
-searchForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const query = new FormData(searchForm).get("query") || "";
-    const includeDrafts = isReviewerSession();
-    const result = await api(
-      `/api/legal-library/search?q=${encodeURIComponent(String(query))}${includeDrafts ? "&includeDrafts=true" : ""}`,
-    );
-    renderLibraryResults(result.results || []);
-  } catch (error) {
-    libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-  }
-});
-
-reviewForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const payload = formToObject(reviewForm);
-    await api(`/api/legal-library/documents/${encodeURIComponent(String(payload.documentId || ""))}/status`, {
-      method: "POST",
-      body: JSON.stringify({
-        status: payload.status,
-      }),
-    });
-    reviewForm.reset();
-    await refreshLibrary();
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-  }
-});
-
-ingestForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const payload = formToObject(ingestForm);
-    payload.tags = splitTags(payload.tags);
-    await api("/api/legal-library/ingest", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    ingestForm.reset();
-    await refreshLibrary();
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-  }
-});
-
-boot();
-
-async function boot() {
-  consumeAuthFlash();
-  await refreshAccessControl();
-  await refreshAllProtectedViews();
-}
-
-async function refreshAllProtectedViews() {
-  await Promise.all([
-    refreshRuntimeConfig(),
-    refreshLibrary(),
-    refreshAuditIntegrity(),
-    refreshAuditExports(),
-    refreshAuditHistory(),
-    refreshProbeHistory(),
-    refreshOperatorActivity(),
-  ]);
-}
-
-async function refreshGovernanceTelemetry() {
-  await Promise.all([
-    refreshAuditIntegrity(),
-    refreshAuditExports(),
-    refreshOperatorActivity(),
-  ]);
-}
-
-async function refreshRuntimeConfig() {
-  try {
-    const { config } = await api("/api/runtime/config");
-    state.config = config;
-    fillConfigForm(config);
-    probeOutput.textContent = "";
-  } catch (error) {
-    state.config = null;
-    probeOutput.textContent = String(error.message || error);
-    modelsOutput.textContent = "";
+    rememberAction(`身份绑定创建失败：${String(error.message || error)}`);
   }
 }
 
-async function loadModels() {
-  modelsOutput.textContent = "Loading models...";
-  try {
-    const result = await api("/api/runtime/models");
-    modelsOutput.textContent = JSON.stringify(result.models, null, 2);
-  } catch (error) {
-    modelsOutput.textContent = String(error.message || error);
+async function deactivateBinding(bindingId) {
+  if (!bindingId) {
+    return;
   }
-}
-
-async function probeRuntime() {
-  probeOutput.textContent = "Probing runtime...";
   try {
-    const result = await api("/api/runtime/probe", {
+    await api(`/api/access-control/bindings/${encodeURIComponent(bindingId)}/deactivate`, {
       method: "POST",
       body: JSON.stringify({}),
     });
-    probeOutput.textContent = JSON.stringify(
-      {
-        probe: result.probe,
-        auditRun: result.auditRun,
-      },
-      null,
-      2,
-    );
-    await refreshProbeHistory(result.auditRun?.id);
-    await refreshGovernanceTelemetry();
+    rememberAction("已停用身份绑定");
+    await Promise.allSettled([refreshAccessControl(), refreshOperatorActivity()]);
   } catch (error) {
-    probeOutput.textContent = String(error.message || error);
+    rememberAction(`停用身份绑定失败：${String(error.message || error)}`);
   }
 }
 
-async function refreshAuditIntegrity() {
-  if (!canViewAuditIntegrity()) {
-    state.integrity = null;
-    integrityStatus.textContent = "Reviewer or admin access is required to inspect audit integrity.";
-    migrationStatus.innerHTML = '<p class="empty-state">Integrity details are hidden until a reviewer or admin session is active.</p>';
+async function revokeAccessSession(sessionId) {
+  if (!sessionId) {
     return;
   }
-
   try {
-    const result = await api("/api/audit/integrity");
-    state.integrity = result.integrity;
-    renderAuditIntegrity();
-  } catch (error) {
-    state.integrity = null;
-    integrityStatus.textContent = String(error.message || error);
-    migrationStatus.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-  }
-}
-
-async function verifyAuditIntegrity() {
-  if (!canManageAuditIntegrity()) {
-    integrityStatus.textContent = "Admin access is required to verify the audit chain.";
-    return;
-  }
-
-  integrityStatus.textContent = "Verifying ledger hash chain...";
-  try {
-    const result = await api("/api/audit/integrity/verify", {
+    const result = await api(`/api/access-control/sessions/${encodeURIComponent(sessionId)}/revoke`, {
       method: "POST",
       body: JSON.stringify({}),
     });
-    state.integrity = result.integrity;
-    integrityStatus.textContent = JSON.stringify(
-      {
-        integrity: result.integrity,
-        verification: result.verification,
-      },
-      null,
-      2,
-    );
-    renderMigrationStatus(result.integrity?.migration || null);
-    await refreshAuditExports();
-    await refreshOperatorActivity();
-  } catch (error) {
-    integrityStatus.textContent = String(error.message || error);
-  }
-}
-
-async function refreshAuditExports(preferredId) {
-  if (!canViewAuditIntegrity()) {
-    state.exportBatches = [];
-    state.selectedExportId = null;
-    exportList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view audit exports.</p>';
-    exportDetail.textContent = "Audit exports are hidden until a reviewer or admin session is active.";
-    return;
-  }
-
-  try {
-    const result = await api("/api/audit/exports?limit=12");
-    state.exportBatches = result.exports || [];
-    if (preferredId) {
-      state.selectedExportId = preferredId;
-    } else if (!state.selectedExportId && state.exportBatches.length > 0) {
-      state.selectedExportId = state.exportBatches[0].id;
-    } else if (!state.exportBatches.some((item) => item.id === state.selectedExportId)) {
-      state.selectedExportId = state.exportBatches[0]?.id || null;
+    if (result.currentSessionId && result.currentSessionId === sessionId) {
+      state.csrfToken = "";
     }
-
-    renderAuditExports();
-    if (state.selectedExportId) {
-      await openAuditExport(state.selectedExportId);
-    } else {
-      exportDetail.textContent = "No audit exports generated yet.";
-    }
+    rememberAction("已撤销活跃会话");
+    await Promise.allSettled([refreshAccessControl(), refreshDashboardOverview(), refreshOperatorActivity()]);
   } catch (error) {
-    state.exportBatches = [];
-    exportList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-    exportDetail.textContent = String(error.message || error);
-  }
-}
-
-async function openAuditExport(exportId) {
-  state.selectedExportId = exportId;
-  renderAuditExports();
-  exportDetail.textContent = "Loading audit export...";
-  try {
-    const result = await api(`/api/audit/exports/${encodeURIComponent(exportId)}`);
-    exportDetail.textContent = JSON.stringify(result.exportBatch, null, 2);
-  } catch (error) {
-    exportDetail.textContent = String(error.message || error);
-  }
-}
-
-async function refreshLibrary() {
-  try {
-    const result = await api("/api/legal-library/documents");
-    renderLibraryResults(
-      (result.documents || []).map((document) => ({
-        document,
-        excerpt: document.summary,
-        score: 0,
-      })),
-    );
-  } catch (error) {
-    libraryResults.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-  }
-}
-
-async function runDecision() {
-  financeOutput.textContent = "Running decision...";
-  try {
-    const result = await api("/api/decision/run", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    financeOutput.textContent = JSON.stringify(
-      {
-        auditRun: result.auditRun,
-        decisionPacket: result.decision.decisionPacket,
-      },
-      null,
-      2,
-    );
-    await refreshAuditHistory(result.auditRun?.id);
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    financeOutput.textContent = String(error.message || error);
-  }
-}
-
-async function runReplay() {
-  financeOutput.textContent = "Running replay...";
-  try {
-    const result = await api("/api/replay/run", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    financeOutput.textContent = JSON.stringify(
-      {
-        auditRun: result.auditRun,
-        replay: result.replay,
-      },
-      null,
-      2,
-    );
-    await refreshAuditHistory(result.auditRun?.id);
-    await refreshGovernanceTelemetry();
-  } catch (error) {
-    financeOutput.textContent = String(error.message || error);
-  }
-}
-
-async function refreshAuditHistory(preferredId) {
-  if (!canViewAuditIntegrity()) {
-    state.auditRuns = [];
-    state.selectedAuditId = null;
-    auditList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view audit history.</p>';
-    auditDetail.textContent = "Audit history is hidden until a reviewer or admin session is active.";
-    return;
-  }
-
-  try {
-    const result = await api("/api/audit/runs?limit=12");
-    state.auditRuns = result.runs || [];
-    if (preferredId) {
-      state.selectedAuditId = preferredId;
-    } else if (!state.selectedAuditId && state.auditRuns.length > 0) {
-      state.selectedAuditId = state.auditRuns[0].id;
-    } else if (!state.auditRuns.some((item) => item.id === state.selectedAuditId)) {
-      state.selectedAuditId = state.auditRuns[0]?.id || null;
-    }
-
-    renderAuditRuns();
-    if (state.selectedAuditId) {
-      await openAuditRun(state.selectedAuditId);
-    } else {
-      auditDetail.textContent = "No persisted runs yet.";
-    }
-  } catch (error) {
-    state.auditRuns = [];
-    auditList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-    auditDetail.textContent = String(error.message || error);
-  }
-}
-
-async function openAuditRun(runId) {
-  state.selectedAuditId = runId;
-  renderAuditRuns();
-  auditDetail.textContent = "Loading audit run...";
-  try {
-    const result = await api(`/api/audit/runs/${encodeURIComponent(runId)}`);
-    auditDetail.textContent = JSON.stringify(result.run, null, 2);
-  } catch (error) {
-    auditDetail.textContent = String(error.message || error);
-  }
-}
-
-async function refreshProbeHistory(preferredId) {
-  if (!canViewAuditIntegrity()) {
-    state.probeRuns = [];
-    state.selectedProbeId = null;
-    probeHistoryList.innerHTML = '<p class="empty-state">Reviewer or admin access is required to view probe history.</p>';
-    probeHistoryDetail.textContent = "Probe history is hidden until a reviewer or admin session is active.";
-    return;
-  }
-
-  try {
-    const result = await api("/api/runtime/probes?limit=12");
-    state.probeRuns = result.runs || [];
-    if (preferredId) {
-      state.selectedProbeId = preferredId;
-    } else if (!state.selectedProbeId && state.probeRuns.length > 0) {
-      state.selectedProbeId = state.probeRuns[0].id;
-    } else if (!state.probeRuns.some((item) => item.id === state.selectedProbeId)) {
-      state.selectedProbeId = state.probeRuns[0]?.id || null;
-    }
-
-    renderProbeRuns();
-    if (state.selectedProbeId) {
-      await openProbeRun(state.selectedProbeId);
-    } else {
-      probeHistoryDetail.textContent = "No persisted probes yet.";
-    }
-  } catch (error) {
-    state.probeRuns = [];
-    probeHistoryList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-    probeHistoryDetail.textContent = String(error.message || error);
-  }
-}
-
-async function openProbeRun(runId) {
-  state.selectedProbeId = runId;
-  renderProbeRuns();
-  probeHistoryDetail.textContent = "Loading probe run...";
-  try {
-    const result = await api(`/api/runtime/probes/${encodeURIComponent(runId)}`);
-    probeHistoryDetail.textContent = JSON.stringify(result.run, null, 2);
-  } catch (error) {
-    probeHistoryDetail.textContent = String(error.message || error);
-  }
-}
-
-async function refreshOperatorActivity(preferredId) {
-  if (!canViewOperatorActivity()) {
-    state.activityEvents = [];
-    state.selectedActivityId = null;
-    activityList.innerHTML = '<p class="empty-state">Admin access is required to view operator activity.</p>';
-    activityDetail.textContent = "Operator activity is hidden until an admin session is active.";
-    return;
-  }
-
-  try {
-    const result = await api("/api/access-control/activity?limit=20");
-    state.activityEvents = result.events || [];
-    if (preferredId) {
-      state.selectedActivityId = preferredId;
-    } else if (!state.selectedActivityId && state.activityEvents.length > 0) {
-      state.selectedActivityId = state.activityEvents[0].id;
-    } else if (!state.activityEvents.some((item) => item.id === state.selectedActivityId)) {
-      state.selectedActivityId = state.activityEvents[0]?.id || null;
-    }
-
-    renderOperatorActivity();
-    if (state.selectedActivityId) {
-      await openOperatorActivity(state.selectedActivityId);
-    } else {
-      activityDetail.textContent = "No operator activity logged yet.";
-    }
-  } catch (error) {
-    state.activityEvents = [];
-    activityList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
-    activityDetail.textContent = String(error.message || error);
-  }
-}
-
-async function openOperatorActivity(eventId) {
-  state.selectedActivityId = eventId;
-  renderOperatorActivity();
-  activityDetail.textContent = "Loading operator activity...";
-  try {
-    const result = await api(`/api/access-control/activity/${encodeURIComponent(eventId)}`);
-    activityDetail.textContent = JSON.stringify(result.event, null, 2);
-  } catch (error) {
-    activityDetail.textContent = String(error.message || error);
-  }
-}
-
-async function refreshAccessControl() {
-  const result = await api("/api/access-control");
-  state.access = result;
-  adoptSessionState(result.session);
-  if (canManageIdentitySessions()) {
-    await refreshAccessSessions();
-  } else {
-    state.accessSessions = [];
-  }
-  renderAccessControl();
-}
-
-async function refreshAccessSessions() {
-  try {
-    const result = await api("/api/access-control/sessions?limit=25");
-    state.accessSessions = result.sessions || [];
-  } catch (error) {
-    state.accessSessions = [];
-    activeSessionList.innerHTML = `<p class="empty-state">${escapeHtml(String(error.message || error))}</p>`;
+    rememberAction(`撤销会话失败：${String(error.message || error)}`);
   }
 }
 
@@ -674,79 +1199,897 @@ function startOidcLogin() {
   window.location.href = "/api/access-control/login?next=%2F";
 }
 
-async function logoutCurrentSession() {
+async function updateRuntimeConfig() {
   try {
-    await api("/api/access-control/logout", {
+    const payload = formToObject(elements.runtimeConfigForm);
+    const result = await api("/api/runtime/config", {
+      method: "POST",
+      body: JSON.stringify({
+        mode: payload.mode,
+        model: payload.model,
+        localBaseUrl: payload.localBaseUrl,
+        cloudBaseUrl: payload.cloudBaseUrl,
+        apiKey: payload.apiKey,
+        temperature: Number(payload.temperature),
+        systemPrompt: payload.systemPrompt,
+        persistSecret: Boolean(payload.persistSecret),
+      }),
+    });
+    state.config = result.config;
+    fillForm(elements.runtimeConfigForm, result.config);
+    rememberAction("已保存运行时配置");
+    elements.probeOutput.textContent = "运行时配置已保存。";
+    await Promise.allSettled([refreshDashboardOverview(), refreshOperationsHealth(), refreshRuntimeConfig(), refreshOperatorActivity()]);
+  } catch (error) {
+    elements.probeOutput.textContent = String(error.message || error);
+    rememberAction(`运行时配置保存失败：${String(error.message || error)}`);
+  }
+}
+
+async function probeRuntime() {
+  elements.probeOutput.textContent = "正在探测运行时…";
+  try {
+    const result = await api("/api/runtime/probe", {
       method: "POST",
       body: JSON.stringify({}),
     });
-  } catch (_error) {
-    // Clear local auth state even if the server session was already gone.
+    state.probeResult = result;
+    elements.probeOutput.textContent = JSON.stringify(result, null, 2);
+    rememberAction("已执行运行时探测");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshOperationsHealth(),
+      refreshProbeHistory(result.auditRun?.id),
+      refreshOperatorActivity(),
+    ]);
+  } catch (error) {
+    state.probeResult = {
+      error: String(error.message || error),
+    };
+    elements.probeOutput.textContent = String(error.message || error);
+    rememberAction(`运行时探测失败：${String(error.message || error)}`);
   }
-  state.csrfToken = "";
-  state.accessSessions = [];
-  await refreshAccessControl();
-  await refreshAllProtectedViews();
+  renderRuntimeConfig();
+}
+
+async function loadModels() {
+  elements.modelsOutput.textContent = "正在读取模型列表…";
+  try {
+    const result = await api("/api/runtime/models");
+    state.models = result.models || [];
+    elements.modelsOutput.textContent = JSON.stringify(result.models, null, 2);
+    rememberAction("已刷新模型列表");
+  } catch (error) {
+    state.models = [];
+    elements.modelsOutput.textContent = String(error.message || error);
+    rememberAction(`模型列表读取失败：${String(error.message || error)}`);
+  }
+  renderRuntimeConfig();
+}
+
+async function handleQuickAction(input) {
+  const workspace = input.workspace || "workbench";
+  if (workspace === "system" && !canViewSystemWorkspace()) {
+    setWorkspace("workbench");
+  } else if (workspace === "governance" && !canViewGovernanceWorkspace()) {
+    setWorkspace("workbench");
+  } else {
+    setWorkspace(workspace);
+  }
+
+  switch (input.intent) {
+    case "run_example_decision":
+      await runDecision();
+      break;
+    case "run_example_replay":
+      await runReplay();
+      break;
+    case "search_legal_library":
+      setWorkspace("library");
+      elements.searchForm.querySelector('[name="query"]').focus();
+      break;
+    case "open_system_health":
+      if (canViewSystemWorkspace()) {
+        setWorkspace("system");
+      }
+      break;
+    case "verify_audit_chain":
+      setWorkspace(canViewGovernanceWorkspace() ? "governance" : "workbench");
+      break;
+    case "configure_backups":
+      setWorkspace(canViewSystemWorkspace() ? "system" : "workbench");
+      break;
+    case "review_draft_documents":
+      setWorkspace("library");
+      break;
+    case "open_login":
+      setWorkspace("system");
+      break;
+    default:
+      break;
+  }
+}
+
+function renderAll() {
+  renderFrame();
+  renderWorkbenchSummary();
+  renderDecisionSummary();
+  renderReplaySummary();
+  renderAssistantSummary();
+  renderLibrary();
+  renderGovernance();
+  renderAccessControl();
+  renderRuntimeConfig();
+  renderOperationsSummary();
+}
+
+function renderFrame() {
+  applyPreferences();
+  const visibleWorkspaces = getVisibleWorkspaces();
+  if (!visibleWorkspaces.includes(state.prefs.currentWorkspace)) {
+    setWorkspace("workbench", { persist: true, replaceHash: true });
+  }
+
+  for (const button of elements.workspaceTabs) {
+    const workspace = button.getAttribute("data-workspace");
+    button.hidden = !visibleWorkspaces.includes(workspace);
+    button.classList.toggle("active", workspace === state.prefs.currentWorkspace);
+  }
+  for (const panel of elements.workspacePanels) {
+    panel.classList.toggle("active", panel.getAttribute("data-workspace-panel") === state.prefs.currentWorkspace);
+  }
+
+  elements.identityPill.innerHTML = buildIdentityPill();
+  elements.flashBanner.hidden = !state.authFlash;
+  elements.flashBanner.textContent = state.authFlash ? formatAuthFlash(state.authFlash) : "";
+
+  elements.heroIdentity.innerHTML = renderHeroCard({
+    kicker: "身份状态",
+    title: state.overview?.identity?.authenticated
+      ? `${state.overview.identity.actor?.name || "当前用户"}`
+      : state.overview?.identity?.authEnabled
+        ? "等待登录"
+        : "开放模式",
+    pill: statusPill(
+      state.overview?.identity?.authenticated
+        ? "good"
+        : state.overview?.identity?.authEnabled
+          ? "warn"
+          : "info",
+      state.overview?.identity?.authenticated
+        ? formatRole(state.overview.identity.actor?.role)
+        : state.overview?.identity?.authEnabled
+          ? "未登录"
+          : "开放模式",
+    ),
+    note: state.overview?.identity?.summary || "正在读取控制台身份状态。",
+    meta: [
+      state.overview?.identity?.authMethod ? `登录方式：${formatAuthMethod(state.overview.identity.authMethod)}` : null,
+      state.overview?.identity?.sessionExpiresAt ? `到期：${formatDateTime(state.overview.identity.sessionExpiresAt)}` : null,
+    ].filter(Boolean),
+  });
+
+  elements.heroRuntime.innerHTML = renderHeroCard({
+    kicker: "运行时",
+    title: state.overview?.runtime?.model || "未配置模型",
+    pill: statusPill(statusToneFromRun(state.overview?.runtime?.lastProbe?.status), state.overview?.runtime?.mode || "unknown"),
+    note: state.overview?.runtime?.lastProbe?.summary || "尚未获取运行时摘要。",
+    meta: [
+      state.overview?.runtime?.hasApiKey ? "已配置云端凭据" : "未配置云端凭据",
+      state.operationsHealth ? `Uptime：${humanizeSeconds(state.operationsHealth.uptimeSeconds)}` : null,
+    ].filter(Boolean),
+  });
+
+  elements.heroGovernance.innerHTML = renderHeroCard({
+    kicker: "治理状态",
+    title: state.overview?.governance?.integrity?.summary || "正在读取治理摘要",
+    pill: statusPill(statusToneFromIntegrity(state.overview?.governance?.integrity), integrityLabel(state.overview?.governance?.integrity)),
+    note: state.overview?.governance?.backups?.summary || "尚未读取备份状态。",
+    meta: [
+      state.overview?.governance?.legalLibrary ? `待审核资料：${state.overview.governance.legalLibrary.draftCount}` : null,
+      state.overview?.governance?.sessions ? `活跃会话：${state.overview.governance.sessions.activeCount}` : null,
+    ].filter(Boolean),
+  });
+
+  elements.heroLastAction.innerHTML = renderHeroCard({
+    kicker: "最近动作",
+    title: state.prefs.lastAction || "还没有执行新的操作",
+    pill: statusPill("neutral", WORKSPACE_LABELS[state.prefs.currentWorkspace]),
+    note: state.operationsHealth
+      ? `${state.operationsHealth.environment} / ${state.operationsHealth.teamScope} · ${state.operationsHealth.version}`
+      : "将控制台视图、最近动作和高级模式一并保存在本地偏好里。",
+    meta: [
+      state.overview?.generatedAt ? `总览生成于 ${formatDateTime(state.overview.generatedAt)}` : null,
+      state.prefs.advancedMode ? "高级详情已开启" : "高级详情已隐藏",
+    ].filter(Boolean),
+  });
+
+  renderQuickActions();
+}
+
+function renderQuickActions() {
+  const actions = state.overview?.actions || [];
+  if (!actions.length) {
+    elements.quickActions.innerHTML = emptyState("当前没有推荐动作，可以直接进入工作台浏览摘要。");
+    return;
+  }
+  elements.quickActions.innerHTML = actions
+    .map(
+      (action) => `
+        <button
+          type="button"
+          class="action-card"
+          data-intent="${escapeHtml(action.intent)}"
+          data-workspace="${escapeHtml(action.workspace)}"
+        >
+          <div class="record-head">
+            <strong>${escapeHtml(action.title)}</strong>
+            ${statusPill(action.tone === "warning" ? "warn" : action.tone === "primary" ? "good" : "neutral", WORKSPACE_LABELS[action.workspace])}
+          </div>
+          <p class="summary-note">${escapeHtml(action.description)}</p>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function renderWorkbenchSummary() {
+  const overview = state.overview;
+  if (!overview) {
+    elements.workbenchSummary.innerHTML = emptyState("正在读取工作台摘要。");
+    return;
+  }
+
+  elements.workbenchSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "最近决策",
+      title: overview.decisioning.lastDecision?.summary || "还没有运行过决策",
+      pill: statusPill("good", overview.decisioning.lastDecision?.riskRating ? `${formatRisk(overview.decisioning.lastDecision.riskRating)}风险` : "等待运行"),
+      note: overview.decisioning.lastDecision
+        ? `最近一次结果：${overview.decisioning.lastDecision.label}`
+        : "点击“运行示例决策”即可快速生成第一份可审计结果。",
+      meta: [
+        `24h 决策数：${overview.decisioning.counts24h.decision}`,
+        overview.decisioning.lastDecision?.confidence != null
+          ? `置信度：${Number(overview.decisioning.lastDecision.confidence).toFixed(2)}`
+          : null,
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "最近回放",
+      title: overview.decisioning.lastReplay?.summary || "还没有运行过回放",
+      pill: statusPill("info", overview.decisioning.lastReplay ? `${overview.decisioning.lastReplay.changedEvents || 0} 条变化` : "等待运行"),
+      note: overview.decisioning.lastReplay
+        ? `最近一次回放：${overview.decisioning.lastReplay.label}`
+        : "回放会告诉你候选规则相对基线产生了多少变化。",
+      meta: [`24h 回放数：${overview.decisioning.counts24h.replay}`],
+    }),
+    renderSummaryCard({
+      kicker: "依据库",
+      title: `${overview.governance.legalLibrary.totalDocuments} 份资料`,
+      pill: statusPill(overview.governance.legalLibrary.draftCount > 0 ? "warn" : "good", `${overview.governance.legalLibrary.draftCount} 份待审`),
+      note: overview.governance.integrity.summary,
+      meta: [
+        `Reviewed：${overview.governance.legalLibrary.reviewedCount}`,
+        `Approved：${overview.governance.legalLibrary.approvedCount}`,
+      ],
+    }),
+  ].join("");
+}
+
+function renderWorkbenchHealth() {
+  const health = state.operationsHealth;
+  if (!health) {
+    elements.workbenchHealth.innerHTML = emptyState("系统快照正在读取。");
+    return;
+  }
+  elements.workbenchHealth.innerHTML = [
+    renderSummaryCard({
+      kicker: "运行时检查",
+      title: health.checks.runtime.summary,
+      pill: statusPill(statusToneFromStatus(health.checks.runtime.status), translateStatus(health.checks.runtime.status)),
+      note: `最新探测：${health.recent.probe ? formatDateTime(health.recent.probe.createdAt) : "暂无记录"}`,
+      meta: [
+        `环境：${health.environment}`,
+        `团队：${health.teamScope}`,
+      ],
+    }),
+    renderSummaryCard({
+      kicker: "审计链",
+      title: health.checks.ledger.summary,
+      pill: statusPill(statusToneFromStatus(health.checks.ledger.status), translateStatus(health.checks.ledger.status)),
+      note: state.overview?.governance?.integrity?.lastVerifiedAt
+        ? `最近校验：${formatDateTime(state.overview.governance.integrity.lastVerifiedAt)}`
+        : "还没有完整校验记录。",
+      meta: [
+        state.overview?.governance?.integrity?.mismatchCount != null
+          ? `异常数：${state.overview.governance.integrity.mismatchCount}`
+          : null,
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "异地备份",
+      title: health.checks.backupTargets.summary,
+      pill: statusPill(statusToneFromStatus(health.checks.backupTargets.status), translateStatus(health.checks.backupTargets.status)),
+      note: health.recent.backup
+        ? `最近备份：${formatDateTime(health.recent.backup.createdAt)}`
+        : "还没有备份记录。",
+      meta: [
+        state.overview?.governance?.backups?.configuredTargetCount != null
+          ? `已配置目标：${state.overview.governance.backups.configuredTargetCount}`
+          : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+}
+
+function renderDecisionSummary() {
+  if (!state.decisionResult) {
+    renderMessageCard(elements.decisionSummary, "运行一次示例决策后，这里会告诉你风险等级、置信度和审计编号。");
+    return;
+  }
+  if (state.decisionResult.error) {
+    renderMessageCard(elements.decisionSummary, state.decisionResult.error);
+    return;
+  }
+  const packet = state.decisionResult.decision?.decisionPacket;
+  const auditRun = state.decisionResult.auditRun;
+  elements.decisionSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "决策结论",
+      title: `当前事件被判定为 ${formatRisk(packet?.risk_rating)} 风险`,
+      pill: statusPill(packet?.risk_rating === "high" ? "bad" : packet?.risk_rating === "medium" ? "warn" : "good", packet?.risk_rating || "unknown"),
+      note: packet?.rationale || "决策包已生成。",
+      meta: [
+        packet?.confidence != null ? `置信度：${Number(packet.confidence).toFixed(2)}` : null,
+        auditRun ? `审计序号：#${auditRun.sequence}` : null,
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "审计归档",
+      title: auditRun ? auditRun.label : "审计记录未生成",
+      pill: statusPill(statusToneFromStatus(auditRun?.chainStatus), auditRun?.chainStatus || "pending"),
+      note: auditRun
+        ? `${auditRun.environment} / ${auditRun.teamScope} · ${formatDateTime(auditRun.createdAt)}`
+        : "当前结果没有持久化审计记录。",
+      meta: [
+        auditRun?.decisionPacketId ? `Decision packet：${auditRun.decisionPacketId}` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+}
+
+function renderReplaySummary() {
+  if (!state.replayResult) {
+    renderMessageCard(elements.replaySummary, "运行回放后，这里会用业务语言总结变更影响。");
+    return;
+  }
+  if (state.replayResult.error) {
+    renderMessageCard(elements.replaySummary, state.replayResult.error);
+    return;
+  }
+  const replay = state.replayResult.replay;
+  const auditRun = state.replayResult.auditRun;
+  elements.replaySummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "回放结论",
+      title: `共发现 ${replay.changed_events} 条结果变化`,
+      pill: statusPill(replay.changed_events > 0 ? "warn" : "good", `${replay.changed_events}/${replay.compared_events}`),
+      note:
+        replay.changed_events > 0
+          ? `其中 ${replay.higher_risk_events} 条变得更高风险，${replay.lower_confidence_events} 条置信度下降。`
+          : "候选规则与基线结果一致，没有发现业务输出变化。",
+      meta: [
+        auditRun ? `审计序号：#${auditRun.sequence}` : null,
+        auditRun ? `环境：${auditRun.environment}` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+}
+
+function renderAssistantSummary() {
+  if (!state.chatResult) {
+    renderMessageCard(elements.assistantSummary, "在上方输入业务问题，这里会先给一句能直接转述给业务方的说明。");
+    return;
+  }
+  if (state.chatResult.error) {
+    renderMessageCard(elements.assistantSummary, state.chatResult.error);
+    return;
+  }
+  elements.assistantSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "说明结果",
+      title: state.chatResult.reply || "未生成回复",
+      pill: statusPill("info", state.chatResult.model || "chat"),
+      note: state.chatResult.citations?.length
+        ? `本次引用了 ${state.chatResult.citations.length} 条依据库资料。`
+        : "本次没有找到可引用的依据库资料，请留意资料是否缺失。",
+      meta: [
+        state.chatResult.provider ? `Provider：${state.chatResult.provider}` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+
+  elements.assistantCitations.innerHTML = (state.chatResult.citations || [])
+    .map(
+      (item) => `
+        <article class="citation-card">
+          <div class="record-head">
+            <strong>${escapeHtml(item.title)}</strong>
+            ${statusPill("neutral", item.status || "citation")}
+          </div>
+          <p class="summary-note">${escapeHtml(item.excerpt || "暂无摘要")}</p>
+          <div class="record-meta">
+            <span>${escapeHtml(item.jurisdiction || "GLOBAL")}</span>
+            <span>${escapeHtml(item.sourceRef || "")}</span>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderLibrary() {
+  renderLibrarySummary();
+  renderLibraryResults();
+  renderLibraryDetail();
+  const canReview = canReviewLibrary();
+  elements.reviewTools.classList.toggle("hidden", !canReview);
+  elements.createDocumentPanel.classList.toggle("hidden", !canReview);
+  elements.ingestPanel.classList.toggle("hidden", !canReview);
+}
+
+function renderLibrarySummary() {
+  if (!canViewLibrary()) {
+    elements.librarySummary.innerHTML = emptyState("登录后才能浏览依据库。");
+    return;
+  }
+  const total = state.libraryDocuments.length;
+  const draftCount = state.libraryDocuments.filter((item) => item.status === "draft").length;
+  const approvedCount = state.libraryDocuments.filter((item) => item.status === "approved").length;
+  const resultCount = state.libraryResults.length;
+  elements.librarySummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "资料总量",
+      title: `${total} 份资料`,
+      pill: statusPill(draftCount > 0 ? "warn" : "good", `${draftCount} 份待审`),
+      note: resultCount > 0 ? `当前结果集共有 ${resultCount} 条可查看条目。` : "当前还没有搜索结果，可直接浏览全量资料。",
+      meta: [`Approved：${approvedCount}`],
+    }),
+  ].join("");
+}
+
+function renderLibraryResults() {
+  if (!canViewLibrary()) {
+    elements.libraryResults.innerHTML = emptyState("登录后才能查看依据库搜索结果。");
+    return;
+  }
+  if (!state.libraryResults.length) {
+    elements.libraryResults.innerHTML = emptyState("没有匹配结果。可以换关键词，或点击“刷新依据库”查看全部资料。");
+    return;
+  }
+
+  elements.libraryResults.innerHTML = state.libraryResults
+    .map(({ document, excerpt, score }) => {
+      const selected = document.id === state.selectedLibraryDocumentId;
+      return `
+        <button
+          type="button"
+          class="record-item ${selected ? "active" : ""}"
+          data-document-id="${escapeHtml(document.id)}"
+        >
+          <div class="record-head">
+            <strong>${escapeHtml(document.title)}</strong>
+            ${statusPill(document.status === "approved" ? "good" : document.status === "reviewed" ? "info" : document.status === "draft" ? "warn" : "neutral", document.status)}
+          </div>
+          <p class="record-copy">${escapeHtml(excerpt || document.summary || "")}</p>
+          <div class="record-meta">
+            <span>${escapeHtml(document.jurisdiction)}</span>
+            <span>${escapeHtml(document.domain)}</span>
+            ${score ? `<span>score ${escapeHtml(score)}</span>` : ""}
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderLibraryDetail() {
+  if (!canViewLibrary()) {
+    renderMessageCard(elements.libraryDetail, "登录后才能查看资料详情。");
+    return;
+  }
+  const document = getSelectedLibraryDocument();
+  if (!document) {
+    renderMessageCard(elements.libraryDetail, "从左侧选择一份资料，查看它是否已通过审核、可以直接引用。");
+    return;
+  }
+  elements.libraryDetail.innerHTML = `
+    <div class="record-head">
+      <strong>${escapeHtml(document.title)}</strong>
+      ${statusPill(document.status === "approved" ? "good" : document.status === "reviewed" ? "info" : document.status === "draft" ? "warn" : "neutral", document.status)}
+    </div>
+    <p class="summary-note">${escapeHtml(document.summary || "暂无摘要")}</p>
+    <div class="metric-list">
+      ${metricRow("Jurisdiction", document.jurisdiction)}
+      ${metricRow("Domain", document.domain)}
+      ${metricRow("Source", document.sourceRef || "manual")}
+      ${metricRow("版本", `v${document.version}`)}
+      ${metricRow("更新时间", formatDateTime(document.updatedAt))}
+      ${metricRow("Document ID", document.id)}
+    </div>
+    <details class="technical-details advanced-only">
+      <summary>查看原始正文</summary>
+      <pre class="output">${escapeHtml(document.body || "")}</pre>
+    </details>
+  `;
+}
+
+function renderGovernance() {
+  renderIntegritySummary();
+  renderAuditExports();
+  renderAuditHistory();
+  renderProbeHistory();
+  renderOperatorActivity();
+  renderBackups();
+
+  elements.verifyIntegrityButton.hidden = !canManageAuditIntegrity();
+  elements.runBackupButton.hidden = !canManageIdentitySessions();
+  elements.exportForm.classList.toggle("hidden", !canManageAuditIntegrity());
+}
+
+function renderIntegritySummary() {
+  if (!canViewGovernanceWorkspace()) {
+    renderMessageCard(elements.integritySummary, "Reviewer 或 Admin 登录后才能查看治理中心。");
+    elements.integrityStatus.textContent = "";
+    elements.migrationStatus.innerHTML = emptyState("治理详情对当前角色不可见。");
+    return;
+  }
+  const integrity = state.integrity;
+  if (!integrity) {
+    renderMessageCard(elements.integritySummary, "正在读取审计链状态。");
+    elements.integrityStatus.textContent = "";
+    elements.migrationStatus.innerHTML = emptyState("正在读取 SQLite ledger 迁移信息。");
+    return;
+  }
+
+  elements.integritySummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "链路健康",
+      title: integritySummaryTitle(integrity),
+      pill: statusPill(statusToneFromIntegrity(integrity), integrityLabel(integrity)),
+      note: integrity.lastVerifiedAt
+        ? `最近完整校验：${formatDateTime(integrity.lastVerifiedAt)}`
+        : "还没有执行过完整校验。",
+      meta: [
+        `最新序号：#${integrity.latestSequence || 0}`,
+        `Mismatch：${integrity.mismatchCount || 0}`,
+        `环境：${integrity.environment}/${integrity.teamScope}`,
+      ],
+    }),
+    renderSummaryCard({
+      kicker: "最近导出",
+      title: integrity.lastExport ? `${integrity.lastExport.entryCount} 条记录` : "还没有导出记录",
+      pill: statusPill(integrity.lastExport ? "info" : "neutral", integrity.lastExport ? "可追溯" : "未导出"),
+      note: integrity.lastExport
+        ? `${integrity.lastExport.dataFile}`
+        : "导出切片会生成 NDJSON 数据文件和 manifest。",
+      meta: integrity.lastExport
+        ? [
+            `范围：${integrity.lastExport.sequenceFrom || 0} - ${integrity.lastExport.sequenceTo || 0}`,
+            `时间：${formatDateTime(integrity.lastExport.createdAt)}`,
+          ]
+        : [],
+    }),
+  ].join("");
+
+  elements.integrityStatus.textContent = JSON.stringify(integrity, null, 2);
+  elements.migrationStatus.innerHTML = integrity.migration
+    ? renderSummaryCard({
+        kicker: "迁移状态",
+        title: `已从旧 JSON 导入 ${integrity.migration.importedEntries} 条历史记录`,
+        pill: statusPill("good", "SQLite 接管"),
+        note: "旧的 runs.json / activity.json 现在只保留为历史备份来源，不再作为主存储。",
+        meta: [
+          integrity.migration.legacyPaths.runs,
+          integrity.migration.legacyPaths.activity,
+        ],
+      })
+    : renderSummaryCard({
+        kicker: "主存储",
+        title: "SQLite ledger 已作为唯一 source of truth",
+        pill: statusPill("good", "source of truth"),
+        note: "当前没有需要展示的 legacy JSON 迁移元数据。",
+        meta: [],
+      });
+}
+
+function renderAuditExports() {
+  if (!canViewGovernanceWorkspace()) {
+    elements.exportList.innerHTML = emptyState("当前角色不可查看导出历史。");
+    renderMessageCard(elements.exportDetail, "导出详情对当前角色不可见。");
+    return;
+  }
+  if (!state.exportBatches.length) {
+    elements.exportList.innerHTML = emptyState("还没有导出记录。");
+  } else {
+    elements.exportList.innerHTML = state.exportBatches
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.id === state.selectedExportId ? "active" : ""}"
+            data-export-id="${escapeHtml(item.id)}"
+          >
+            <div class="record-head">
+              <strong>导出 #${escapeHtml(item.sequence)}</strong>
+              ${statusPill(statusToneFromStatus(item.chainStatus), item.chainStatus)}
+            </div>
+            <p class="record-copy">${escapeHtml(`${item.entryCount} 条记录 · ${pathLeaf(item.dataFile)}`)}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(`${item.sequenceFrom || 0} - ${item.sequenceTo || 0}`)}</span>
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.exportDetail, state.selectedExportDetail, "导出详情", renderExportDetailCard);
+}
+
+function renderBackups() {
+  if (!canViewGovernanceWorkspace()) {
+    renderMessageCard(elements.backupsSummary, "当前角色不可查看备份状态。");
+    elements.backupList.innerHTML = emptyState("备份记录对当前角色不可见。");
+    renderMessageCard(elements.backupDetail, "备份详情对当前角色不可见。");
+    return;
+  }
+  const latest = state.backupJobs[0] || null;
+  elements.backupsSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "备份配置",
+      title: state.backupConfig?.anyConfigured
+        ? `已配置 ${state.backupConfig.configuredTargetCount} 个目标`
+        : "尚未配置异地备份目标",
+      pill: statusPill(
+        state.backupConfig?.anyConfigured ? "info" : "warn",
+        state.backupConfig?.anyConfigured ? "已配置" : "未配置",
+      ),
+      note: latest
+        ? `最近一次备份：${formatDateTime(latest.createdAt)} · ${translateBackupStatus(latest.status)}`
+        : "备份会包含 ledger.sqlite、auth-sessions.sqlite、访问控制状态和审计导出文件。",
+      meta: [
+        state.backupConfig?.localDir ? `目录目标：${state.backupConfig.localDir}` : null,
+        state.backupConfig?.s3?.configured ? `S3：${state.backupConfig.s3.bucket}` : null,
+      ].filter(Boolean),
+    }),
+    latest
+      ? renderSummaryCard({
+          kicker: "最近结果",
+          title: latest.error || latest.summary || translateBackupStatus(latest.status),
+          pill: statusPill(statusToneFromBackup(latest.status), translateBackupStatus(latest.status)),
+          note: `快照路径：${latest.snapshotPath}`,
+          meta: [
+            `文件数：${latest.includedFiles.length}`,
+            `大小：${formatBytes(latest.totalBytes)}`,
+          ],
+        })
+      : emptyState("还没有备份记录。"),
+  ].join("");
+
+  if (!state.backupJobs.length) {
+    elements.backupList.innerHTML = emptyState("执行一次备份后，这里会出现历史记录。");
+  } else {
+    elements.backupList.innerHTML = state.backupJobs
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.backupId === state.selectedBackupId ? "active" : ""}"
+            data-backup-id="${escapeHtml(item.backupId)}"
+          >
+            <div class="record-head">
+              <strong>${escapeHtml(translateBackupStatus(item.status))}</strong>
+              ${statusPill(statusToneFromBackup(item.status), item.trigger)}
+            </div>
+            <p class="record-copy">${escapeHtml(item.error || pathLeaf(item.snapshotPath))}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+              <span>${escapeHtml(formatBytes(item.totalBytes))}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.backupDetail, state.selectedBackupDetail, "备份详情", renderBackupDetailCard);
+}
+
+function renderAuditHistory() {
+  if (!canViewGovernanceWorkspace()) {
+    elements.auditList.innerHTML = emptyState("当前角色不可查看审计历史。");
+    renderMessageCard(elements.auditDetail, "审计详情对当前角色不可见。");
+    return;
+  }
+  if (!state.auditRuns.length) {
+    elements.auditList.innerHTML = emptyState("运行一次决策或回放后，这里会出现审计记录。");
+  } else {
+    elements.auditList.innerHTML = state.auditRuns
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.id === state.selectedAuditId ? "active" : ""}"
+            data-run-id="${escapeHtml(item.id)}"
+          >
+            <div class="record-head">
+              <strong>${escapeHtml(item.type === "decision" ? "决策记录" : "回放记录")}</strong>
+              ${statusPill(item.type === "decision" ? "good" : "info", `#${item.sequence}`)}
+            </div>
+            <p class="record-copy">${escapeHtml(item.label)}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+              <span>${escapeHtml(item.actorName || "anonymous")}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.auditDetail, state.selectedAuditDetail, "审计详情", renderAuditDetailCard);
+}
+
+function renderProbeHistory() {
+  if (!canViewGovernanceWorkspace()) {
+    elements.probeList.innerHTML = emptyState("当前角色不可查看探测历史。");
+    renderMessageCard(elements.probeDetail, "探测详情对当前角色不可见。");
+    return;
+  }
+  if (!state.probeRuns.length) {
+    elements.probeList.innerHTML = emptyState("执行一次运行时探测后，这里会保留历史。");
+  } else {
+    elements.probeList.innerHTML = state.probeRuns
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.id === state.selectedProbeId ? "active" : ""}"
+            data-probe-id="${escapeHtml(item.id)}"
+          >
+            <div class="record-head">
+              <strong>${escapeHtml(item.probeOk ? "探测正常" : "探测异常")}</strong>
+              ${statusPill(item.probeOk ? "good" : "warn", item.mode)}
+            </div>
+            <p class="record-copy">${escapeHtml(item.label)}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+              <span>${escapeHtml(item.model || "unknown")}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.probeDetail, state.selectedProbeDetail, "探测详情", renderProbeDetailCard);
+}
+
+function renderOperatorActivity() {
+  if (!canViewOperatorActivity()) {
+    elements.activityList.innerHTML = emptyState("当前角色不可查看操作时间线。");
+    renderMessageCard(elements.activityDetail, "操作时间线对当前角色不可见。");
+    return;
+  }
+  if (!state.activityEvents.length) {
+    elements.activityList.innerHTML = emptyState("治理动作发生后，这里会出现操作时间线。");
+  } else {
+    elements.activityList.innerHTML = state.activityEvents
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.id === state.selectedActivityId ? "active" : ""}"
+            data-activity-id="${escapeHtml(item.id)}"
+          >
+            <div class="record-head">
+              <strong>${escapeHtml(item.message)}</strong>
+              ${statusPill(item.outcome === "failure" ? "bad" : "info", item.action)}
+            </div>
+            <p class="record-copy">${escapeHtml(item.subject || "system")}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+              <span>${escapeHtml(item.actorName || "anonymous")}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.activityDetail, state.selectedActivityDetail, "操作详情", renderActivityDetailCard);
 }
 
 function renderAccessControl() {
   const access = state.access;
-  const actor = access?.session?.actor || null;
   const config = access?.config || {
     enabled: false,
     bootstrapRequired: true,
     operators: [],
     bindings: [],
+    allowLocalTokens: true,
+    oidcConfigured: false,
+    identityMode: "local_tokens",
   };
+  fillCheckbox(elements.accessConfigForm, "enabled", Boolean(config.enabled));
 
-  fillAccessConfigForm(config);
-  bootstrapForm.hidden = !config.bootstrapRequired;
-  accessConfigForm.hidden = !(actor && actor.role === "admin");
-  operatorForm.hidden = !(actor && actor.role === "admin");
-  bindingForm.hidden = !(actor && actor.role === "admin");
-  reviewForm.hidden = !canReviewGovernance();
-  integrityPanel.hidden = !canViewAuditIntegrity();
-  verifyIntegrityButton.hidden = !canManageAuditIntegrity();
-  exportForm.hidden = !canManageAuditIntegrity();
-  auditPanel.hidden = !canViewAuditIntegrity();
-  probePanel.hidden = !canViewAuditIntegrity();
-  activityPanel.hidden = !canViewOperatorActivity();
-  startOidcLoginButton.hidden = !config.oidcConfigured;
-  startOidcLoginButton.disabled = !config.oidcConfigured;
+  elements.bootstrapForm.hidden = !config.bootstrapRequired;
+  elements.bootstrapPanel.classList.toggle("hidden", !config.bootstrapRequired && !state.prefs.advancedMode);
+  elements.accessConfigForm.classList.toggle("hidden", !canManageIdentitySessions());
+  elements.operatorForm.classList.toggle("hidden", !canManageIdentitySessions());
+  elements.bindingForm.classList.toggle("hidden", !canManageIdentitySessions());
+  elements.startOidcLoginButton.hidden = !config.oidcConfigured;
+  elements.startOidcLoginButton.disabled = !config.oidcConfigured;
 
-  accessStatus.textContent = JSON.stringify(
-    {
-      enabled: config.enabled,
-      bootstrapRequired: config.bootstrapRequired,
-      identityMode: config.identityMode,
-      allowLocalTokens: config.allowLocalTokens,
-      oidcConfigured: config.oidcConfigured,
-      oidcDisplayName: config.oidcDisplayName,
-      flash: state.authFlash,
-      authenticated: Boolean(access?.session?.authenticated),
-      actor,
-      authMethod: access?.session?.authMethod,
-      operators: config.operators.map((item) => ({
-        name: item.name,
-        role: item.role,
-        active: item.active,
-      })),
-    },
-    null,
-    2,
-  );
+  elements.accessSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "当前会话",
+      title: access?.session?.authenticated
+        ? `${access.session.actor?.name || "当前用户"} · ${formatRole(access.session.actor?.role)}`
+        : config.enabled
+          ? "等待登录"
+          : "开放模式",
+      pill: statusPill(
+        access?.session?.authenticated
+          ? "good"
+          : config.enabled
+            ? "warn"
+            : "info",
+        access?.session?.authenticated
+          ? formatAuthMethod(access.session.authMethod)
+          : config.enabled
+            ? "未登录"
+            : "无需登录",
+      ),
+      note: state.overview?.identity?.summary || "当前身份摘要会显示在这里。",
+      meta: [
+        access?.session?.currentSession?.expiresAt
+          ? `到期：${formatDateTime(access.session.currentSession.expiresAt)}`
+          : null,
+        access?.session?.currentSession ? "受 CSRF 保护" : "无 CSRF 会话",
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "身份联邦",
+      title: config.oidcConfigured
+        ? `已接入 ${config.oidcDisplayName || config.issuer || "OIDC"}`
+        : "尚未配置 OIDC Provider",
+      pill: statusPill(config.oidcConfigured ? "good" : "neutral", config.identityMode),
+      note: config.allowLocalTokens
+        ? "本地 token 仍保留为 break-glass 入口。"
+        : "当前仅允许企业身份登录。",
+      meta: [
+        `活跃会话：${state.overview?.governance?.sessions?.activeCount ?? state.accessSessions.length}`,
+        `本地 operator：${config.operators?.length || 0}`,
+      ],
+    }),
+  ].join("");
 
-  currentSessionOutput.textContent = JSON.stringify(
-    {
-      authenticated: Boolean(access?.session?.authenticated),
-      authMethod: access?.session?.authMethod,
-      actor,
-      currentSession: access?.session?.currentSession || null,
-      csrfTokenPresent: Boolean(state.csrfToken),
-    },
-    null,
-    2,
-  );
+  elements.currentSession.textContent = JSON.stringify(access?.session || null, null, 2);
+  elements.accessStatus.textContent = JSON.stringify(access?.config || null, null, 2);
+  elements.bootstrapHint.innerHTML = config.bootstrapRequired
+    ? renderSummaryCard({
+        kicker: "提示",
+        title: "还没有管理员",
+        pill: statusPill("warn", "需要初始化"),
+        note: "创建首个管理员后，才能完整启用身份治理、会话撤销和绑定管理。",
+        meta: [],
+      })
+    : renderSummaryCard({
+        kicker: "提示",
+        title: "管理员初始化已完成",
+        pill: statusPill("good", "ready"),
+        note: "如果只是日常使用，可以直接通过企业身份或本地应急令牌登录。",
+        meta: [],
+      });
 
   renderOperatorList(config.operators || []);
   renderBindings(config.bindings || []);
@@ -755,20 +2098,22 @@ function renderAccessControl() {
 
 function renderOperatorList(operators) {
   if (!operators.length) {
-    operatorList.innerHTML = '<p class="empty-state">No operators have been issued yet.</p>';
+    elements.operatorList.innerHTML = emptyState("还没有新增本地操作员。");
     return;
   }
-
-  operatorList.innerHTML = operators
+  elements.operatorList.innerHTML = operators
     .map(
       (item) => `
-        <article class="library-card">
-          <div class="library-head">
+        <article class="record-item">
+          <div class="record-head">
             <strong>${escapeHtml(item.name)}</strong>
-            <span>${escapeHtml(item.role)}</span>
+            ${statusPill(item.active ? "good" : "neutral", formatRole(item.role))}
           </div>
-          <p>${escapeHtml(item.active ? "Active operator" : "Inactive operator")}</p>
-          <small>${escapeHtml(new Date(item.createdAt).toLocaleString())}</small>
+          <p class="record-copy">${escapeHtml(item.active ? "当前可用" : "当前已停用")}</p>
+          <div class="record-meta">
+            <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+            <span>${escapeHtml(item.credentialType)}</span>
+          </div>
         </article>
       `,
     )
@@ -776,282 +2121,484 @@ function renderOperatorList(operators) {
 }
 
 function renderBindings(bindings) {
-  if (!bindings.length) {
-    bindingList.innerHTML = '<p class="empty-state">OIDC identity bindings will appear here after an admin creates them.</p>';
+  if (!canManageIdentitySessions()) {
+    elements.bindingList.innerHTML = emptyState("管理员登录后可查看和管理身份绑定。");
     return;
   }
-
-  bindingList.innerHTML = bindings
+  if (!bindings.length) {
+    elements.bindingList.innerHTML = emptyState("还没有创建 OIDC 身份绑定。");
+    return;
+  }
+  elements.bindingList.innerHTML = bindings
     .map(
       (item) => `
-        <article class="library-card">
-          <div class="library-head">
+        <article class="record-item">
+          <div class="record-head">
             <strong>${escapeHtml(item.label)}</strong>
-            <span>${escapeHtml(item.role)}</span>
+            ${statusPill(item.active ? "good" : "neutral", formatRole(item.role))}
           </div>
-          <p>${escapeHtml(item.active ? `${item.matchType} binding` : `Inactive ${item.matchType} binding`)}</p>
-          <small>${escapeHtml(formatBindingMeta(item))}</small>
-          ${canManageIdentitySessions() && item.active ? `<div class="actions compact"><button type="button" class="ghost" data-binding-id="${escapeHtml(item.id)}">Deactivate</button></div>` : ""}
+          <p class="record-copy">
+            ${escapeHtml(item.matchType === "subject" ? `${item.issuer || ""} · ${item.subject || ""}` : item.email || "email binding")}
+          </p>
+          <div class="record-meta">
+            <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+            <span>${escapeHtml(item.matchType)}</span>
+          </div>
+          ${item.active ? `<div class="actions"><button type="button" class="ghost" data-binding-id="${escapeHtml(item.id)}">停用绑定</button></div>` : ""}
         </article>
       `,
     )
     .join("");
-
-  for (const element of bindingList.querySelectorAll("[data-binding-id]")) {
-    element.addEventListener("click", async () => {
-      try {
-        await api(`/api/access-control/bindings/${encodeURIComponent(element.getAttribute("data-binding-id"))}/deactivate`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-        await refreshAccessControl();
-        await refreshOperatorActivity();
-      } catch (error) {
-        accessStatus.textContent = String(error.message || error);
-      }
-    });
-  }
 }
 
 function renderAccessSessions() {
   if (!canManageIdentitySessions()) {
-    activeSessionList.innerHTML = '<p class="empty-state">Admin access is required to inspect active sessions.</p>';
+    elements.accessSessionList.innerHTML = emptyState("管理员登录后可查看活跃会话。");
     return;
   }
-
   if (!state.accessSessions.length) {
-    activeSessionList.innerHTML = '<p class="empty-state">No active sessions are currently recorded.</p>';
+    elements.accessSessionList.innerHTML = emptyState("当前没有活跃会话。");
     return;
   }
-
   const currentSessionId = state.access?.session?.currentSession?.sessionId || null;
-  activeSessionList.innerHTML = state.accessSessions
+  elements.accessSessionList.innerHTML = state.accessSessions
     .map(
       (item) => `
-        <article class="library-card">
-          <div class="library-head">
+        <article class="record-item">
+          <div class="record-head">
             <strong>${escapeHtml(item.actor?.name || item.actorName || "Session")}</strong>
-            <span>${escapeHtml(item.authMethod)}</span>
+            ${statusPill(item.sessionId === currentSessionId ? "info" : "neutral", item.authMethod)}
           </div>
-          <p>${escapeHtml(item.actor?.role || item.actorRole || "unknown")} | ${escapeHtml(item.email || item.subject || "local session")}</p>
-          <small>${escapeHtml(formatAccessSessionMeta(item, currentSessionId))}</small>
-          <div class="actions compact">
-            <button type="button" class="ghost" data-session-id="${escapeHtml(item.sessionId)}">Revoke</button>
+          <p class="record-copy">${escapeHtml(`${item.actor?.role || item.actorRole || "unknown"} · ${item.email || item.subject || "local session"}`)}</p>
+          <div class="record-meta">
+            <span>${escapeHtml(`最后活跃：${formatDateTime(item.lastSeenAt)}`)}</span>
+            <span>${escapeHtml(`到期：${formatDateTime(item.expiresAt)}`)}</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="ghost" data-session-id="${escapeHtml(item.sessionId)}">撤销会话</button>
           </div>
         </article>
       `,
     )
     .join("");
-
-  for (const element of activeSessionList.querySelectorAll("[data-session-id]")) {
-    element.addEventListener("click", async () => {
-      try {
-        const result = await api(`/api/access-control/sessions/${encodeURIComponent(element.getAttribute("data-session-id"))}/revoke`, {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-        if (result.currentSessionId && result.currentSessionId === element.getAttribute("data-session-id")) {
-          state.csrfToken = "";
-        }
-        await refreshAccessControl();
-        await refreshOperatorActivity();
-      } catch (error) {
-        accessStatus.textContent = String(error.message || error);
-      }
-    });
-  }
 }
 
-function renderAuditRuns() {
-  if (state.auditRuns.length === 0) {
-    auditList.innerHTML = '<p class="empty-state">Run a decision or replay to build your audit trail.</p>';
+function renderRuntimeConfig() {
+  if (!canViewSystemWorkspace()) {
+    renderMessageCard(elements.runtimeSummary, "系统设置对当前角色不可见。");
     return;
   }
-
-  auditList.innerHTML = state.auditRuns
-    .map(
-      (item) => `
-        <button
-          type="button"
-          class="audit-item ${item.id === state.selectedAuditId ? "active" : ""}"
-          data-run-id="${escapeHtml(item.id)}"
-        >
-          <div class="audit-item-head">
-            <strong>${escapeHtml(item.type === "decision" ? "Decision Run" : "Replay Run")}</strong>
-            <span>${escapeHtml(item.mode)}</span>
-          </div>
-          <p>${escapeHtml(item.label || "")}</p>
-          <small>${escapeHtml(formatAuditMeta(item))}</small>
-        </button>
-      `,
-    )
-    .join("");
-
-  for (const element of auditList.querySelectorAll("[data-run-id]")) {
-    element.addEventListener("click", () => {
-      void openAuditRun(element.getAttribute("data-run-id"));
-    });
+  if (!state.config) {
+    renderMessageCard(elements.runtimeSummary, "还没有读取到运行时配置。");
+    return;
   }
+  elements.runtimeSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "当前配置",
+      title: `${state.config.mode} / ${state.config.model}`,
+      pill: statusPill(state.config.hasApiKey ? "good" : "neutral", state.config.hasApiKey ? "API key 已配置" : "无 API key"),
+      note: state.operationsHealth?.checks.runtime.summary || "运行时健康状态会显示在这里。",
+      meta: [
+        state.config.localBaseUrl,
+        state.config.cloudBaseUrl,
+      ],
+    }),
+    renderSummaryCard({
+      kicker: "最近探测",
+      title: state.operationsHealth?.recent?.probe?.summary || "暂无运行时探测记录",
+      pill: statusPill(statusToneFromRun(state.operationsHealth?.recent?.probe?.status), translateStatus(state.operationsHealth?.recent?.probe?.status || "not_configured")),
+      note: state.probeResult?.probe ? "最新探测结果已刷新到治理中心。" : "点击上方按钮可以立即执行一次健康探测。",
+      meta: [
+        state.models.length ? `模型列表：${state.models.length} 个` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
 }
 
-function renderAuditIntegrity() {
-  if (!state.integrity) {
-    integrityStatus.textContent = "No integrity data loaded yet.";
-    migrationStatus.innerHTML = '<p class="empty-state">SQLite ledger state will appear here.</p>';
+function renderOperationsSummary() {
+  if (!canViewSystemWorkspace()) {
+    renderMessageCard(elements.operationsSummary, "系统设置对当前角色不可见。");
+    elements.metricsOutput.textContent = state.metricsPreview || "";
     return;
   }
-
-  integrityStatus.textContent = JSON.stringify(state.integrity, null, 2);
-  renderMigrationStatus(state.integrity.migration || null);
+  const health = state.operationsHealth;
+  if (!health) {
+    renderMessageCard(elements.operationsSummary, "正在读取部署与观测基线。");
+    return;
+  }
+  elements.operationsSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "部署健康",
+      title: `${health.service} · ${health.version}`,
+      pill: statusPill("info", `${health.environment}/${health.teamScope}`),
+      note: `已运行 ${humanizeSeconds(health.uptimeSeconds)}，metrics ${health.metricsAvailable ? "可用" : "不可用"}。`,
+      meta: [
+        `Runtime：${translateStatus(health.checks.runtime.status)}`,
+        `Ledger：${translateStatus(health.checks.ledger.status)}`,
+        `Backup：${translateStatus(health.checks.backupTargets.status)}`,
+      ],
+    }),
+    renderSummaryCard({
+      kicker: "最近备份",
+      title: health.recent.backup ? translateBackupStatus(health.recent.backup.status) : "暂无备份记录",
+      pill: statusPill(statusToneFromBackup(health.recent.backup?.status), health.recent.backup ? `#${health.recent.backup.backupId.slice(0, 8)}` : "未执行"),
+      note: state.backupConfig?.anyConfigured
+        ? `已配置 ${state.backupConfig.configuredTargetCount} 个目标。`
+        : "当前未配置本地目录或 S3 兼容目标。",
+      meta: [
+        state.backupConfig?.localDir ? `Local dir：${state.backupConfig.localDir}` : null,
+        state.backupConfig?.s3?.bucket ? `S3：${state.backupConfig.s3.bucket}` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+  elements.metricsOutput.textContent = state.metricsPreview || "暂无 Prometheus 指标预览。";
 }
 
-function renderMigrationStatus(migration) {
-  if (!migration) {
-    migrationStatus.innerHTML = `
-      <article class="library-card">
-        <div class="library-head">
-          <strong>SQLite Source Of Truth</strong>
-          <span>live</span>
-        </div>
-        <p>No legacy JSON migration metadata was found. The ledger is operating as the primary audit store.</p>
-      </article>
-    `;
-    return;
+function renderExportDetailCard(detail) {
+  if (!detail) {
+    return emptyState("从左侧选择一个导出批次，查看 manifest 和文件路径。");
   }
+  if (detail.error) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(pathLeaf(detail.dataFile || "export.ndjson"))}</strong>
+      ${statusPill("info", `#${detail.sequence}`)}
+    </div>
+    <p class="summary-note">本次导出包含 ${escapeHtml(detail.entryCount)} 条 ledger 记录。</p>
+    <div class="metric-list">
+      ${metricRow("序号范围", `${detail.sequenceFrom || 0} - ${detail.sequenceTo || 0}`)}
+      ${metricRow("Data SHA", shortHash(detail.dataSha256))}
+      ${metricRow("Manifest SHA", shortHash(detail.manifestSha256))}
+      ${metricRow("创建时间", formatDateTime(detail.createdAt))}
+      ${metricRow("Data File", detail.dataFile)}
+      ${metricRow("Manifest File", detail.manifestFile)}
+    </div>
+    ${rawDetails(detail)}
+  `;
+}
 
-  migrationStatus.innerHTML = `
-    <article class="library-card">
-      <div class="library-head">
-        <strong>Migration Status</strong>
-        <span>${escapeHtml(migration.sourceOfTruth)}</span>
+function renderBackupDetailCard(detail) {
+  if (!detail) {
+    return emptyState("从左侧选择一个备份任务，查看包含文件、目标状态和 manifest。");
+  }
+  if (detail.error && !detail.targets) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(translateBackupStatus(detail.status))}</strong>
+      ${statusPill(statusToneFromBackup(detail.status), detail.trigger || "backup")}
+    </div>
+    <p class="summary-note">${escapeHtml(detail.error || "快照已生成，详情见下方目标结果。")}</p>
+    <div class="metric-list">
+      ${metricRow("Backup ID", detail.backupId)}
+      ${metricRow("Snapshot", detail.snapshotPath)}
+      ${metricRow("大小", formatBytes(detail.totalBytes))}
+      ${metricRow("Archive SHA", shortHash(detail.archiveSha256))}
+      ${metricRow("包含文件", String(detail.includedFiles?.length || 0))}
+    </div>
+    ${detail.targets?.length ? `
+      <div class="summary-stack">
+        ${detail.targets.map((target) => renderSummaryCard({
+          kicker: target.type,
+          title: translateTargetStatus(target.status),
+          pill: statusPill(target.status === "success" ? "good" : target.status === "failure" ? "bad" : "neutral", target.configured ? "configured" : "not configured"),
+          note: target.location || target.error || "未配置目标",
+          meta: [
+            target.transferredFiles != null ? `文件数：${target.transferredFiles}` : null,
+            target.totalBytes != null ? `大小：${formatBytes(target.totalBytes)}` : null,
+          ].filter(Boolean),
+        })).join("")}
       </div>
-      <p>Imported ${escapeHtml(migration.importedEntries)} legacy entries into SQLite on ${escapeHtml(new Date(migration.migratedAt).toLocaleString())}.</p>
-      <small>${escapeHtml(migration.legacyPaths.runs)} | ${escapeHtml(migration.legacyPaths.activity)}</small>
+    ` : ""}
+    ${rawDetails(detail)}
+  `;
+}
+
+function renderAuditDetailCard(detail) {
+  if (!detail) {
+    return emptyState("选择一条决策或回放记录，查看摘要和底层审计字段。");
+  }
+  if (detail.error) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(detail.label)}</strong>
+      ${statusPill(detail.type === "decision" ? "good" : "info", `#${detail.sequence}`)}
+    </div>
+    <p class="summary-note">
+      ${escapeHtml(detail.type === "decision"
+        ? `风险等级 ${formatRisk(detail.riskRating)}，置信度 ${Number(detail.confidence || 0).toFixed(2)}。`
+        : `共发现 ${detail.changedEvents || 0} 条变化，${detail.higherRiskEvents || 0} 条更高风险。`)}
+    </p>
+    <div class="metric-list">
+      ${metricRow("创建时间", formatDateTime(detail.createdAt))}
+      ${metricRow("执行人", detail.actorName || "anonymous")}
+      ${metricRow("环境", `${detail.environment}/${detail.teamScope}`)}
+      ${metricRow("链路状态", detail.chainStatus)}
+      ${metricRow("Event IDs", (detail.eventIds || []).join(", "))}
+    </div>
+    ${rawDetails(detail)}
+  `;
+}
+
+function renderProbeDetailCard(detail) {
+  if (!detail) {
+    return emptyState("选择一次探测记录，查看运行时与链路元数据。");
+  }
+  if (detail.error) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(detail.label)}</strong>
+      ${statusPill(detail.probeOk ? "good" : "warn", `#${detail.sequence}`)}
+    </div>
+    <p class="summary-note">${escapeHtml(detail.probeOk ? "最近一次探测返回正常。" : "最近一次探测存在失败或降级。")}</p>
+    <div class="metric-list">
+      ${metricRow("模型", detail.model || "unknown")}
+      ${metricRow("可用模型数", String(detail.availableModelCount || 0))}
+      ${metricRow("List Models", detail.listModelsOk ? "ok" : "failed")}
+      ${metricRow("Inference", detail.inferenceOk ? "ok" : "failed")}
+      ${metricRow("创建时间", formatDateTime(detail.createdAt))}
+    </div>
+    ${rawDetails(detail)}
+  `;
+}
+
+function renderActivityDetailCard(detail) {
+  if (!detail) {
+    return emptyState("选择一条操作记录，查看 actor、subject 和关联 run。");
+  }
+  if (detail.error) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(detail.message)}</strong>
+      ${statusPill(detail.outcome === "failure" ? "bad" : "info", detail.action)}
+    </div>
+    <p class="summary-note">${escapeHtml(detail.subject || "system")}</p>
+    <div class="metric-list">
+      ${metricRow("执行人", detail.actorName || "anonymous")}
+      ${metricRow("角色", detail.actorRole || "unknown")}
+      ${metricRow("相关 Run", detail.relatedRunId || "none")}
+      ${metricRow("创建时间", formatDateTime(detail.createdAt))}
+      ${metricRow("链路状态", detail.chainStatus)}
+    </div>
+    ${rawDetails(detail)}
+  `;
+}
+
+function renderDetailCard(container, detail, title, renderer) {
+  if (!detail) {
+    renderMessageCard(container, `从左侧选择一条${title}。`);
+    return;
+  }
+  container.innerHTML = renderer(detail);
+}
+
+function renderHeroCard({ kicker, title, note, pill, meta }) {
+  return `
+    <p class="section-kicker">${escapeHtml(kicker)}</p>
+    <div class="record-head">
+      <h3>${escapeHtml(title)}</h3>
+      ${pill || ""}
+    </div>
+    <p class="summary-note">${escapeHtml(note || "")}</p>
+    ${meta?.length ? `<div class="record-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
+  `;
+}
+
+function renderSummaryCard({ kicker, title, note, pill, meta }) {
+  return `
+    <article class="summary-card">
+      <p class="section-kicker">${escapeHtml(kicker)}</p>
+      <div class="record-head">
+        <strong>${escapeHtml(title)}</strong>
+        ${pill || ""}
+      </div>
+      <p class="summary-note">${escapeHtml(note || "")}</p>
+      ${meta?.length ? `<div class="record-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
     </article>
   `;
 }
 
-function renderAuditExports() {
-  if (state.exportBatches.length === 0) {
-    exportList.innerHTML = '<p class="empty-state">Create an export to generate an NDJSON ledger slice and manifest.</p>';
+function renderMessageCard(container, message) {
+  container.innerHTML = emptyState(message);
+}
+
+function emptyState(message) {
+  return `<p class="empty-state">${escapeHtml(message)}</p>`;
+}
+
+function rawDetails(detail) {
+  return `
+    <details class="technical-details advanced-only">
+      <summary>查看技术详情</summary>
+      <pre class="output">${escapeHtml(JSON.stringify(detail, null, 2))}</pre>
+    </details>
+  `;
+}
+
+function metricRow(label, value) {
+  return `
+    <div class="metric-row">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function ensureSelectedLibraryDocument() {
+  const existing = getSelectedLibraryDocument();
+  if (existing) {
     return;
   }
+  const firstResult = state.libraryResults[0]?.document?.id;
+  const firstDocument = state.libraryDocuments[0]?.id;
+  state.selectedLibraryDocumentId = firstResult || firstDocument || null;
+}
 
-  exportList.innerHTML = state.exportBatches
-    .map(
-      (item) => `
-        <button
-          type="button"
-          class="audit-item ${item.id === state.selectedExportId ? "active" : ""}"
-          data-export-id="${escapeHtml(item.id)}"
-        >
-          <div class="audit-item-head">
-            <strong>${escapeHtml(`Export #${item.sequence}`)}</strong>
-            <span>${escapeHtml(item.chainStatus)}</span>
-          </div>
-          <p>${escapeHtml(`${item.entryCount} entries | ${item.dataFile}`)}</p>
-          <small>${escapeHtml(formatExportMeta(item))}</small>
-        </button>
-      `,
-    )
-    .join("");
+function getSelectedLibraryDocument() {
+  if (!state.selectedLibraryDocumentId) {
+    return null;
+  }
+  const inResults = state.libraryResults.find((item) => item.document.id === state.selectedLibraryDocumentId)?.document;
+  if (inResults) {
+    return inResults;
+  }
+  return state.libraryDocuments.find((item) => item.id === state.selectedLibraryDocumentId) || null;
+}
 
-  for (const element of exportList.querySelectorAll("[data-export-id]")) {
-    element.addEventListener("click", () => {
-      void openAuditExport(element.getAttribute("data-export-id"));
-    });
+function applyPreferences() {
+  elements.body.classList.toggle("advanced-mode", state.prefs.advancedMode);
+  elements.toggleAdvancedButton.textContent = state.prefs.advancedMode ? "隐藏高级详情" : "显示高级详情";
+  syncWorkspaceHash();
+}
+
+function getVisibleWorkspaces() {
+  const workspaces = ["workbench", "library"];
+  if (canViewGovernanceWorkspace()) {
+    workspaces.push("governance");
+  }
+  if (canViewSystemWorkspace()) {
+    workspaces.push("system");
+  }
+  return workspaces;
+}
+
+function setWorkspace(workspace, options = {}) {
+  if (!workspace || !Object.prototype.hasOwnProperty.call(WORKSPACE_LABELS, workspace)) {
+    return;
+  }
+  state.prefs.currentWorkspace = workspace;
+  if (options.persist !== false) {
+    window.localStorage.setItem(STORAGE_KEYS.workspace, workspace);
+  }
+  if (options.replaceHash !== false) {
+    syncWorkspaceHash();
+  }
+  renderFrame();
+}
+
+function syncWorkspaceHash() {
+  const nextHash = `#${state.prefs.currentWorkspace}`;
+  if (window.location.hash !== nextHash) {
+    window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}${nextHash}`);
   }
 }
 
-function renderProbeRuns() {
-  if (state.probeRuns.length === 0) {
-    probeHistoryList.innerHTML = '<p class="empty-state">Run a runtime probe to build probe history.</p>';
+function readWorkspaceFromHash() {
+  const hash = window.location.hash.replace(/^#/, "");
+  return Object.prototype.hasOwnProperty.call(WORKSPACE_LABELS, hash) ? hash : null;
+}
+
+function loadStoredWorkspace() {
+  return readWorkspaceFromHash() || window.localStorage.getItem(STORAGE_KEYS.workspace) || "workbench";
+}
+
+function loadStoredAdvancedMode() {
+  return window.localStorage.getItem(STORAGE_KEYS.advancedMode) === "true";
+}
+
+function rememberAction(message) {
+  state.prefs.lastAction = message;
+  window.localStorage.setItem(STORAGE_KEYS.lastAction, message);
+  renderFrame();
+}
+
+function buildIdentityPill() {
+  const environment = state.operationsHealth?.environment || state.overview?.governance?.integrity?.environment || "unknown";
+  const teamScope = state.operationsHealth?.teamScope || state.overview?.governance?.integrity?.teamScope || "unknown";
+  if (state.overview?.identity?.authenticated) {
+    return `${escapeHtml(state.overview.identity.actor?.name || "当前用户")} · ${escapeHtml(formatRole(state.overview.identity.actor?.role))} · ${escapeHtml(environment)}/${escapeHtml(teamScope)}`;
+  }
+  if (state.overview?.identity?.authEnabled) {
+    return `未登录 · ${escapeHtml(environment)}/${escapeHtml(teamScope)} · 可以先用企业身份或应急令牌进入控制台`;
+  }
+  return `开放模式 · ${escapeHtml(environment)}/${escapeHtml(teamScope)} · 非技术用户可直接浏览工作台摘要`;
+}
+
+function formatAuthFlash(flash) {
+  if (flash.authError) {
+    return `登录失败：${flash.authError}`;
+  }
+  if (flash.auth === "success") {
+    return "企业身份登录成功，当前 session 已生效。";
+  }
+  return "";
+}
+
+function consumeAuthFlash() {
+  const url = new URL(window.location.href);
+  const auth = url.searchParams.get("auth");
+  const authError = url.searchParams.get("authError");
+  if (!auth && !authError) {
     return;
   }
+  state.authFlash = { auth, authError };
+  url.searchParams.delete("auth");
+  url.searchParams.delete("authError");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
-  probeHistoryList.innerHTML = state.probeRuns
-    .map(
-      (item) => `
-        <button
-          type="button"
-          class="audit-item ${item.id === state.selectedProbeId ? "active" : ""}"
-          data-probe-id="${escapeHtml(item.id)}"
-        >
-          <div class="audit-item-head">
-            <strong>${escapeHtml(item.probeOk ? "Healthy Probe" : "Degraded Probe")}</strong>
-            <span>${escapeHtml(item.mode)}</span>
-          </div>
-          <p>${escapeHtml(item.label || "")}</p>
-          <small>${escapeHtml(formatProbeMeta(item))}</small>
-        </button>
-      `,
-    )
-    .join("");
-
-  for (const element of probeHistoryList.querySelectorAll("[data-probe-id]")) {
-    element.addEventListener("click", () => {
-      void openProbeRun(element.getAttribute("data-probe-id"));
-    });
+function adoptSessionState(sessionState) {
+  if (sessionState && typeof sessionState === "object") {
+    state.csrfToken = sessionState.csrfToken || state.csrfToken || "";
+    if (sessionState.authenticated === false) {
+      state.csrfToken = "";
+    }
   }
 }
 
-function renderOperatorActivity() {
-  if (state.activityEvents.length === 0) {
-    activityList.innerHTML = '<p class="empty-state">Operator actions will appear here after governance activity occurs.</p>';
-    return;
+function formToObject(form) {
+  const data = new FormData(form);
+  const payload = {};
+  for (const [key, value] of data.entries()) {
+    const field = form.elements.namedItem(key);
+    payload[key] = field?.type === "checkbox" ? true : value;
   }
-
-  activityList.innerHTML = state.activityEvents
-    .map(
-      (item) => `
-        <button
-          type="button"
-          class="audit-item ${item.id === state.selectedActivityId ? "active" : ""}"
-          data-activity-id="${escapeHtml(item.id)}"
-        >
-          <div class="audit-item-head">
-            <strong>${escapeHtml(item.action)}</strong>
-            <span>${escapeHtml(item.outcome)}</span>
-          </div>
-          <p>${escapeHtml(item.message || "")}</p>
-          <small>${escapeHtml(formatActivityMeta(item))}</small>
-        </button>
-      `,
-    )
-    .join("");
-
-  for (const element of activityList.querySelectorAll("[data-activity-id]")) {
-    element.addEventListener("click", () => {
-      void openOperatorActivity(element.getAttribute("data-activity-id"));
-    });
+  for (const element of form.querySelectorAll('input[type="checkbox"]')) {
+    if (!(element.name in payload)) {
+      payload[element.name] = false;
+    }
   }
+  return payload;
 }
 
-function renderLibraryResults(results) {
-  libraryResults.innerHTML = results
-    .map(
-      (item) => `
-        <article class="library-card">
-          <div class="library-head">
-            <strong>${escapeHtml(item.document.title)}</strong>
-            <span>${escapeHtml(item.document.jurisdiction)}</span>
-          </div>
-          <p>${escapeHtml(item.document.status)} | v${escapeHtml(item.document.version)}</p>
-          <p>${escapeHtml(item.excerpt || item.document.summary || "")}</p>
-          <small>${escapeHtml(item.document.id)} | ${escapeHtml(item.document.sourceRef || "")}</small>
-        </article>
-      `,
-    )
-    .join("");
-}
-
-function fillConfigForm(config) {
-  if (!config) {
+function fillForm(form, values) {
+  if (!form || !values) {
     return;
   }
-  for (const [key, value] of Object.entries(config)) {
-    const field = configForm.elements.namedItem(key);
-    if (!field) continue;
+  for (const [key, value] of Object.entries(values)) {
+    const field = form.elements.namedItem(key);
+    if (!field) {
+      continue;
+    }
     if (field.type === "checkbox") {
       field.checked = Boolean(value);
     } else {
@@ -1060,10 +2607,10 @@ function fillConfigForm(config) {
   }
 }
 
-function fillAccessConfigForm(config) {
-  const field = accessConfigForm.elements.namedItem("enabled");
+function fillCheckbox(form, name, value) {
+  const field = form.elements.namedItem(name);
   if (field) {
-    field.checked = Boolean(config.enabled);
+    field.checked = Boolean(value);
   }
 }
 
@@ -1091,22 +2638,18 @@ async function api(url, init = {}) {
   return payload;
 }
 
-function formToObject(form) {
-  const data = new FormData(form);
-  const payload = {};
-  for (const [key, value] of data.entries()) {
-    if (form.elements.namedItem(key)?.type === "checkbox") {
-      payload[key] = true;
-    } else {
-      payload[key] = value;
-    }
+async function fetchText(url) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    headers: {
+      Accept: "text/plain",
+    },
+  });
+  const content = await response.text();
+  if (!response.ok) {
+    throw new Error(content || "Request failed");
   }
-  for (const element of form.querySelectorAll('input[type="checkbox"]')) {
-    if (!(element.name in payload)) {
-      payload[element.name] = false;
-    }
-  }
-  return payload;
+  return content;
 }
 
 function splitTags(value) {
@@ -1116,107 +2659,11 @@ function splitTags(value) {
     .filter(Boolean);
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function formatAuditMeta(item) {
-  const createdAt = new Date(item.createdAt).toLocaleString();
-  if (item.type === "decision") {
-    return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.riskRating || "unknown"} risk | ${item.actorName || "anonymous"} | confidence ${Number(item.confidence || 0).toFixed(2)}`;
-  }
-  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.changedEvents || 0} changed | ${item.actorName || "anonymous"} | ${item.higherRiskEvents || 0} higher risk`;
-}
-
-function formatProbeMeta(item) {
-  const createdAt = new Date(item.createdAt).toLocaleString();
-  const status = item.probeOk ? "healthy" : "degraded";
-  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${status} | ${item.actorName || "anonymous"} | ${item.availableModelCount || 0} models`;
-}
-
-function formatActivityMeta(item) {
-  const createdAt = new Date(item.createdAt).toLocaleString();
-  return `#${item.sequence} | ${item.chainStatus} | ${item.environment}/${item.teamScope} | ${createdAt} | ${item.actorName || "anonymous"} | ${item.subject || "system"}${item.relatedRunId ? ` | run ${item.relatedRunId}` : ""}`;
-}
-
-function formatExportMeta(item) {
-  const createdAt = new Date(item.createdAt).toLocaleString();
-  return `${createdAt} | ${item.environment}/${item.teamScope} | ${item.sequenceFrom || 0}-${item.sequenceTo || 0} | sha ${String(item.dataSha256 || "").slice(0, 12)}`;
-}
-
-function formatBindingMeta(item) {
-  const createdAt = new Date(item.createdAt).toLocaleString();
-  if (item.matchType === "subject") {
-    return `${createdAt} | ${item.issuer || "issuer"} | ${item.subject || "subject"}`;
-  }
-  return `${createdAt} | ${item.email || "email binding"}`;
-}
-
-function formatAccessSessionMeta(item, currentSessionId) {
-  const lastSeenAt = new Date(item.lastSeenAt).toLocaleString();
-  const expiresAt = new Date(item.expiresAt).toLocaleString();
-  const current = item.sessionId === currentSessionId ? " | current session" : "";
-  return `${lastSeenAt} | expires ${expiresAt}${current}`;
-}
-
-function adoptSessionState(sessionState) {
-  if (sessionState && typeof sessionState === "object") {
-    state.csrfToken = sessionState.csrfToken || state.csrfToken || "";
-    if (sessionState.authenticated === false) {
-      state.csrfToken = "";
-    }
-  }
-}
-
-function consumeAuthFlash() {
-  const url = new URL(window.location.href);
-  const auth = url.searchParams.get("auth");
-  const authError = url.searchParams.get("authError");
-  if (!auth && !authError) {
-    return;
-  }
-
-  state.authFlash = { auth, authError };
-  url.searchParams.delete("auth");
-  url.searchParams.delete("authError");
-  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-}
-
-function isReviewerSession() {
-  const role = state.access?.session?.actor?.role;
-  return role === "reviewer" || role === "admin";
-}
-
-function isAdminSession() {
-  return state.access?.session?.actor?.role === "admin";
-}
-
-function canManageIdentitySessions() {
-  return !state.access?.config?.enabled || isAdminSession();
-}
-
-function canReviewGovernance() {
-  return !state.access?.config?.enabled || isReviewerSession();
-}
-
-function canViewAuditIntegrity() {
-  return !state.access?.config?.enabled || isReviewerSession();
-}
-
-function canManageAuditIntegrity() {
-  return !state.access?.config?.enabled || isAdminSession();
-}
-
-function canViewProbeHistory() {
-  return !state.access?.config?.enabled || isReviewerSession();
-}
-
-function canViewOperatorActivity() {
-  return !state.access?.config?.enabled || isAdminSession();
+function splitPaths(value) {
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function toIsoIfPresent(value) {
@@ -1228,4 +2675,275 @@ function toIsoIfPresent(value) {
     return undefined;
   }
   return parsed.toISOString();
+}
+
+function selectPreferred(key, items, preferredId, idKey = "id") {
+  const ids = items.map((item) => item?.[idKey]).filter(Boolean);
+  if (preferredId && ids.includes(preferredId)) {
+    state[key] = preferredId;
+    return;
+  }
+  if (state[key] && ids.includes(state[key])) {
+    return;
+  }
+  state[key] = ids[0] || null;
+}
+
+function canViewLibrary() {
+  return isOpenMode() || Boolean(state.access?.session?.authenticated);
+}
+
+function canOperateWorkbench() {
+  return isOpenMode() || hasRole("operator");
+}
+
+function canReviewLibrary() {
+  return isOpenMode() || hasRole("reviewer");
+}
+
+function canViewGovernanceWorkspace() {
+  return isOpenMode() || hasRole("reviewer");
+}
+
+function canManageAuditIntegrity() {
+  return isOpenMode() || hasRole("admin");
+}
+
+function canViewOperatorActivity() {
+  return isOpenMode() || hasRole("admin");
+}
+
+function canManageIdentitySessions() {
+  return isOpenMode() || hasRole("admin");
+}
+
+function canViewSystemWorkspace() {
+  return isOpenMode() || hasRole("admin") || Boolean(state.access?.config?.bootstrapRequired);
+}
+
+function isOpenMode() {
+  return !state.access?.config?.enabled;
+}
+
+function hasRole(requiredRole) {
+  const actor = state.access?.session?.actor;
+  if (!actor) {
+    return false;
+  }
+  const rank = {
+    viewer: 1,
+    operator: 2,
+    reviewer: 3,
+    admin: 4,
+  };
+  return rank[actor.role] >= rank[requiredRole];
+}
+
+function statusPill(tone, label) {
+  return `<span class="status-pill ${escapeHtml(tone)}">${escapeHtml(label || "")}</span>`;
+}
+
+function statusToneFromStatus(status) {
+  if (status === "healthy" || status === "verified" || status === "success") {
+    return "good";
+  }
+  if (status === "degraded" || status === "pending" || status === "not_configured" || status === "partial_failure") {
+    return "warn";
+  }
+  if (status === "down" || status === "mismatch" || status === "failure") {
+    return "bad";
+  }
+  return "neutral";
+}
+
+function statusToneFromRun(status) {
+  return status ? statusToneFromStatus(status) : "neutral";
+}
+
+function statusToneFromIntegrity(integrity) {
+  if (!integrity) {
+    return "neutral";
+  }
+  if (integrity.status === "mismatch") {
+    return "bad";
+  }
+  if (integrity.isStale || integrity.status === "pending") {
+    return "warn";
+  }
+  return "good";
+}
+
+function statusToneFromBackup(status) {
+  return statusToneFromStatus(status || "not_configured");
+}
+
+function integrityLabel(integrity) {
+  if (!integrity) {
+    return "未知";
+  }
+  if (integrity.status === "mismatch") {
+    return "异常";
+  }
+  if (integrity.isStale || integrity.status === "pending") {
+    return "待复核";
+  }
+  return "已验证";
+}
+
+function integritySummaryTitle(integrity) {
+  if (integrity.status === "mismatch") {
+    return `发现 ${integrity.mismatchCount} 处链路异常`;
+  }
+  if (integrity.isStale) {
+    return "最近一次完整校验已过期";
+  }
+  if (integrity.lastVerifiedAt) {
+    return "审计链已通过最近一次完整校验";
+  }
+  return "审计链尚未做过完整校验";
+}
+
+function translateStatus(status) {
+  if (status === "healthy") {
+    return "正常";
+  }
+  if (status === "verified") {
+    return "已验证";
+  }
+  if (status === "degraded") {
+    return "降级";
+  }
+  if (status === "pending") {
+    return "待处理";
+  }
+  if (status === "down") {
+    return "异常";
+  }
+  if (status === "not_configured") {
+    return "未配置";
+  }
+  if (status === "mismatch") {
+    return "不匹配";
+  }
+  return status || "未知";
+}
+
+function translateBackupStatus(status) {
+  if (status === "success") {
+    return "备份成功";
+  }
+  if (status === "partial_failure") {
+    return "部分成功";
+  }
+  if (status === "failure") {
+    return "备份失败";
+  }
+  return "未配置目标";
+}
+
+function translateTargetStatus(status) {
+  if (status === "success") {
+    return "同步成功";
+  }
+  if (status === "failure") {
+    return "同步失败";
+  }
+  return "未配置";
+}
+
+function formatAuthMethod(value) {
+  if (value === "oidc") {
+    return "企业身份";
+  }
+  if (value === "token") {
+    return "本地应急令牌";
+  }
+  if (value === "bearer") {
+    return "Bearer 令牌";
+  }
+  return "未知方式";
+}
+
+function formatRole(role) {
+  const map = {
+    viewer: "Viewer",
+    operator: "Operator",
+    reviewer: "Reviewer",
+    admin: "Admin",
+  };
+  return map[role] || role || "Unknown";
+}
+
+function formatRisk(risk) {
+  if (risk === "high") {
+    return "高";
+  }
+  if (risk === "medium") {
+    return "中";
+  }
+  if (risk === "low") {
+    return "低";
+  }
+  return risk || "未标注";
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "unknown";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString("zh-CN");
+}
+
+function humanizeSeconds(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return "0 秒";
+  }
+  if (seconds >= 3600) {
+    return `${(seconds / 3600).toFixed(1)} 小时`;
+  }
+  if (seconds >= 60) {
+    return `${Math.round(seconds / 60)} 分钟`;
+  }
+  return `${Math.round(seconds)} 秒`;
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024 * 1024) {
+    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${value} B`;
+}
+
+function shortHash(value) {
+  return value ? `${String(value).slice(0, 12)}…` : "n/a";
+}
+
+function pathLeaf(value) {
+  if (!value) {
+    return "";
+  }
+  return String(value).split(/[\\/]/).at(-1) || String(value);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function byId(id) {
+  return document.getElementById(id);
 }

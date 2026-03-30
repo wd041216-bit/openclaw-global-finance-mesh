@@ -492,6 +492,10 @@ export class AccessControlStore {
     return this.sessionStore.listSessions(limit);
   }
 
+  async countActiveSessions(): Promise<number> {
+    return this.sessionStore.countActiveSessions();
+  }
+
   async revokeSession(sessionId: string): Promise<AuthenticatedSession | null> {
     return this.sessionStore.revokeSession(sessionId);
   }

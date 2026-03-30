@@ -267,6 +267,19 @@ export class AuthSessionStore {
     return rows.map((row) => this.deserializeSession(row));
   }
 
+  async countActiveSessions(): Promise<number> {
+    await this.ensureReady();
+    await this.expireStaleSessions();
+
+    const row = this.database().prepare(`
+      SELECT COUNT(*) AS count
+      FROM auth_sessions
+      WHERE revoked_at IS NULL
+    `).get() as { count?: number } | undefined;
+
+    return Number(row?.count ?? 0);
+  }
+
   async createOidcState(input?: { redirectTo?: string }): Promise<OidcStateRecord> {
     await this.ensureReady();
     await this.pruneExpiredOidcStates();

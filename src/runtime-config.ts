@@ -25,7 +25,16 @@ const CONFIG_PATH = path.join(RUNTIME_DIR, "config.json");
 const SECRET_PATH = path.join(RUNTIME_DIR, "local.secrets.json");
 
 export class RuntimeConfigStore {
+  private readonly configPath: string;
+  private readonly secretPath: string;
+  private readonly runtimeDir: string;
   private cache: BrainRuntimeConfig | null = null;
+
+  constructor(options?: { configPath?: string; secretPath?: string }) {
+    this.configPath = options?.configPath ?? CONFIG_PATH;
+    this.secretPath = options?.secretPath ?? SECRET_PATH;
+    this.runtimeDir = path.dirname(this.configPath);
+  }
 
   async get(): Promise<BrainRuntimeConfig> {
     if (this.cache) {
@@ -33,8 +42,8 @@ export class RuntimeConfigStore {
     }
 
     const defaults = defaultConfig();
-    const configFile = await readJsonFile<Record<string, unknown>>(CONFIG_PATH);
-    const secretFile = await readJsonFile<Record<string, unknown>>(SECRET_PATH);
+    const configFile = await readJsonFile<Record<string, unknown>>(this.configPath);
+    const secretFile = await readJsonFile<Record<string, unknown>>(this.secretPath);
 
     this.cache = normalizeConfig({
       ...defaults,
@@ -73,9 +82,9 @@ export class RuntimeConfigStore {
           : current.apiKey,
     });
 
-    await fs.mkdir(RUNTIME_DIR, { recursive: true });
+    await fs.mkdir(this.runtimeDir, { recursive: true });
     await fs.writeFile(
-      CONFIG_PATH,
+      this.configPath,
       JSON.stringify(
         {
           mode: next.mode,
@@ -92,7 +101,7 @@ export class RuntimeConfigStore {
     );
 
     if (persistSecret && next.apiKey) {
-      await fs.writeFile(SECRET_PATH, JSON.stringify({ apiKey: next.apiKey }, null, 2), "utf8");
+      await fs.writeFile(this.secretPath, JSON.stringify({ apiKey: next.apiKey }, null, 2), "utf8");
     }
 
     this.cache = next;

@@ -32,6 +32,7 @@
     "verify": "npm test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.910.0",
     "yaml": "^2.8.1"
   },
   "homepage": "https://github.com/wd041216-bit/zhouheng-global-finance-mesh",
