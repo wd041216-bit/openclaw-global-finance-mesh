@@ -65,3 +65,8 @@ npm run dev
 - 持久化审计和变更治理
 - 真实 ERP / 审批流连接器
 - 更大规模的法规资料装载与签核机制
+
+## 交接与长期方案
+
+- [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
+- [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)

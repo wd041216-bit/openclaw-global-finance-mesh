@@ -136,6 +136,11 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 
 GitHub positioning and rollout notes live in [docs/marketing-launch.md](./docs/marketing-launch.md). The next implementation milestones are in [docs/roadmap.md](./docs/roadmap.md).
 
+## Operator Handoff
+
+- [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
+- [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
+
 ## Contribution surface
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
