@@ -5,6 +5,7 @@
 ## 已落地内容
 
 - 独立 Web 控制台，覆盖运行时配置、法律资料库、决策执行、回放分析、审计历史
+- 基于 token 的访问控制，支持 `viewer`、`operator`、`reviewer`、`admin` 四级角色
 - 可插拔 Ollama 大脑，支持本地与云端模式
 - Pack 校验、决策生成、回放对比、审计追溯快照
 - 法律资料库采集、检索、引用注入链路
@@ -41,6 +42,15 @@ npm run dev
 
 默认不会持久化 API key，除非你在 UI 里主动勾选保存到本地忽略文件。
 
+## 访问控制
+
+控制台现在已经支持本地 RBAC。
+
+- 可以在 Access Control 面板里 bootstrap 第一个 admin
+- 也可以通过 `FINANCE_MESH_BOOTSTRAP_ADMIN_*` 环境变量预置第一个管理员
+- decision、replay、资料库写操作和审计查看都已经按角色做了限制
+- 开启 auth 后，审计历史会记录操作者身份
+
 ## 审计历史
 
 本轮开始，decision 和 replay 的运行结果会持久化到 `data/audit/runs.json`。
@@ -62,10 +72,11 @@ npm run dev
 - Web 操作台
 - 法律资料库基础管理
 - 可解释决策与回放
+- token 级访问控制与角色边界
 - 本地持久化审计历史
 
 仍需继续补齐：
-- 权限与 SSO
+- SSO 与更强的身份体系
 - 不可变审计存储与操作归因
 - 真实 ERP / 审批流连接器
 - 更大规模的法规资料装载与签核机制

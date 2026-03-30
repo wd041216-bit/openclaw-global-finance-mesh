@@ -79,6 +79,81 @@
           <pre id="models-output" class="output small"></pre>
         </section>
 
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Access Control</h2>
+            <button id="refresh-access" type="button" class="ghost">Refresh Access</button>
+          </div>
+          <form id="session-form" class="stack">
+            <label>
+              Session Token
+              <input name="sessionToken" type="password" placeholder="Paste an admin, reviewer, or operator token" />
+            </label>
+            <div class="actions">
+              <button type="submit">Save Session</button>
+              <button id="clear-session" type="button" class="ghost">Clear Session</button>
+            </div>
+          </form>
+          <pre id="access-status" class="output small"></pre>
+
+          <form id="bootstrap-form" class="stack" hidden>
+            <label>
+              First Admin Name
+              <input name="name" placeholder="Finance Platform Admin" />
+            </label>
+            <label>
+              First Admin Token
+              <input name="token" type="password" placeholder="Bootstrap admin token" />
+            </label>
+            <label class="inline">
+              <input type="checkbox" name="enableAuth" checked />
+              Enable auth immediately after bootstrap
+            </label>
+            <div class="actions">
+              <button type="submit">Bootstrap Admin</button>
+            </div>
+          </form>
+
+          <form id="access-config-form" class="stack" hidden>
+            <label class="inline">
+              <input type="checkbox" name="enabled" />
+              Require authentication and role checks
+            </label>
+            <div class="actions">
+              <button type="submit">Save Access Policy</button>
+            </div>
+          </form>
+
+          <form id="operator-form" class="stack" hidden>
+            <label>
+              Operator Name
+              <input name="name" placeholder="Reviewer or operator display name" />
+            </label>
+            <label>
+              Role
+              <select name="role">
+                <option value="operator">Operator</option>
+                <option value="reviewer">Reviewer</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
+              </select>
+            </label>
+            <label>
+              Token
+              <input name="token" type="password" placeholder="Issue a token for this operator" />
+            </label>
+            <label class="inline">
+              <input type="checkbox" name="active" checked />
+              Operator starts active
+            </label>
+            <div class="actions">
+              <button type="submit">Create Operator</button>
+            </div>
+          </form>
+
+          <div id="operator-list" class="library-list"></div>
+        </section>
+
         <section class="panel chat-panel">
           <div class="panel-head">
             <h2>Agent Console</h2>

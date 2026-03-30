@@ -5,6 +5,7 @@
 - repositioned the repository as the standalone `zhouheng-global-finance-mesh` product
 - moved the OpenClaw compatibility layer into `integrations/openclaw/`
 - added persisted audit history APIs and an operator-facing audit timeline in the web console
+- added token-based RBAC with bootstrap admin flow, operator management, and actor attribution on audit runs
 
 ## 0.1.0
 

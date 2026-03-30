@@ -7,6 +7,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 ## What it ships
 
 - standalone web console for runtime control, legal-library operations, decisions, replays, and audit history
+- token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
 - pluggable Ollama brain runtime for local and cloud deployments
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, search, and citation grounding
@@ -60,6 +61,15 @@ npm run dev
 
 The UI also lets you enter the API key at runtime; it is not persisted unless you explicitly opt in.
 
+## Access control
+
+The console now supports local token-based RBAC.
+
+- bootstrap the first admin in the Access Control panel or with `FINANCE_MESH_BOOTSTRAP_ADMIN_*` env vars
+- authenticate with a bearer token stored in browser session storage
+- protect mutation and audit endpoints with `viewer`, `operator`, `reviewer`, and `admin` roles
+- stamp decision and replay audit history with the authenticated actor when auth is enabled
+
 ## Audit history
 
 Every example decision and replay run is persisted to `data/audit/runs.json`.
@@ -96,8 +106,8 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 
 This repo is intentionally honest about scope.
 
-- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, audit history, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
-- not yet included: auth and RBAC, immutable audit persistence, ERP-side writeback adapters, SSO, or full production governance workflows
+- included: Pack authoring pattern, validation, deterministic decision generation, replay summary, token-based RBAC, audit history, audit trace snapshotting, pluggable Ollama brain support, web console, and legal-library grounding
+- not yet included: SSO, immutable audit persistence, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.
 

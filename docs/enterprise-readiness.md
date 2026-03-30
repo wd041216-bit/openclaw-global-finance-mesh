@@ -6,13 +6,14 @@
 - auditable Decision Packet generation
 - replay-before-publish capability
 - evidence graph snapshots
+- local token-based RBAC with role-gated privileged endpoints
 - local or cloud LLM routing
 - legal library ingestion and grounding
 - browser-based operator console
 
 ## What still needs work before an honest enterprise-ready claim
 
-- SSO and role-based access control
+- SSO and production identity federation
 - immutable or tamper-evident audit storage
 - encryption and secrets-management posture
 - tenant isolation
@@ -26,9 +27,8 @@
 
 The product should only be called enterprise-ready when:
 
-1. privileged actions are access-controlled
+1. privileged actions are access-controlled and attributable
 2. audit records survive service restarts and review
 3. legal source provenance is reviewable
 4. replay gates are part of release workflow
 5. integration failures have recovery paths
-

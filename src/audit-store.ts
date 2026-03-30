@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { AuthenticatedActor } from "./access-control.ts";
 import type { DecisionRunResult, EventPayload, Mode, ReplayRunResult, RiskLevel } from "./types.ts";
 
 export type AuditRunType = "decision" | "replay";
@@ -21,6 +22,9 @@ export interface AuditRunSummary {
   changedEvents?: number;
   higherRiskEvents?: number;
   lowerConfidenceEvents?: number;
+  actorId?: string;
+  actorName?: string;
+  actorRole?: string;
 }
 
 export interface AuditRunRecord extends AuditRunSummary {
@@ -56,6 +60,7 @@ export class AuditRunStore {
     packPaths: string[];
     event: EventPayload;
     result: DecisionRunResult;
+    actor: AuthenticatedActor | null;
   }): Promise<AuditRunSummary> {
     const createdAt = new Date().toISOString();
     const record: AuditRunRecord = {
@@ -69,7 +74,11 @@ export class AuditRunStore {
       riskRating: input.result.decisionPacket.risk_rating,
       confidence: input.result.decisionPacket.confidence,
       decisionPacketId: input.result.decisionPacket.decision_packet_id,
+      actorId: input.actor?.id,
+      actorName: input.actor?.name,
+      actorRole: input.actor?.role,
       detail: {
+        actor: input.actor,
         event: input.event,
         decisionPacket: input.result.decisionPacket,
         missingEvidence: input.result.missingEvidence,
@@ -88,6 +97,7 @@ export class AuditRunStore {
     candidatePackPaths: string[];
     events: EventPayload[];
     replay: ReplayRunResult;
+    actor: AuthenticatedActor | null;
   }): Promise<AuditRunSummary> {
     const createdAt = new Date().toISOString();
     const record: AuditRunRecord = {
@@ -101,7 +111,11 @@ export class AuditRunStore {
       changedEvents: input.replay.changed_events,
       higherRiskEvents: input.replay.higher_risk_events,
       lowerConfidenceEvents: input.replay.lower_confidence_events,
+      actorId: input.actor?.id,
+      actorName: input.actor?.name,
+      actorRole: input.actor?.role,
       detail: {
+        actor: input.actor,
         baselinePackPaths: input.baselinePackPaths,
         candidatePackPaths: input.candidatePackPaths,
         replay: input.replay,

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { AccessControlStore, isAccessRole } from "./access-control.ts";
 import { AuditRunStore } from "./audit-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
@@ -21,6 +22,7 @@ const runtimeStore = new RuntimeConfigStore();
 const brain = new OllamaBrainRuntime();
 const legalLibrary = new LegalLibraryStore();
 const auditRuns = new AuditRunStore();
+const accessControl = new AccessControlStore();
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -50,12 +52,91 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     return;
   }
 
+  if (req.method === "GET" && requestUrl.pathname === "/api/access-control") {
+    sendJson(res, 200, {
+      ok: true,
+      config: await accessControl.getPublicConfig(),
+      session: await accessControl.getSession(req.headers),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/bootstrap") {
+    const body = await readJsonBody(req);
+    const operator = await accessControl.bootstrapAdmin({
+      name: String(body.name ?? ""),
+      token: String(body.token ?? ""),
+      enableAuth: body.enableAuth !== false,
+    });
+    sendJson(res, 200, {
+      ok: true,
+      operator,
+      config: await accessControl.getPublicConfig(),
+      session: await accessControl.getSession({
+        authorization: `Bearer ${String(body.token ?? "")}`,
+      }),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/config") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    sendJson(res, 200, {
+      ok: true,
+      config: await accessControl.updateConfig({
+        enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      }),
+      actor: auth.actor,
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/access-control/operators") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    if (!isAccessRole(body.role)) {
+      sendJson(res, 400, { ok: false, error: "Invalid operator role." });
+      return;
+    }
+
+    const operator = await accessControl.createOperator({
+      name: String(body.name ?? ""),
+      role: body.role,
+      token: String(body.token ?? ""),
+      active: body.active !== false,
+    });
+    sendJson(res, 200, {
+      ok: true,
+      operator,
+      config: await accessControl.getPublicConfig(),
+      actor: auth.actor,
+    });
+    return;
+  }
+
   if (req.method === "GET" && requestUrl.pathname === "/api/runtime/config") {
+    const auth = await requireRole(req, res, "viewer");
+    if (!auth) {
+      return;
+    }
     sendJson(res, 200, { ok: true, config: await runtimeStore.getPublic() });
     return;
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/runtime/config") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const config = await runtimeStore.update({
       mode: body.mode,
@@ -72,6 +153,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/runtime/models") {
+    const auth = await requireRole(req, res, "operator");
+    if (!auth) {
+      return;
+    }
     const config = await runtimeStore.get();
     const models = await brain.listModels(config);
     sendJson(res, 200, { ok: true, models });
@@ -79,6 +164,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/runtime/probe") {
+    const auth = await requireRole(req, res, "operator");
+    if (!auth) {
+      return;
+    }
     const config = await runtimeStore.get();
     const probe = await brain.probe(config);
     sendJson(res, probe.ok ? 200 : 400, probe);
@@ -86,6 +175,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/chat") {
+    const auth = await requireRole(req, res, "operator");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const config = await runtimeStore.get();
     const userPrompt = String(body.prompt ?? "").trim();
@@ -128,17 +221,29 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/legal-library/documents") {
+    const auth = await requireRole(req, res, "viewer");
+    if (!auth) {
+      return;
+    }
     sendJson(res, 200, { ok: true, documents: await legalLibrary.listDocuments() });
     return;
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/legal-library/search") {
+    const auth = await requireRole(req, res, "viewer");
+    if (!auth) {
+      return;
+    }
     const query = requestUrl.searchParams.get("q") || "";
     sendJson(res, 200, { ok: true, results: await legalLibrary.search(query, 8) });
     return;
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/legal-library/documents") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const document = await legalLibrary.createDocument({
       title: String(body.title ?? ""),
@@ -155,6 +260,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/legal-library/ingest") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const document = await legalLibrary.ingest({
       title: typeof body.title === "string" ? body.title : undefined,
@@ -172,6 +281,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/decision/run") {
+    const auth = await requireRole(req, res, "operator");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const packPaths = normalizePackPaths(body.packPaths);
     const loadedPacks = await loadFinancePacksFromPaths(packPaths, REPO_ROOT);
@@ -199,6 +312,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       packPaths,
       event: eventPayload,
       result,
+      actor: auth.actor,
     });
 
     sendJson(res, 200, { ok: true, decision: result, auditRun });
@@ -206,6 +320,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   }
 
   if (req.method === "POST" && requestUrl.pathname === "/api/replay/run") {
+    const auth = await requireRole(req, res, "operator");
+    if (!auth) {
+      return;
+    }
     const body = await readJsonBody(req);
     const baselinePackPaths = normalizePackPaths(body.baselinePackPaths);
     const candidatePackPaths = normalizePackPaths(body.candidatePackPaths);
@@ -239,18 +357,27 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       candidatePackPaths,
       events,
       replay,
+      actor: auth.actor,
     });
     sendJson(res, 200, { ok: true, replay, auditRun });
     return;
   }
 
   if (req.method === "GET" && requestUrl.pathname === "/api/audit/runs") {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
     const limit = Number(requestUrl.searchParams.get("limit") || 12);
     sendJson(res, 200, { ok: true, runs: await auditRuns.list(Number.isFinite(limit) ? limit : 12) });
     return;
   }
 
   if (req.method === "GET" && requestUrl.pathname.startsWith("/api/audit/runs/")) {
+    const auth = await requireRole(req, res, "reviewer");
+    if (!auth) {
+      return;
+    }
     const id = requestUrl.pathname.slice("/api/audit/runs/".length).trim();
     if (!id) {
       sendJson(res, 400, { ok: false, error: "run id is required" });
@@ -309,6 +436,21 @@ function normalizeMode(value: unknown): "L0" | "L1" | "L2" | "L3" {
     return value;
   }
   return "L1";
+}
+
+async function requireRole(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  role: "viewer" | "operator" | "reviewer" | "admin",
+): Promise<{ actor: import("./access-control.ts").AuthenticatedActor | null } | null> {
+  const auth = await accessControl.authorize(req.headers, role);
+  if (!auth.ok) {
+    sendJson(res, auth.status, { ok: false, error: auth.error });
+    return null;
+  }
+  return {
+    actor: auth.actor,
+  };
 }
 
 function sendJson(res: http.ServerResponse, statusCode: number, payload: Record<string, unknown>): void {

@@ -26,6 +26,7 @@ The intended operating mode is:
 - Pack validation, deterministic Decision Packet generation, replay analysis, evidence graph snapshotting
 - pluggable Ollama brain runtime with `local` and `cloud` modes
 - browser-based operator console
+- local token-based access control with `viewer`, `operator`, `reviewer`, and `admin` roles
 - legal library ingestion, storage, search, and citation injection
 - persisted local audit history for decision and replay runs
 - optional OpenClaw adapter under `integrations/openclaw/`
@@ -48,6 +49,7 @@ The intended operating mode is:
 - `/api/decision/run` produces a full Decision Packet for the example SaaS annual prepayment event
 - `/api/replay/run` persists replay outcomes and returns drift summaries
 - `/api/audit/runs` returns saved decision and replay history
+- `/api/access-control` returns auth posture and current session state
 - cloud runtime probe can distinguish:
   - model listing works
   - inference is unauthorized
@@ -96,7 +98,7 @@ Do not describe cloud inference as operational until the runtime probe shows bot
 - deterministic finance Decision Packet output
 - replay-before-publish capability
 - visible legal-source grounding path
-- persisted local audit history
+- persisted local audit history with actor attribution when auth is enabled
 - honest enterprise-readiness messaging
 - no committed secrets
 
