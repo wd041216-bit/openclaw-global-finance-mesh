@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Global Finance Mesh Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">Finance Operating Console</p>
+          <h1>Global Finance Mesh Atlas</h1>
+          <p class="lede">
+            A Pack-driven finance control plane with pluggable LLM brains, legal-library grounding,
+            and auditable decision flows.
+          </p>
+        </div>
+        <div class="status-card">
+          <span class="status-dot"></span>
+          <div>
+            <strong>Brain-ready runtime</strong>
+            <p>Local Ollama or Ollama Cloud. Cloud requests are serialized for safe concurrency.</p>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Brain Runtime</h2>
+            <button id="load-models" class="ghost">Refresh Models</button>
+          </div>
+          <form id="config-form" class="stack">
+            <label>
+              Mode
+              <select name="mode">
+                <option value="local">Local Ollama</option>
+                <option value="cloud">Ollama Cloud</option>
+              </select>
+            </label>
+            <label>
+              Model
+              <input name="model" placeholder="qwen3:8b" />
+            </label>
+            <label>
+              Local Base URL
+              <input name="localBaseUrl" placeholder="http://127.0.0.1:11434" />
+            </label>
+            <label>
+              Cloud Base URL
+              <input name="cloudBaseUrl" placeholder="https://ollama.com" />
+            </label>
+            <label>
+              API Key
+              <input name="apiKey" type="password" placeholder="Only used for cloud mode" />
+            </label>
+            <label>
+              Temperature
+              <input name="temperature" type="number" min="0" max="2" step="0.1" />
+            </label>
+            <label>
+              System Prompt
+              <textarea name="systemPrompt" rows="4"></textarea>
+            </label>
+            <label class="inline">
+              <input name="persistSecret" type="checkbox" />
+              Persist API key to local ignored secrets file
+            </label>
+            <div class="actions">
+              <button type="submit">Save Runtime</button>
+            </div>
+          </form>
+          <pre id="models-output" class="output small"></pre>
+        </section>
+
+        <section class="panel chat-panel">
+          <div class="panel-head">
+            <h2>Agent Console</h2>
+            <span class="chip">Ground with legal sources</span>
+          </div>
+          <form id="chat-form" class="stack">
+            <label>
+              Prompt
+              <textarea name="prompt" rows="6" placeholder="Ask about a finance scenario, legal requirement, or implementation question."></textarea>
+            </label>
+            <label class="inline">
+              <input type="checkbox" name="useLegalLibrary" checked />
+              Use legal-library context
+            </label>
+            <div class="actions">
+              <button type="submit">Run Agent</button>
+            </div>
+          </form>
+          <div class="response-block">
+            <h3>Reply</h3>
+            <pre id="chat-output" class="output"></pre>
+          </div>
+          <div class="response-block">
+            <h3>Citations</h3>
+            <div id="citations-output" class="citations"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Legal Library</h2>
+            <button id="refresh-library" class="ghost">Refresh Library</button>
+          </div>
+          <form id="search-form" class="search-row">
+            <input name="query" placeholder="Search library by jurisdiction, topic, or obligation" />
+            <button type="submit">Search</button>
+          </form>
+          <div id="library-results" class="library-list"></div>
+          <hr />
+          <form id="ingest-form" class="stack">
+            <label>
+              Title
+              <input name="title" placeholder="Document title" />
+            </label>
+            <label>
+              Jurisdiction
+              <input name="jurisdiction" placeholder="CN / EU / GLOBAL" />
+            </label>
+            <label>
+              Domain
+              <input name="domain" placeholder="tax / accounting / control" />
+            </label>
+            <label>
+              Source URL
+              <input name="url" placeholder="https://official-source.example" />
+            </label>
+            <label>
+              Local File Path
+              <input name="filePath" placeholder="/absolute/path/to/file.txt" />
+            </label>
+            <label>
+              Tags
+              <input name="tags" placeholder="comma,separated,tags" />
+            </label>
+            <label>
+              Raw Text
+              <textarea name="body" rows="5" placeholder="Paste statute excerpts, regulations, or internal legal notes."></textarea>
+            </label>
+            <div class="actions">
+              <button type="submit">Ingest Into Library</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Finance Mesh</h2>
+            <span class="chip">Example packs wired in</span>
+          </div>
+          <div class="actions dual">
+            <button id="run-decision">Run Example Decision</button>
+            <button id="run-replay" class="ghost">Run Example Replay</button>
+          </div>
+          <pre id="finance-output" class="output"></pre>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
+

@@ -12,19 +12,26 @@
     "node": ">=22"
   },
   "files": [
+    ".env.example",
     "index.ts",
     "openclaw.plugin.json",
     "src",
     "skills",
     "agents",
+    "web",
+    "data",
     "examples",
     "docs",
     "SKILL.md",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "LICENSE"
   ],
   "scripts": {
+    "dev": "node src/server.ts",
+    "start": "node src/server.ts",
     "test": "node --test tests/*.test.ts",
     "verify": "npm test"
   },
@@ -52,4 +59,3 @@
     ]
   }
 }
-

@@ -1,0 +1,37 @@
+{
+  "documents": [
+    {
+      "id": "cn-invoice-baseline-2026",
+      "title": "China Invoice Review Baseline",
+      "jurisdiction": "CN",
+      "domain": "tax",
+      "sourceType": "tax_authority",
+      "sourceRef": "official://cn/tax/invoice-baseline",
+      "tags": [
+        "invoice",
+        "vat",
+        "review"
+      ],
+      "summary": "Country-level invoice review expectations used by the example Pack set.",
+      "body": "Invoice release requires tax review readiness, customer registration completeness, and country-specific field validation before outbound issuance.",
+      "updatedAt": "2026-03-30T20:00:00+08:00"
+    },
+    {
+      "id": "group-saas-revenue-policy-2026",
+      "title": "Group SaaS Revenue Recognition Policy",
+      "jurisdiction": "GLOBAL",
+      "domain": "revenue",
+      "sourceType": "group_policy",
+      "sourceRef": "policy://group/revenue/saas",
+      "tags": [
+        "saas",
+        "revenue",
+        "contract-liability"
+      ],
+      "summary": "Annual SaaS prepayments are booked to contract liability until service is delivered.",
+      "body": "For annual subscription prepayments, recognize cash receipt against contract liability first and amortize revenue monthly over the service period once delivery begins.",
+      "updatedAt": "2026-03-30T20:00:00+08:00"
+    }
+  ]
+}
+
