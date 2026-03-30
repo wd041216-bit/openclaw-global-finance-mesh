@@ -1,0 +1,20 @@
+{
+  "mode": "L1",
+  "baselinePackPaths": [
+    "./examples/packs/cn-country-core.yaml",
+    "./examples/packs/saas-industry.yaml",
+    "./examples/packs/group-entity-policy.yaml",
+    "./examples/packs/global-control.yaml",
+    "./examples/packs/standard-output.yaml"
+  ],
+  "candidatePackPaths": [
+    "./examples/packs/cn-country-core.yaml",
+    "./examples/packs/saas-industry.yaml",
+    "./examples/packs/group-entity-policy.yaml",
+    "./examples/packs/global-control.yaml",
+    "./examples/packs/standard-output.yaml"
+  ],
+  "events": [
+    "./examples/events/saas-annual-prepayment.json"
+  ]
+}

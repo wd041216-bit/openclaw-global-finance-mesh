@@ -1,0 +1,42 @@
+{
+  "event_id": "EVT-2026-000184",
+  "event_type": "customer_cash_received",
+  "sub_event_type": "annual_subscription_prepayment",
+  "entity_id": "CN-SUB-001",
+  "source_system": "billing-core",
+  "event_time": "2026-03-30T10:42:15+08:00",
+  "industry_code": "SAAS",
+  "legal_country": "CN",
+  "tax_country": "CN",
+  "service_delivery_country": "CN",
+  "counterparty_country": "CN",
+  "cross_border": false,
+  "related_party": false,
+  "contract_signed": true,
+  "pricing_schedule": true,
+  "signed_contract": true,
+  "cash_receipt": true,
+  "customer_master": true,
+  "tax_registration_info": true,
+  "customer_master_snapshot": true,
+  "amount": {
+    "value": 120000,
+    "currency": "CNY"
+  },
+  "currency": "CNY",
+  "service_period": {
+    "start": "2026-04-01",
+    "end": "2027-03-31"
+  },
+  "document_types": [
+    "signed_contract",
+    "cash_receipt",
+    "invoice_request"
+  ],
+  "evidence_refs": [
+    "signed_contract.pdf",
+    "cash_receipt_bank_advice.pdf",
+    "service_period_confirmation.json"
+  ]
+}
+

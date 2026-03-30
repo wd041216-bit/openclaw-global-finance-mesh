@@ -1,0 +1,83 @@
+pack_id: GLOBAL_CONTROL_v1.5.2
+pack_type: control
+display_name: Global Control Pack
+version: 1.5.2
+status: active
+owner: Internal Control Office
+effective_from: "2026-01-01"
+effective_to: null
+priority_weight: 95
+source_of_truth:
+  - source_id: CTRL-001
+    source_type: audit_policy
+    title: Global control baseline
+    uri_or_registry_ref: policy://group/internal-control/global
+    retrieved_at: "2026-03-20T09:00:00+08:00"
+approval:
+  required_roles:
+    - finance
+    - internal_control
+    - system_owner
+  approved_by:
+    - Internal Control Lead
+  approved_at: "2026-03-24T09:00:00+08:00"
+  rollback_version: 1.5.1
+test_requirements:
+  min_pass_rate: 0.97
+  required_scenarios:
+    - happy_path
+    - boundary
+    - exception
+    - conflict
+    - rollback
+rules:
+  - rule_id: CTRL-DOC-COMPLETE
+    title: Contract and cash evidence must exist for prepayments
+    intent: Block automated processing when core supporting documents are missing.
+    scope:
+      all:
+        - field: event_type
+          op: eq
+          value: customer_cash_received
+      any: []
+      not: []
+    conditions:
+      preconditions: []
+      blocking_conditions:
+        - field: signed_contract
+          op: missing
+          value: true
+        - field: cash_receipt
+          op: missing
+          value: true
+      warning_conditions:
+        - field: pricing_schedule
+          op: missing
+          value: true
+    actions:
+      evidence_requirements:
+        - signed_contract
+        - cash_receipt
+        - pricing_schedule
+      control_hooks:
+        - document_completeness_check
+      approval_route:
+        default:
+          - finance_operations
+      execution_policy:
+        mode: freeze_until_complete
+      output_templates: []
+      notifications:
+        - request_missing_documents
+    risk_model:
+      risk_level: high
+      risk_reasons:
+        - evidence_incomplete
+      confidence_formula_ref: CF-CTRL-DOC-COMPLETE
+    explanation_template: Missing core evidence blocks automated finance processing.
+    rollback:
+      supported: true
+      rollback_steps:
+        - clear_document_request
+      data_compensation_actions: []
+

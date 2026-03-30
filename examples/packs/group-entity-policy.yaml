@@ -1,0 +1,84 @@
+pack_id: GROUP_ENTITY_POLICY_v2.1.0
+pack_type: entity
+display_name: Group Entity Policy
+version: 2.1.0
+status: active
+owner: Group Controller
+effective_from: "2026-01-01"
+effective_to: null
+priority_weight: 90
+source_of_truth:
+  - source_id: ENT-001
+    source_type: group_policy
+    title: Group revenue materiality policy
+    uri_or_registry_ref: policy://group/materiality/revenue
+    retrieved_at: "2026-03-22T09:00:00+08:00"
+approval:
+  required_roles:
+    - finance
+    - internal_control
+    - system_owner
+  approved_by:
+    - Group Controller
+  approved_at: "2026-03-23T10:00:00+08:00"
+  rollback_version: 2.0.0
+test_requirements:
+  min_pass_rate: 0.95
+  required_scenarios:
+    - happy_path
+    - boundary
+    - exception
+    - conflict
+    - rollback
+entity_profile:
+  materiality_thresholds:
+    medium: 100000
+    high: 500000
+rules:
+  - rule_id: ENT-001
+    title: Medium materiality finance events require controller review
+    intent: Escalate annual prepayments above the medium threshold.
+    scope:
+      all:
+        - field: event_type
+          op: eq
+          value: customer_cash_received
+        - field: amount.value
+          op: gte
+          value: 100000
+      any: []
+      not: []
+    conditions:
+      preconditions: []
+      blocking_conditions: []
+      warning_conditions: []
+    actions:
+      approval_route:
+        materiality_overrides:
+          medium:
+            - revenue_controller
+          high:
+            - revenue_controller
+            - finance_director
+      evidence_requirements:
+        - customer_master_snapshot
+      control_hooks:
+        - materiality_review
+      execution_policy:
+        mode: supervised_execute
+      output_templates:
+        - materiality_review_memo
+      notifications:
+        - route_materiality_review
+    risk_model:
+      risk_level: medium
+      risk_reasons:
+        - materiality_threshold_reached
+      confidence_formula_ref: CF-ENT-001
+    explanation_template: Material transactions require controller visibility before automation.
+    rollback:
+      supported: true
+      rollback_steps:
+        - cancel_materiality_review
+      data_compensation_actions: []
+

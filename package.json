@@ -1,0 +1,55 @@
+{
+  "name": "@wd041216-bit/openclaw-global-finance-mesh",
+  "version": "0.1.0",
+  "private": false,
+  "description": "OpenClaw-style finance agent plugin for pack validation, decision packets, replay analysis, and audit trace generation.",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "index.ts",
+    "openclaw.plugin.json",
+    "src",
+    "skills",
+    "agents",
+    "examples",
+    "docs",
+    "SKILL.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.ts",
+    "verify": "npm test"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "homepage": "https://github.com/wd041216-bit/openclaw-global-finance-mesh",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wd041216-bit/openclaw-global-finance-mesh.git"
+  },
+  "keywords": [
+    "openclaw",
+    "finance",
+    "agent",
+    "audit-trail",
+    "rule-engine",
+    "decision-packet",
+    "plugin",
+    "global-finance"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "name": "zhouheng-global-finance-mesh",
+  "version": "0.1.0",
+  "description": "Pack-based finance agent for OpenClaw with decision packets, replay analysis, and audit trace generation.",
+  "author": "Dawei",
+  "homepage": "https://github.com/wd041216-bit/openclaw-global-finance-mesh",
+  "metadata": {
+    "tags": [
+      "openclaw",
+      "finance",
+      "audit",
+      "decision-packet",
+      "rules"
+    ],
+    "categories": [
+      "Finance",
+      "Automation"
+    ]
+  }
+}
+

@@ -1,0 +1,53 @@
+{
+  "id": "global-finance-mesh",
+  "name": "Global Finance Mesh",
+  "version": "0.1.0",
+  "description": "Finance decisioning plugin for OpenClaw with pack validation, replay analysis, evidence graph snapshots, and decision packet generation.",
+  "skills": [
+    "./skills"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "prependSystemGuidance": {
+        "type": "boolean",
+        "default": true
+      },
+      "defaultMode": {
+        "type": "string",
+        "enum": [
+          "L0",
+          "L1",
+          "L2",
+          "L3"
+        ],
+        "default": "L1"
+      },
+      "maxAutoExecuteRisk": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "default": "low"
+      },
+      "packRoots": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "./examples/packs"
+        ]
+      }
+    }
+  }
+}
+

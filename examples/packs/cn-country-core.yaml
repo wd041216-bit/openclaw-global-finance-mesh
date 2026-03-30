@@ -1,0 +1,102 @@
+pack_id: CN_COUNTRY_CORE_v1.3.0
+pack_type: country
+display_name: China Country Core
+version: 1.3.0
+status: active
+owner: Tax Technology Office
+jurisdictions:
+  - CN
+effective_from: "2026-01-01"
+effective_to: null
+priority_weight: 60
+source_of_truth:
+  - source_id: CN-TAX-001
+    source_type: tax_authority
+    title: PRC invoice and tax review baseline
+    uri_or_registry_ref: official://cn/tax/invoice-baseline
+    retrieved_at: "2026-03-20T09:00:00+08:00"
+approval:
+  required_roles:
+    - finance
+    - tax
+    - legal
+    - internal_control
+    - system_owner
+  approved_by:
+    - China Tax Lead
+    - Finance Systems Owner
+  approved_at: "2026-03-25T10:00:00+08:00"
+  rollback_version: 1.2.0
+test_requirements:
+  min_pass_rate: 0.95
+  required_scenarios:
+    - happy_path
+    - boundary
+    - exception
+    - conflict
+    - rollback
+country_profile:
+  taxes_in_scope:
+    - vat
+    - corporate_income_tax
+  invoice_requirements:
+    supports_e_invoice: true
+    serial_control_required: true
+rules:
+  - rule_id: CN-TAX-REV-001
+    title: SaaS prepayment requires tax review before invoice release
+    intent: Add tax review and invoice-preparation outputs for annual subscription prepayments.
+    scope:
+      all:
+        - field: legal_country
+          op: eq
+          value: CN
+        - field: event_type
+          op: eq
+          value: customer_cash_received
+      any: []
+      not: []
+    conditions:
+      preconditions:
+        - field: sub_event_type
+          op: eq
+          value: annual_subscription_prepayment
+      blocking_conditions: []
+      warning_conditions:
+        - field: cross_border
+          op: eq
+          value: true
+    actions:
+      tax_treatment:
+        tax_review_required: true
+        filing_flag: false
+        reason: invoice release requires country-specific tax review
+        output_tags:
+          - invoice_preparation_required
+      evidence_requirements:
+        - customer_master
+        - tax_registration_info
+      control_hooks:
+        - country_invoice_schema_check
+      approval_route:
+        additional_review:
+          - tax_manager_for_invoice_release
+      execution_policy:
+        mode: recommend
+      output_templates:
+        - invoice_precheck
+        - tax_review_note
+      notifications:
+        - notify_tax_manager_before_invoice_release
+    risk_model:
+      risk_level: medium
+      risk_reasons:
+        - country_tax_review_required
+      confidence_formula_ref: CF-CN-TAX-REV-001
+    explanation_template: China country rules require tax review before invoice release.
+    rollback:
+      supported: true
+      rollback_steps:
+        - revoke_invoice_precheck
+      data_compensation_actions: []
+

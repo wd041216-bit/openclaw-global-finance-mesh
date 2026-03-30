@@ -1,0 +1,13 @@
+{
+  "plugins": {
+    "load": {
+      "paths": [
+        "/absolute/path/to/openclaw-global-finance-mesh"
+      ]
+    },
+    "entries": [
+      "global-finance-mesh"
+    ]
+  }
+}
+
