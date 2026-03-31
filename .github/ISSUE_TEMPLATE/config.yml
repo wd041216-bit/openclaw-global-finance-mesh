@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Security policy
+    url: https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/SECURITY.md
+    about: Report vulnerabilities through private channels only.
+  - name: Support guide
+    url: https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/SUPPORT.md
+    about: Start here for install, runtime, and operations support paths.
   - name: Identity and audit operations guide
     url: https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/docs/identity-operations.md
     about: Check the current OIDC, session, revoke, and CSRF guide before opening an auth issue.

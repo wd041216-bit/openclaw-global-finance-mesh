@@ -1,8 +1,17 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a business-first Apple-style multi-page console, summary-first admin dashboards, local-first agent connectors with structured MCP outputs, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
+![CI](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/ci.yml/badge.svg)
+![Release](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/release.yml/badge.svg)
+[![npm version](https://img.shields.io/npm/v/@wd041216-bit/zhouheng-global-finance-mesh)](https://www.npmjs.com/package/@wd041216-bit/zhouheng-global-finance-mesh)
+[![GHCR](https://img.shields.io/badge/GHCR-zhouheng--global--finance--mesh-blue)](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/pkgs/container/zhouheng-global-finance-mesh)
 
-This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
+Business-first finance control plane for deterministic decisioning, replay impact analysis, legal grounding, and tamper-evident audit governance.
+
+- 10-second value: run decisions safely, replay rule changes, and keep governance traceable.
+- 3-minute first run: desktop package + guided onboarding.
+- 10-minute integration: connect one host (OpenClaw / Claude / Manus / Cursor / Cline / Cherry Studio).
+
+中文入口: [README.zh-CN](./README.zh-CN.md)
 
 ## Console snapshots
 
@@ -15,44 +24,85 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
   <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw plus Claude/Manus/Cursor/Cline/Cherry Studio setup cards" width="15%" />
 </p>
 
-## What ships in the current baseline
+## Why
 
-- nine-page Chinese-first web console with a white, high-whitespace, Apple-like shell:
-  - `首页` for brand framing, environment snapshot, and role entry
-  - `业务工作台` for business-friendly next actions, recommended routes, and recent summaries
-  - `决策中心` for a three-step decision workflow: choose event source, choose mode/Packs, then read the result summary
-  - `回放中心` for a parallel three-step replay workflow focused on changed events and risk drift
-  - `依据库` for search-first legal reading, with review/ingestion pushed behind secondary governance actions
-  - `治理中心` for integrity, exports, and operator activity
-  - `恢复中心` for backups, restore drills, and recovery guidance
-  - `系统设置` for identity, session, runtime, and observability controls
-  - `Agent Hub` for OpenClaw plus Claude/Manus/Cursor/Cline/Cherry Studio connector guidance ordered as capabilities, start, verify, then technical details
-- service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
-- hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
-- `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
-- pluggable Ollama brain runtime for local and cloud deployments, with protocol-aware cloud probing for `auto`, `ollama_native`, and `openai_compatible`
-- TypeScript rule engine for Pack validation, decision generation, and replay analysis
-- legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
-- append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
-- local-directory and S3-compatible backup replication for ledger/session snapshots
-- non-destructive restore drills that validate manifests, restored ledger integrity, and identity-state readability in an isolated path
-- `/api/dashboard/overview`, `/api/operations/health`, and Prometheus-friendly `/api/metrics`
-- `/api/integrations/adapters` and `/api/integrations/adapters/:id` for unified agent-adapter discovery
-- stable MCP tool contracts that return human summary text, `structuredContent`, and `outputSchema` for:
-  - pack validation
-  - decision run
-  - replay run
-  - legal library search
-  - audit integrity read
-- structured request logging with request, actor, run, and backup references
-- persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
-- unified local-first adapter registry for OpenClaw native plugin mode plus Claude/Manus/Cursor/Cline/Cherry Studio MCP connector mode
-- example Country, Industry, Entity, Control, and Output Packs
-- example SaaS annual prepayment event
-- node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
-- Docker single-instance baseline plus raw Kubernetes manifests for one-replica deployment
-- GitHub Actions CI and semver release workflows for Node 22/25 compatibility checks, server verification, browser smoke, restore smoke, Docker image publish, and npm publish
-- pilot-readiness assets for single-instance external trials: `.env.pilot.example`, `npm run review:pilot`, `npm run verify:cloud-provider`, and a cloud/provider runbook
+- Deterministic decision packets and replay drift checks before policy rollout.
+- Legal-library grounding and reviewer/admin governance workflow.
+- Tamper-evident audit chain with integrity verification and export manifests.
+- Desktop onboarding + summary-first web console for non-technical operators.
+
+## Try
+
+```bash
+npm install
+npm test
+npm run dev
+```
+
+Open [http://127.0.0.1:3030](http://127.0.0.1:3030), then follow guided onboarding.
+
+Cloud pilot defaults:
+
+```bash
+export OLLAMA_MODE=cloud
+export OLLAMA_MODEL=kimi-k2.5
+export FINANCE_MESH_CLOUD_API_FLAVOR=auto
+export OLLAMA_API_KEY=your_key_here
+```
+
+## Install
+
+- macOS outputs: `.pkg`, `.dmg`, `.zip`
+- Windows outputs: `.exe` (NSIS) + `.zip` fallback
+- first desktop launch always opens:
+  - `getting-started.html?mode=admin&entry=desktop`
+
+Build commands:
+
+```bash
+npm run build:macos-installer
+npm run build:windows-package
+```
+
+## Connect Agents
+
+- OpenClaw: native plugin path under `integrations/openclaw/`
+- Claude / Manus / Cursor / Cline / Cherry Studio: shared MCP entrypoint at `integrations/mcp/server.ts`
+
+Verification:
+
+```bash
+npm run mcp:serve
+npm run smoke:mcp
+npm run smoke:openclaw
+npm run doctor:hosts
+```
+
+## Pilot
+
+- external pilot baseline: single-instance self-hosting
+- runtime gate: `verificationStatus=fully_usable` and `goLiveReady=true`
+- recovery gate: backup target configured + restore drill completed
+
+Key runbooks:
+
+- [cloud-runtime-operations](./docs/cloud-runtime-operations.md)
+- [external-pilot-runbook](./docs/external-pilot-runbook.md)
+- [v0.4.0-launch-checklist](./docs/v0.4.0-launch-checklist.md)
+
+## Download
+
+Release assets are published with checksums:
+
+- `zhouheng-finance-mesh-0.4.0-macos.pkg`
+- `zhouheng-finance-mesh-0.4.0-macos.dmg`
+- `zhouheng-finance-mesh-0.4.0-macos.zip`
+- `zhouheng-finance-mesh-0.4.0-windows.exe`
+- `zhouheng-finance-mesh-0.4.0-windows.zip`
+- `SHA256SUMS`
+
+See [GitHub Releases](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases).
+Live page: [wd041216-bit.github.io/zhouheng-global-finance-mesh](https://wd041216-bit.github.io/zhouheng-global-finance-mesh/).
 
 ## Architecture
 
@@ -198,10 +248,16 @@ npm run build:windows-package
 
 This produces:
 
+- `dist/windows/zhouheng-finance-mesh-<version>-windows.exe`
 - `dist/windows/zhouheng-finance-mesh-<version>-windows.zip`
 - a release folder with installer / start / stop scripts
 
-The Windows package bundles the official Node.js 22.22.2 runtime, installs into `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`, stores user data under `%LOCALAPPDATA%\Zhouheng Finance Mesh`, and launches a tray controller with start / stop / open-console actions.
+The Windows package bundles the official Node.js 22.22.2 runtime, installs into `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`, stores user data under `%LOCALAPPDATA%\Zhouheng Finance Mesh`, and launches a tray controller with onboarding / start / stop / open-console actions.
+
+Recommended install path:
+
+- run `.exe` first (NSIS one-click installer)
+- use `.zip` as fallback when `.exe` is blocked by local policy
 
 See [docs/windows-desktop-package.md](./docs/windows-desktop-package.md) for packaging and install details.
 
@@ -349,8 +405,8 @@ Restore drills are non-destructive. They materialize a backup into `data/restore
 ## CI and release baseline
 
 - `.github/workflows/ci.yml` runs `npm ci`, `npm test`, `npm run verify:server`, `npm run verify:manifests`, `docker build`, `npm run smoke:restore`, and `npm run smoke:ui` on pull requests and `main`
-- `.github/workflows/release.yml` only publishes on `workflow_dispatch` or a semver tag such as `v0.3.0`
-- `npm run release:check -- --tag v0.3.0` verifies that the git tag, `package.json` version, and `CHANGELOG.md` heading all match before release publish starts
+- `.github/workflows/release.yml` only publishes on `workflow_dispatch` or a semver tag such as `v0.4.0`
+- `npm run release:check -- --tag v0.4.0` verifies that the git tag, `package.json` version, and `CHANGELOG.md` heading all match before release publish starts
 - CI provisions a disposable kind cluster before `npm run verify:manifests`, because `kubectl` dry-run still needs API discovery for built-in resource mapping
 - release publish targets are `ghcr.io/wd041216-bit/zhouheng-global-finance-mesh` for container images and the public npm registry for the package
 
@@ -409,6 +465,8 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)
 - [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
+- [docs/host-integration-matrix.md](./docs/host-integration-matrix.md)
+- [docs/v0.4.0-launch-checklist.md](./docs/v0.4.0-launch-checklist.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
@@ -425,3 +483,6 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [CHANGELOG.md](./CHANGELOG.md)
+- [SECURITY.md](./SECURITY.md)
+- [SUPPORT.md](./SUPPORT.md)
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)

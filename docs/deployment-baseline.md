@@ -63,7 +63,7 @@ kubectl apply -f deploy/kubernetes/service.yaml
 
 - `ci.yml` validates the repo on pull requests and `main` with unit tests, syntax checks, Kubernetes dry runs, Docker build, restore smoke, and browser smoke.
 - The workflow provisions a disposable kind cluster before `npm run verify:manifests` so `kubectl` dry-run has API discovery available.
-- `release.yml` is intentionally tag-gated. Use `workflow_dispatch` or push a semver tag such as `v0.3.0` after `npm run release:check -- --tag v0.3.0` passes locally.
+- `release.yml` is intentionally tag-gated. Use `workflow_dispatch` or push a semver tag such as `v0.4.0` after `npm run release:check -- --tag v0.4.0` passes locally.
 - Required repository secrets are:
   - `NPM_TOKEN` for npm publish
   - `GITHUB_TOKEN` is used automatically for GHCR publish

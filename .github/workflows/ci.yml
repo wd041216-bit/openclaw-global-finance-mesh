@@ -90,3 +90,9 @@ jobs:
 
       - name: Smoke browser flow
         run: npm run smoke:ui
+
+      - name: Smoke Pages content
+        run: npm run smoke:pages
+
+      - name: Smoke release artifact contract
+        run: npm run smoke:release-artifacts

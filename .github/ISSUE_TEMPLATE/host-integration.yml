@@ -1,0 +1,56 @@
+name: Host integration issue
+description: Report integration issues for OpenClaw, Claude, Manus, Cursor, Cline, or Cherry Studio.
+title: "[Host integration]: "
+labels:
+  - bug
+  - integrations
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when host setup, tool discovery, or structured output behavior does not match docs.
+  - type: dropdown
+    id: host
+    attributes:
+      label: Host
+      options:
+        - OpenClaw
+        - Claude
+        - Manus
+        - Cursor
+        - Cline
+        - Cherry Studio
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Install / config template
+        - MCP startup
+        - tools/list
+        - Tool execution
+        - structuredContent / outputSchema
+        - doctor:hosts mismatch
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      placeholder: tools/list worked but finance_mesh_run_decision returned host parse error.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Commands and outputs
+      description: Include sanitized output from `npm run doctor:hosts`, `npm run smoke:mcp`, or `npm run smoke:openclaw` as relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment context
+      description: OS, host version, Node version, and relevant non-secret env vars.

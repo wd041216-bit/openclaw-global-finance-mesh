@@ -1,7 +1,7 @@
 {
   "id": "zhouheng-global-finance-mesh",
   "name": "Zhouheng Global Finance Mesh",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "OpenClaw plugin adapter for Zhouheng Global Finance Mesh with unified finance pack validation, decision packets, and replay analysis.",
   "skills": [
     "./skills"

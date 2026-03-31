@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag in semver form, for example v0.3.0"
+        description: "Release tag in semver form, for example v0.4.0"
         required: true
         type: string
   push:
@@ -17,15 +17,19 @@ permissions:
   id-token: write
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
+
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      version: ${{ steps.meta.outputs.version }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Resolve release metadata
-        id: release_meta
+        id: meta
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -60,13 +64,16 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Validate release metadata
-        run: npm run release:check -- --tag "${{ steps.release_meta.outputs.release_tag }}"
+        run: npm run release:check -- --tag "${{ steps.meta.outputs.release_tag }}"
 
       - name: Run node tests
         run: npm test
 
       - name: Verify server syntax
         run: npm run verify:server
+
+      - name: Diagnose host adapters
+        run: npm run doctor:hosts
 
       - name: Verify Kubernetes manifests
         run: npm run verify:manifests
@@ -76,6 +83,162 @@ jobs:
 
       - name: Smoke browser flow
         run: npm run smoke:ui
+
+      - name: Smoke Pages content
+        run: npm run smoke:pages
+
+      - name: Smoke release artifact contract
+        run: npm run smoke:release-artifacts
+
+  build-desktop-macos:
+    needs: validate
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS desktop artifacts
+        run: npm run build:macos-installer
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-desktop-artifacts
+          path: |
+            dist/macos/*.pkg
+            dist/macos/*.dmg
+            dist/macos/*.zip
+          if-no-files-found: error
+
+  build-desktop-windows:
+    needs: validate
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build Windows desktop artifacts
+        run: npm run build:windows-package -- --require-exe
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-artifacts
+          path: |
+            dist/windows/*.exe
+            dist/windows/*.zip
+          if-no-files-found: error
+
+  assemble-release-assets:
+    needs:
+      - validate
+      - build-desktop-macos
+      - build-desktop-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-desktop-artifacts
+          path: release-artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-desktop-artifacts
+          path: release-artifacts
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          cd release-artifacts
+          sha256sum \
+            zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.pkg \
+            zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.dmg \
+            zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.zip \
+            zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-windows.exe \
+            zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-windows.zip > SHA256SUMS
+
+      - name: Checkout repository for smoke scripts
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify release artifact set
+        run: npm run smoke:release-artifacts -- --strict --artifacts-dir release-artifacts
+
+      - name: Upload release asset bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release-artifacts/*
+          if-no-files-found: error
+
+  publish:
+    needs:
+      - validate
+      - assemble-release-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-artifacts
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          sed "s/__VERSION__/${{ needs.validate.outputs.version }}/g" .github/release-notes-template.md > release-notes.md
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
@@ -97,10 +260,25 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/wd041216-bit/zhouheng-global-finance-mesh:${{ steps.release_meta.outputs.version }}
+            ghcr.io/wd041216-bit/zhouheng-global-finance-mesh:${{ needs.validate.outputs.version }}
             ghcr.io/wd041216-bit/zhouheng-global-finance-mesh:latest
 
       - name: Publish npm package
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.validate.outputs.release_tag }}
+          name: ${{ needs.validate.outputs.release_tag }}
+          body_path: release-notes.md
+          files: |
+            release-artifacts/zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.pkg
+            release-artifacts/zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.dmg
+            release-artifacts/zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-macos.zip
+            release-artifacts/zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-windows.exe
+            release-artifacts/zhouheng-finance-mesh-${{ needs.validate.outputs.version }}-windows.zip
+            release-artifacts/SHA256SUMS
+          generate_release_notes: false
