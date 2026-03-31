@@ -25,7 +25,8 @@
 - governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing
 - legal library ingestion and grounding
-- Chinese-first browser console with business-first workbench, governance center, and system workspace
+- Chinese-first multi-page browser console with separate home, workbench, governance, recovery, system, and Agent Hub surfaces
+- unified local-first adapter registry for OpenClaw plugin mode plus Claude/Manus MCP connector mode
 
 ## What still needs work before an honest enterprise-ready claim
 

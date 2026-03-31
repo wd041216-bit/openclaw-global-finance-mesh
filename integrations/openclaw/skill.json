@@ -1,7 +1,7 @@
 {
   "name": "zhouheng-global-finance-mesh",
-  "version": "0.1.0",
-  "description": "Optional OpenClaw adapter for Zhouheng Global Finance Mesh with decision packets, replay analysis, and audit trace generation.",
+  "version": "0.3.0",
+  "description": "OpenClaw adapter for Zhouheng Global Finance Mesh with decision packets, replay analysis, and unified agent-registry metadata.",
   "author": "Dawei",
   "homepage": "https://github.com/wd041216-bit/zhouheng-global-finance-mesh",
   "metadata": {

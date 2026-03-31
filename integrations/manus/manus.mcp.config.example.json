@@ -1,0 +1,12 @@
+{
+  "name": "zhouheng-global-finance-mesh",
+  "transport": "stdio",
+  "command": "node",
+  "args": [
+    "/absolute/path/to/zhouheng-global-finance-mesh/integrations/mcp/server.ts"
+  ],
+  "env": {
+    "FINANCE_MESH_REPO_ROOT": "/absolute/path/to/zhouheng-global-finance-mesh",
+    "FINANCE_MESH_MCP_PACK_ROOTS": "examples/packs"
+  }
+}

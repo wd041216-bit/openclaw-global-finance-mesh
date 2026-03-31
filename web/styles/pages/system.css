@@ -1,0 +1,25 @@
+.top-gap {
+  margin-top: 14px;
+}
+
+.record-card {
+  display: grid;
+  gap: 10px;
+}
+
+#binding-list .record-card {
+  padding: 18px;
+}
+
+#access-overview .detail-card,
+#identity-admin .detail-card,
+#session-admin .detail-card,
+#runtime-config-panel .detail-card,
+#runtime-detail-panel .detail-card {
+  display: grid;
+  gap: 14px;
+}
+
+#system-metrics-preview {
+  min-height: 180px;
+}

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { AccessControlStore, isAccessRole, isIdentityBindingMatchType } from "./access-control.ts";
 import { OperatorActivityStore } from "./activity-store.ts";
+import { getAgentAdapter, listAgentAdapters } from "./agent-adapters.ts";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 import { AuditRunStore } from "./audit-store.ts";
 import { BackupReplicationStore } from "./backup-store.ts";
@@ -176,6 +177,31 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     sendJson(res, 200, {
       ok: true,
       overview: await operations.getDashboardOverview(session),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname === "/api/integrations/adapters") {
+    sendJson(res, 200, {
+      ok: true,
+      adapters: listAgentAdapters(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/api/integrations/adapters/")) {
+    const adapterId = decodeURIComponent(requestUrl.pathname.replace("/api/integrations/adapters/", ""));
+    const adapter = getAgentAdapter(adapterId);
+    if (!adapter) {
+      sendJson(res, 404, {
+        ok: false,
+        error: "Adapter not found.",
+      });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      adapter,
     });
     return;
   }

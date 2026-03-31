@@ -1,0 +1,13 @@
+.agent-card {
+  display: grid;
+  gap: 14px;
+}
+
+.capability-list,
+.step-list,
+.verify-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  line-height: 1.72;
+}

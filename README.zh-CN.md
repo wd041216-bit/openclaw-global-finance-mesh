@@ -1,6 +1,6 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、四工作区中文控制台、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、Apple 风格白色多页面控制台、面向 Claude / Manus / OpenClaw 的统一兼容层、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
 
 ## 控制台截图
 
@@ -12,11 +12,16 @@
 
 ## 已落地内容
 
-- 四工作区中文控制台，给非技术人员也能直接上手：
-  - `工作台`：运行决策、回放影响、法规问答、系统快照
-  - `依据库`：搜索、治理、资料采集
-  - `治理中心`：审计链、导出、备份、恢复演练、时间线
-  - `系统设置`：身份、运行时、部署观测与恢复控制
+- 九页面中文控制台，按任务路径拆开，不再把所有功能堆在一屏里：
+  - `首页`：品牌首页、环境摘要、角色入口
+  - `业务工作台`：推荐动作与最近结果
+  - `决策中心`：新决策执行与历史
+  - `回放中心`：候选规则与基线的影响对比
+  - `依据库`：法规资料搜索、治理、采集
+  - `治理中心`：审计链、导出、Operator Activity
+  - `恢复中心`：备份、恢复演练、恢复建议
+  - `系统设置`：身份、会话、运行时、部署健康
+  - `Agent Hub`：OpenClaw / Claude / Manus 接入说明
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
 - `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
@@ -27,8 +32,10 @@
 - 目录复制与 S3-compatible 对象存储两种异地备份目标
 - 非破坏性的恢复演练，支持从挂载目录、S3-compatible 目标或本地 snapshot 验证恢复可行性
 - `/api/dashboard/overview`、`/api/operations/health`、`/api/metrics` 三个聚合 / 观测接口
+- `/api/integrations/adapters` 与 `/api/integrations/adapters/:id` 两个统一适配器发现接口
 - 结构化日志，便于请求、actor、run、backup 的串联排查
 - 持久化 operator activity timeline，记录 RBAC、session、运行时配置、法规治理和执行动作
+- 统一 local-first adapter registry：OpenClaw 原生插件 + Claude/Manus MCP connector
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
 - Docker 单实例基线与 Kubernetes 原生单副本清单
@@ -52,7 +59,7 @@ npm run dev
 
 然后访问 `http://127.0.0.1:3030`。
 
-默认首页现在是摘要优先的 `工作台`。先给业务可读结论和推荐动作，原始 JSON 与底层技术字段都收进了高级详情。
+默认入口现在是 `首页`，随后进入 `业务工作台`。先给业务可读结论和推荐动作，原始 JSON 与底层技术字段都收进了高级详情。
 
 如果走云端模型，可以本地设置：
 
@@ -90,6 +97,40 @@ npm run dev
 ```
 
 完整流程见 [docs/identity-operations.md](./docs/identity-operations.md)。
+
+## 多页面控制台
+
+控制台已经不再是单页切 tab 的后台壳。
+
+- `index.html`：品牌首页
+- `workbench.html`：业务首页
+- `decisions.html`：决策执行
+- `replays.html`：回放分析
+- `library.html`：依据库
+- `governance.html`：治理中心
+- `recovery.html`：恢复中心
+- `system.html`：系统设置
+- `agents.html`：Agent Hub
+
+这样做的目标很直接：让非技术人员先看懂页面边界，再决定要不要进入高级详情。
+
+## 多 Agent 兼容层
+
+这轮开始，仓库不再只有 OpenClaw 一条兼容路径。
+
+- `integrations/openclaw/`：原生 OpenClaw 插件适配
+- `integrations/mcp/server.ts`：共享 MCP server 入口
+- `integrations/claude/`：Claude 本地接入说明与示例配置
+- `integrations/manus/`：Manus 本地接入说明与示例配置
+- `npm run mcp:serve`：直接启动共享 MCP connector
+
+当前统一暴露的工具面包括：
+
+- Pack 校验
+- 决策运行
+- 回放运行
+- 法律资料检索
+- 审计完整性读取
 
 ## 审计历史
 
@@ -153,9 +194,21 @@ npm run dev
 - 默认 grounding 只会引用 `reviewed/approved` 文档
 - 仓库自带的种子法规已经预设成 `approved`，开箱即用不会失去引用能力
 
-## OpenClaw 兼容接入
+## 宿主接入
 
 如果你仍然需要接到 OpenClaw，请使用 `integrations/openclaw/` 下的适配器，而不是把整个仓库继续当成 skill 根目录。
+
+如果是 Claude 或 Manus 这类支持 MCP 的宿主，则直接使用共享入口：
+
+```bash
+npm run mcp:serve
+```
+
+对应说明见：
+
+- [integrations/mcp/README.md](./integrations/mcp/README.md)
+- [integrations/claude/README.md](./integrations/claude/README.md)
+- [integrations/manus/README.md](./integrations/manus/README.md)
 
 ## 企业化边界
 
@@ -192,3 +245,4 @@ npm run dev
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
+- [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)

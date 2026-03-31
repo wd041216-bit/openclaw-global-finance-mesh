@@ -1,0 +1,18 @@
+.home-spotlight {
+  display: grid;
+  gap: 18px;
+}
+
+.home-hero-copy {
+  max-width: 42rem;
+}
+
+.hero-stat {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-stat strong {
+  font-size: 34px;
+  letter-spacing: -0.04em;
+}

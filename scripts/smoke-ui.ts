@@ -37,12 +37,17 @@ async function main() {
           height: 1100,
         },
       });
-      await page.goto(`http://127.0.0.1:${appPort}/`, {
+      await page.goto(`http://127.0.0.1:${appPort}/index.html`, {
         waitUntil: "networkidle",
       });
+      await page.waitForFunction(() => document.body.textContent?.includes("像 Apple 一样克制的财务控制台"));
+      await page.getByRole("link", { name: "打开业务工作台" }).click();
+      await page.waitForURL(`http://127.0.0.1:${appPort}/workbench.html`);
 
-      await page.locator('button.action-card[data-intent="open_login"]').click();
-      await page.locator('#session-form input[name="sessionToken"]').fill("admin-secret");
+      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.locator('#token-login-form input[name="token"]').fill("admin-secret");
       await page.getByRole("button", { name: "用本地令牌登录" }).click();
       await page.waitForFunction(() => document.body.textContent?.includes("Alice Admin"));
 
@@ -54,24 +59,41 @@ async function main() {
       await page.waitForFunction(() => document.querySelector("#binding-list")?.textContent?.includes("admin@example.com"));
 
       await page.getByRole("button", { name: "退出当前会话" }).click();
-      await page.waitForFunction(() => document.querySelector("#access-summary")?.textContent?.includes("等待登录"));
+      await page.waitForFunction(() => document.body.textContent?.includes("等待登录"));
 
       await page.getByRole("button", { name: "使用企业身份登录" }).click();
-      await page.waitForURL((url) => url.toString().startsWith(`http://127.0.0.1:${appPort}/`));
+      await page.waitForURL((url) => url.toString().startsWith(`http://127.0.0.1:${appPort}/system.html`));
       await page.waitForFunction(() => document.body.textContent?.includes("Jamie Admin"));
 
-      await page.locator('button.workspace-tab[data-workspace="governance"]').click();
+      await page.goto(`http://127.0.0.1:${appPort}/governance.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("完整性状态"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/recovery.html`, {
+        waitUntil: "networkidle",
+      });
       await page.getByRole("button", { name: "立即执行备份" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#backup-list [data-backup-id]").length > 0);
 
       await page.getByRole("button", { name: "立即执行演练" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#restore-list [data-restore-id]").length > 0);
-      await page.waitForFunction(() => document.querySelector("#restores-summary")?.textContent?.includes("恢复"));
+      await page.waitForFunction(() => document.querySelector("#recovery-summary")?.textContent?.includes("恢复"));
 
-      await page.locator('button.workspace-tab[data-workspace="system"]').click();
+      await page.goto(`http://127.0.0.1:${appPort}/agents.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("OpenClaw Plugin"));
+      await page.waitForFunction(() => document.body.textContent?.includes("Claude MCP Connector"));
+      await page.waitForFunction(() => document.body.textContent?.includes("Manus MCP Connector"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+        waitUntil: "networkidle",
+      });
       await page.waitForFunction(() => document.querySelector("#active-session-list")?.textContent?.includes("Jamie Admin"));
       await page.locator("#active-session-list [data-session-id]").first().click();
-      await page.waitForFunction(() => document.querySelector("#access-summary")?.textContent?.includes("等待登录"));
+      await page.getByRole("button", { name: /撤销/ }).click();
+      await page.waitForFunction(() => document.body.textContent?.includes("等待登录"));
 
       const restoreStatus = await page.evaluate(async () => {
         const response = await fetch("/api/operations/restores", {

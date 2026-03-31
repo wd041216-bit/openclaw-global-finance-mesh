@@ -1,6 +1,6 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a summary-first operator console, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, an Apple-style multi-page operator console, local-first agent connectors, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
@@ -14,11 +14,16 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 
 ## What ships in the current baseline
 
-- four-workspace Chinese-first web console for business and governance teams:
-  - `工作台` for decisions, replay, assistant guidance, and system snapshots
+- nine-page Chinese-first web console with a white, high-whitespace, Apple-like shell:
+  - `首页` for brand framing, environment snapshot, and role entry
+  - `业务工作台` for business-friendly next actions and recent results
+  - `决策中心` for new decision execution and decision history
+  - `回放中心` for candidate-vs-baseline replay analysis
   - `依据库` for legal-source search, review, and ingestion
-  - `治理中心` for integrity, exports, backups, restore drills, and timelines
-  - `系统设置` for identity, runtime, observability, and recovery controls
+  - `治理中心` for integrity, exports, and operator activity
+  - `恢复中心` for backups, restore drills, and recovery guidance
+  - `系统设置` for identity, session, runtime, and observability controls
+  - `Agent Hub` for OpenClaw, Claude, and Manus connector guidance
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
@@ -29,8 +34,10 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - local-directory and S3-compatible backup replication for ledger/session snapshots
 - non-destructive restore drills that validate manifests, restored ledger integrity, and identity-state readability in an isolated path
 - `/api/dashboard/overview`, `/api/operations/health`, and Prometheus-friendly `/api/metrics`
+- `/api/integrations/adapters` and `/api/integrations/adapters/:id` for unified agent-adapter discovery
 - structured request logging with request, actor, run, and backup references
 - persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
+- unified local-first adapter registry for OpenClaw native plugin mode plus Claude/Manus MCP connector mode
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
@@ -51,7 +58,7 @@ See [ADR-001](./docs/ADR-001-standalone-control-plane.md) for the decision recor
 
 - `src/`: engine, validation, replay, audit-store, audit-ledger, activity-store, and runtime implementations
 - `src/server.ts`: browser-accessible control plane
-- `web/`: single-page operator console
+- `web/`: multi-page operator console and shared UI shell modules
 - `data/legal-library/library.json`: starter legal library corpus
 - `data/audit/ledger.sqlite`: source-of-truth audit ledger
 - `data/audit/runs.json`: legacy audit import source retained for one-time migration/backups
@@ -73,7 +80,7 @@ npm run dev
 
 Then open [http://127.0.0.1:3030](http://127.0.0.1:3030).
 
-The landing experience is now a summary-first workbench intended to stay understandable for non-technical operators. Raw JSON and ids are still there, but they live behind advanced details.
+The landing experience is now a brand homepage plus dedicated product pages. Non-technical operators can stay in `首页` and `业务工作台`; raw JSON, session ids, and ledger metadata stay behind advanced details.
 
 To wire a cloud brain without committing secrets, set environment variables locally:
 
@@ -111,6 +118,37 @@ npm run dev
 ```
 
 See [docs/identity-operations.md](./docs/identity-operations.md) for full bootstrap, OIDC, session-revoke, and CSRF troubleshooting steps.
+
+## Multi-page console
+
+The console is no longer a single overloaded screen.
+
+- `index.html` is the brand homepage with environment snapshot and entry routing
+- `workbench.html` is the business-first starting point
+- `decisions.html` and `replays.html` split execution from impact analysis
+- `library.html`, `governance.html`, and `recovery.html` keep legal grounding, audit governance, and recovery operations separate
+- `system.html` isolates identity, session, runtime, and observability controls
+- `agents.html` gives non-technical and technical users a single place to understand how Zhouheng plugs into external hosts
+
+This keeps business work readable, while preserving advanced details for reviewers and administrators.
+
+## Agent compatibility
+
+Zhouheng now has a unified adapter registry instead of a one-off OpenClaw-only integration story.
+
+- `integrations/openclaw/` remains the native OpenClaw plugin adapter
+- `integrations/mcp/server.ts` is the shared local-first MCP entrypoint
+- `integrations/claude/` contains Claude connector docs and example MCP config
+- `integrations/manus/` contains Manus connector docs and example MCP config
+- `npm run mcp:serve` starts the shared MCP connector directly
+
+Supported tool surfaces today:
+
+- pack validation
+- decision run
+- replay run
+- legal library search
+- audit integrity read
 
 ## Legal library governance
 
@@ -184,9 +222,9 @@ Restore drills are non-destructive. They materialize a backup into `data/restore
 3. `finance_mesh_replay`
    Compares baseline and candidate Pack sets across historical events and persists the replay outcome for review.
 
-## Optional OpenClaw integration
+## Optional host integrations
 
-If you still need OpenClaw compatibility, load the adapter from `integrations/openclaw/`.
+If you want Zhouheng to be used by external agent hosts instead of only through the web console:
 
 ```json
 {
@@ -198,6 +236,18 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
   }
 }
 ```
+
+For MCP-aware hosts, use the shared connector instead:
+
+```bash
+npm run mcp:serve
+```
+
+See:
+
+- [integrations/mcp/README.md](./integrations/mcp/README.md)
+- [integrations/claude/README.md](./integrations/claude/README.md)
+- [integrations/manus/README.md](./integrations/manus/README.md)
 
 ## Delivery posture
 
@@ -222,6 +272,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
+- [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)
 
 ## Contribution surface
 
