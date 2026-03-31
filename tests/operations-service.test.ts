@@ -533,6 +533,10 @@ test("operations overview translates cloud catalog-only access into business-fri
   assert.equal(overview.runtime.diagnosis.catalog.status, "ready");
   assert.equal(overview.runtime.diagnosis.inference.status, "warning");
   assert.match(overview.runtime.diagnosis.nextActionTitle, /推理权限|entitlement/);
+  assert.equal(overview.runtime.doctorReport.provider.id, "custom_cloud");
+  assert.equal(overview.runtime.doctorReport.recommendedFlavor, "ollama_native");
+  assert.ok(overview.runtime.doctorReport.manualChecks.some((command) => command.endpoint === "/api/chat"));
+  assert.match(overview.runtime.doctorReport.escalationNote || "", /entitlement|推理权限|401/);
   assert.equal(overview.runtime.lastProbe?.errorKind, "unauthorized");
   assert.equal(overview.runtime.lastProbe?.diagnosis.businessStatus, "仅模型目录可用");
   assert.equal(health.checks.runtime.status, "degraded");

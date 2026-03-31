@@ -22,6 +22,7 @@ import { runReplay } from "./replay.ts";
 import { RestoreDrillStore } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
 import { buildRuntimeDiagnosis } from "./runtime-diagnostics.ts";
+import { buildRuntimeDoctorReport } from "./runtime-doctor.ts";
 import { validatePackCollection } from "./validation.ts";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -689,6 +690,18 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       },
       probe,
     );
+    const doctorReport = buildRuntimeDoctorReport(
+      {
+        mode: config.mode,
+        model: config.model,
+        hasApiKey: Boolean(config.apiKey),
+        localBaseUrl: config.localBaseUrl,
+        cloudBaseUrl: config.cloudBaseUrl,
+        cloudApiFlavor: config.cloudApiFlavor,
+      },
+      probe,
+      diagnosis,
+    );
     const configSnapshot = toRuntimeConfigSnapshot(config);
     const auditRun = await auditRuns.recordProbe({
       config: configSnapshot,
@@ -712,7 +725,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       actor: auth.actor,
       runId: auditRun.id,
     });
-    sendJson(res, 200, { ok: true, probe, diagnosis, auditRun });
+    sendJson(res, 200, { ok: true, probe, diagnosis, doctorReport, auditRun });
     return;
   }
 

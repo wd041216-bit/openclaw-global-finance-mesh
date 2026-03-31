@@ -34,6 +34,7 @@
     "verify:server": "node scripts/verify-server.ts",
     "verify:manifests": "node scripts/verify-manifests.ts",
     "doctor:hosts": "node scripts/doctor-hosts.ts",
+    "doctor:cloud": "node scripts/smoke-cloud.ts",
     "smoke:mcp": "node scripts/smoke-mcp.ts",
     "smoke:openclaw": "node scripts/smoke-openclaw.ts",
     "smoke:cloud": "node scripts/smoke-cloud.ts",

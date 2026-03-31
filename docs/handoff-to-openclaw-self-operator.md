@@ -59,6 +59,7 @@ The intended operating mode is:
   - inference is unauthorized
   - protocol mismatch vs. real authorization failure
 - `npm run smoke:cloud` prints the normalized cloud diagnosis object for operator troubleshooting
+- `npm run doctor:cloud` prints the full cloud doctor report, including provider guess, model visibility, manual curl checks, and escalation text
 
 ## Known current truth
 
@@ -87,6 +88,7 @@ Operator note:
 2. inspect `catalogChecks` and `inferenceChecks` separately
 3. if catalog succeeds but inference returns `401`, treat it as an account/entitlement problem, not an endpoint bug
 4. if both endpoints return `endpoint_not_supported`, switch the protocol strategy before changing code
+5. use the cloud doctor report to copy the exact validation commands and escalation note instead of writing them by hand
 
 ## First 10 minutes for the new operator thread
 

@@ -1,6 +1,7 @@
 import { OllamaBrainRuntime } from "../src/brain.ts";
 import { RuntimeConfigStore } from "../src/runtime-config.ts";
 import { buildRuntimeDiagnosis } from "../src/runtime-diagnostics.ts";
+import { buildRuntimeDoctorReport } from "../src/runtime-doctor.ts";
 
 async function main() {
   const runtimeStore = new RuntimeConfigStore();
@@ -34,6 +35,18 @@ async function main() {
     },
     probe,
   );
+  const doctorReport = buildRuntimeDoctorReport(
+    {
+      mode: publicConfig.mode,
+      model: publicConfig.model,
+      hasApiKey: publicConfig.hasApiKey,
+      localBaseUrl: publicConfig.localBaseUrl,
+      cloudBaseUrl: publicConfig.cloudBaseUrl,
+      cloudApiFlavor: publicConfig.cloudApiFlavor,
+    },
+    probe,
+    diagnosis,
+  );
 
   console.log(
     JSON.stringify(
@@ -41,6 +54,7 @@ async function main() {
         config: publicConfig,
         probe,
         diagnosis,
+        doctorReport,
       },
       null,
       2,

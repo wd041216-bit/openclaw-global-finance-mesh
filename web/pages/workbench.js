@@ -70,6 +70,7 @@ function render() {
     : buildFallbackActions(overview);
   const runtime = overview?.runtime;
   const runtimeDiagnosis = runtime?.diagnosis;
+  const runtimeDoctorReport = runtime?.doctorReport;
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -130,6 +131,7 @@ function render() {
             pillHtml: pill(runtime?.lastProbe?.inferenceOk ? "good" : runtime?.mode === "cloud" ? "warn" : "info", runtime?.cloudApiFlavor || "local"),
             meta: [
               runtime?.model ? `模型 ${runtime.model}` : null,
+              runtimeDoctorReport?.provider?.label ? `Provider ${runtimeDoctorReport.provider.label}` : null,
               runtimeDiagnosis?.nextActionTitle || null,
               runtime?.lastProbe?.createdAt ? formatDateTime(runtime.lastProbe.createdAt) : "尚未探针",
             ].filter(Boolean),

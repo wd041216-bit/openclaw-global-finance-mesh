@@ -7,7 +7,9 @@ import {
   rememberAction,
 } from "../core/api.js";
 import {
+  bulletList,
   calloutCard,
+  codeBlock,
   detailRows,
   emptyState,
   jsonDetails,
@@ -45,6 +47,7 @@ const state = {
   modelsError: "",
   probeResult: null,
   probeDiagnosis: null,
+  probeDoctorReport: null,
   sessions: [],
   currentSessionId: null,
   selectedSessionId: null,
@@ -230,6 +233,7 @@ async function refreshRuntimeConfig() {
     state.modelsError = "";
     state.probeResult = null;
     state.probeDiagnosis = null;
+    state.probeDoctorReport = null;
     renderRuntime();
     return;
   }
@@ -539,12 +543,14 @@ async function runProbe() {
     });
     state.probeResult = result.probe || null;
     state.probeDiagnosis = result.diagnosis || null;
+    state.probeDoctorReport = result.doctorReport || null;
     rememberAction("已执行运行时探针");
     await shell.refreshChrome();
     renderRuntime();
   } catch (error) {
     state.probeResult = null;
     state.probeDiagnosis = null;
+    state.probeDoctorReport = null;
     state.runtimeMessage = String(error.message || error);
     renderRuntime();
   }
@@ -1024,6 +1030,7 @@ function renderRuntime() {
   const runtime = state.runtimeConfig;
   const lastProbe = state.probeResult || health?.recent?.probe || globalData.overview?.runtime?.lastProbe;
   const diagnosis = state.probeDiagnosis || runtimeOverview?.diagnosis || lastProbe?.diagnosis || null;
+  const doctorReport = state.probeDoctorReport || runtimeOverview?.doctorReport || null;
   const canOperateNow = canOperate(globalData);
   const canManageNow = canManageAdmin(globalData);
   const runtimeBusinessStatus = diagnosis?.businessStatus || runtimeOverview?.businessStatus || lastProbe?.businessStatus || "等待诊断";
@@ -1195,6 +1202,7 @@ function renderRuntime() {
         `
         : emptyState("执行一次探针后，这里会展示当前协议的目录与推理对比。")}
     </article>
+    ${renderDoctorReport(doctorReport)}
     <article class="detail-card">
       <div class="section-head compact">
         <div>
@@ -1449,6 +1457,96 @@ function renderRuntimeRecommendations(diagnosis) {
             }))
           .join("")}
       </div>
+    </article>
+  `;
+}
+
+function renderDoctorReport(report) {
+  if (!report) {
+    return `
+      <article class="detail-card">
+        <p class="section-kicker">云端联调报告</p>
+        <h4>等待第一份联调报告</h4>
+        ${emptyState("执行一次探针后，这里会出现 provider 判断、推荐协议、验证命令和升级给 provider 的描述。")}
+      </article>
+    `;
+  }
+
+  const modelTitle = report.configuredModelVisible
+    ? "当前模型已出现在可见目录里"
+    : report.suggestedModels.length
+      ? `建议先尝试 ${report.suggestedModels.join(" / ")}`
+      : "当前模型还没有在目录中命中";
+
+  return `
+    <article class="detail-card">
+      <p class="section-kicker">云端联调报告</p>
+      <h4>${escapeHtml(report.summary)}</h4>
+      <div class="summary-band three-up top-gap">
+        ${summaryCard({
+          kicker: "Provider 判断",
+          title: report.provider.label,
+          note: report.provider.reason,
+          pillHtml: pill(
+            report.provider.confidence === "high" ? "good" : report.provider.confidence === "medium" ? "info" : "warn",
+            report.provider.confidence,
+          ),
+          meta: [report.provider.id],
+        })}
+        ${summaryCard({
+          kicker: "推荐协议",
+          title: report.recommendedFlavorLabel,
+          note: report.validatedFlavorLabel
+            ? `最近一次已命中 ${report.validatedFlavorLabel}。`
+            : "当前还没有稳定命中的协议，将按推荐顺序继续排查。",
+          pillHtml: pill(report.validatedFlavorLabel ? "good" : "info", report.recommendedFlavor),
+          meta: [report.validatedFlavorLabel ? `已验证 ${report.validatedFlavorLabel}` : "等待验证"],
+        })}
+        ${summaryCard({
+          kicker: "模型可见性",
+          title: modelTitle,
+          note: report.configuredModelVisible
+            ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
+            : report.visibleModelCount
+              ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
+              : "当前还没有拿到可用模型目录。",
+          pillHtml: pill(report.configuredModelVisible ? "good" : "warn", report.configuredModelVisible ? "visible" : "needs_update"),
+          meta: report.suggestedModels.length ? report.suggestedModels : ["等待更多目录信息"],
+        })}
+      </div>
+      <div class="page-grid two-up top-gap">
+        <div class="detail-card">
+          <p class="section-kicker">操作清单</p>
+          <h4>按这个顺序排障</h4>
+          ${bulletList(report.operatorChecklist, "step-list")}
+          ${report.escalationTitle && report.escalationNote
+            ? `
+              <div class="soft-divider"></div>
+              <p class="section-kicker">${escapeHtml(report.escalationTitle)}</p>
+              <p class="summary-note">${escapeHtml(report.escalationNote)}</p>
+            `
+            : ""}
+        </div>
+        <div class="detail-card">
+          <p class="section-kicker">验证命令</p>
+          <h4>直接复制到当前环境执行</h4>
+          ${report.manualChecks.length
+            ? `<div class="record-list">${report.manualChecks
+                .map((command) => `
+                  <div class="record-card">
+                    <div class="record-head">
+                      <strong>${escapeHtml(command.title)}</strong>
+                      ${pill(command.scope === "catalog" ? "info" : "warn", command.scope)}
+                    </div>
+                    <p class="summary-note">${escapeHtml(command.expectedOutcome)}</p>
+                    ${codeBlock(command.command)}
+                  </div>
+                `)
+                .join("")}</div>`
+            : emptyState("当前还没有可执行的联调命令。")}
+        </div>
+      </div>
+      ${jsonDetails("查看联调报告技术详情", report)}
     </article>
   `;
 }

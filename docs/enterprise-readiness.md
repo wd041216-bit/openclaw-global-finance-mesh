@@ -25,6 +25,7 @@
 - governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing with protocol-aware cloud selection (`auto`, `ollama_native`, `openai_compatible`)
 - cloud runtime diagnostics that distinguish catalog access from inference access instead of collapsing everything into a single probe failure
+- operator-facing cloud doctor reports with provider guess, suggested model fallback, manual verification commands, and provider escalation notes
 - legal library ingestion and grounding
 - Chinese-first multi-page browser console with separate home, workbench, governance, recovery, system, and Agent Hub surfaces
 - task-oriented business pages for decision, replay, and legal reading instead of a single overloaded operator screen
@@ -45,7 +46,7 @@
 - load and failover testing
 - full connector hardening for ERP, invoicing, and approval systems
 - vendor-grade host-by-host certification beyond local-first OpenClaw fixture smoke and shared MCP smoke coverage
-- real cloud-provider entitlement validation beyond protocol-aware diagnostics and account-side `401 unauthorized` classification
+- real cloud-provider entitlement validation beyond the current doctor report and account-side `401 unauthorized` classification
 
 ## Standard to hold
 

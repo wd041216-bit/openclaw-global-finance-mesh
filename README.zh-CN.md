@@ -89,6 +89,7 @@ npm run dev
 curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
 npm run smoke:cloud
+npm run doctor:cloud
 ```
 
 结果判断原则：
@@ -99,6 +100,14 @@ npm run smoke:cloud
 - `errorKind=endpoint_not_supported`：优先切换 `FINANCE_MESH_CLOUD_API_FLAVOR` 或确认服务端兼容面
 
 要特别注意：能读模型目录，不代表能做云端推理。
+
+系统设置页现在还会生成一份云端联调报告，里面会直接给出：
+
+- provider 判断与可信度
+- 推荐协议与已验证协议
+- 当前模型是否真实可见，以及替代模型建议
+- 可直接复制的目录 / 推理 `curl` 命令
+- 当目录可读但推理被挡住时，可直接发给 provider 的升级说明
 
 完整排障路径见 [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)。
 
@@ -286,6 +295,7 @@ npm run mcp:serve
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md](./docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md)
+- [docs/checkpoint-2026-03-31-cloud-doctor-report.md](./docs/checkpoint-2026-03-31-cloud-doctor-report.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 - [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)

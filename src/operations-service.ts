@@ -7,6 +7,7 @@ import { LegalLibraryStore } from "./legal-library.ts";
 import { RestoreDrillStore, type RestoreDrillSummary } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
 import { buildRuntimeDiagnosis, type RuntimeDiagnosis } from "./runtime-diagnostics.ts";
+import { buildRuntimeDoctorReport, type RuntimeDoctorReport } from "./runtime-doctor.ts";
 
 export type DashboardWorkspace = "workbench" | "library" | "governance" | "system";
 export type OperationsCheckStatus = "healthy" | "degraded" | "down" | "not_configured";
@@ -33,6 +34,7 @@ export interface DashboardOverview {
     businessStatus: string;
     summary: string;
     diagnosis: RuntimeDiagnosis;
+    doctorReport: RuntimeDoctorReport;
     lastProbe: RunHealthSummary | null;
   };
   decisioning: {
@@ -253,6 +255,7 @@ export class OperationsService {
         businessStatus: runtimeSummary.businessStatus,
         summary: runtimeSummary.summary,
         diagnosis: runtimeSummary.diagnosis,
+        doctorReport: runtimeSummary.doctorReport,
         lastProbe: runtimeSummary.lastProbe,
       },
       decisioning: {
@@ -413,7 +416,7 @@ function summarizeProbe(run: AuditRunSummary): RunHealthSummary {
       cloudApiFlavor: run.cloudApiFlavor || "auto",
       listModelsOk: Boolean(run.listModelsOk),
       inferenceOk: Boolean(run.inferenceOk),
-      availableModels: [],
+      availableModels: run.availableModels || [],
       inferencePreview: run.inferencePreview,
       error: run.probeError,
       errorKind: run.probeErrorKind,
@@ -475,8 +478,30 @@ function summarizeRuntimeState(
   businessStatus: string;
   summary: string;
   diagnosis: RuntimeDiagnosis;
+  doctorReport: RuntimeDoctorReport;
   lastProbe: RunHealthSummary | null;
 } {
+  const probeSnapshot = latestProbe
+    ? {
+        ok: Boolean(latestProbe.probeOk),
+        mode: latestProbe.mode,
+        model: latestProbe.model || runtimeConfig.model,
+        cloudApiFlavor: latestProbe.cloudApiFlavor || runtimeConfig.cloudApiFlavor,
+        listModelsOk: Boolean(latestProbe.listModelsOk),
+        inferenceOk: Boolean(latestProbe.inferenceOk),
+        availableModels: latestProbe.availableModels || [],
+        inferencePreview: latestProbe.inferencePreview,
+        error: latestProbe.probeError,
+        errorKind: latestProbe.probeErrorKind,
+        authStatus:
+          latestProbe.probeAuthStatus || (runtimeConfig.mode === "cloud" ? "unknown" : "not_required"),
+        selectedCatalogEndpoint: latestProbe.selectedCatalogEndpoint,
+        selectedInferenceEndpoint: latestProbe.selectedInferenceEndpoint,
+        catalogChecks: latestProbe.catalogChecks || [],
+        inferenceChecks: latestProbe.inferenceChecks || [],
+        latencyMs: latestProbe.latencyMs,
+      }
+    : null;
   const diagnosis = buildRuntimeDiagnosis(
     {
       mode: runtimeConfig.mode,
@@ -484,33 +509,26 @@ function summarizeRuntimeState(
       hasApiKey: runtimeConfig.hasApiKey,
       cloudApiFlavor: runtimeConfig.cloudApiFlavor,
     },
-    latestProbe
-      ? {
-          ok: Boolean(latestProbe.probeOk),
-          mode: latestProbe.mode,
-          model: latestProbe.model || runtimeConfig.model,
-          cloudApiFlavor: latestProbe.cloudApiFlavor || runtimeConfig.cloudApiFlavor,
-          listModelsOk: Boolean(latestProbe.listModelsOk),
-          inferenceOk: Boolean(latestProbe.inferenceOk),
-          availableModels: [],
-          inferencePreview: latestProbe.inferencePreview,
-          error: latestProbe.probeError,
-          errorKind: latestProbe.probeErrorKind,
-          authStatus:
-            latestProbe.probeAuthStatus || (runtimeConfig.mode === "cloud" ? "unknown" : "not_required"),
-          selectedCatalogEndpoint: latestProbe.selectedCatalogEndpoint,
-          selectedInferenceEndpoint: latestProbe.selectedInferenceEndpoint,
-          catalogChecks: latestProbe.catalogChecks || [],
-          inferenceChecks: latestProbe.inferenceChecks || [],
-          latencyMs: latestProbe.latencyMs,
-        }
-      : null,
+    probeSnapshot,
+  );
+  const doctorReport = buildRuntimeDoctorReport(
+    {
+      mode: runtimeConfig.mode,
+      model: runtimeConfig.model,
+      hasApiKey: runtimeConfig.hasApiKey,
+      localBaseUrl: runtimeConfig.localBaseUrl,
+      cloudBaseUrl: runtimeConfig.cloudBaseUrl,
+      cloudApiFlavor: runtimeConfig.cloudApiFlavor,
+    },
+    probeSnapshot,
+    diagnosis,
   );
   if (!latestProbe) {
     return {
       businessStatus: diagnosis.businessStatus,
       summary: diagnosis.summary,
       diagnosis,
+      doctorReport,
       lastProbe: null,
     };
   }
@@ -520,6 +538,7 @@ function summarizeRuntimeState(
     businessStatus: summary.businessStatus,
     summary: summary.summary,
     diagnosis: summary.diagnosis,
+    doctorReport,
     lastProbe: summary,
   };
 }

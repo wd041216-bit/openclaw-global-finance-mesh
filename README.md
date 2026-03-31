@@ -115,6 +115,7 @@ Minimal cloud verification flow:
 curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
 npm run smoke:cloud
+npm run doctor:cloud
 ```
 
 Expected outcomes:
@@ -125,6 +126,14 @@ Expected outcomes:
 - `errorKind=endpoint_not_supported`: switch `FINANCE_MESH_CLOUD_API_FLAVOR` or confirm the provider surface
 
 Catalog access is not the same as inference access. Do not treat a successful model listing as proof that cloud reasoning is enabled.
+
+The system page now also builds a cloud doctor report with:
+
+- provider guess and confidence
+- recommended protocol and validated protocol
+- model visibility and suggested replacement model names
+- copy-ready catalog and inference `curl` commands
+- an escalation note you can send to the provider when catalog works but inference is still blocked
 
 See [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md) for the cloud runtime runbook.
 
@@ -319,6 +328,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md](./docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md)
+- [docs/checkpoint-2026-03-31-cloud-doctor-report.md](./docs/checkpoint-2026-03-31-cloud-doctor-report.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 - [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)

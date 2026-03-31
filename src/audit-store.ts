@@ -33,6 +33,7 @@ export interface AuditRunSummary extends LedgerMetadata {
   listModelsOk?: boolean;
   inferenceOk?: boolean;
   availableModelCount?: number;
+  availableModels?: string[];
   model?: string;
   cloudApiFlavor?: CloudApiFlavor;
   probeErrorKind?: BrainErrorKind;
@@ -226,6 +227,7 @@ export class AuditRunStore {
       listModelsOk: input.probe.listModelsOk,
       inferenceOk: input.probe.inferenceOk,
       availableModelCount: input.probe.availableModels.length,
+      availableModels: input.probe.availableModels,
       model: input.config.model,
       cloudApiFlavor: input.probe.cloudApiFlavor,
       probeErrorKind: input.probe.errorKind,
@@ -286,6 +288,10 @@ export class AuditRunStore {
       latencyMs:
         payload.type === "probe"
           ? (payload.detail.probe as BrainProbeResult | undefined)?.latencyMs
+          : undefined,
+      availableModels:
+        payload.type === "probe"
+          ? ((payload.detail.probe as BrainProbeResult | undefined)?.availableModels ?? [])
           : undefined,
       sequence: metadata.sequence,
       entryHash: metadata.entryHash,

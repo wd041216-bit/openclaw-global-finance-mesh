@@ -38,6 +38,7 @@ Run:
 
 ```bash
 npm run smoke:cloud
+npm run doctor:cloud
 ```
 
 You will get:
@@ -45,6 +46,7 @@ You will get:
 - the public runtime config snapshot
 - the raw cloud probe result
 - the normalized diagnosis object
+- a cloud doctor report with provider guess, suggested protocol, manual `curl` checks, and escalation text
 
 ## How to read the result
 
@@ -123,6 +125,10 @@ The system page now separates:
 - inference status
 - selected endpoint
 - recommended next action
+- provider guess and confidence
+- model visibility and suggested replacement names
+- copy-ready verification commands
+- escalation text for provider-side entitlement issues
 
 The workbench shows a business-readable runtime conclusion instead of a generic failure string.
 
