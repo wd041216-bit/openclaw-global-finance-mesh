@@ -138,6 +138,21 @@ The workbench shows a business-readable runtime conclusion instead of a generic 
 
 These diagnostics can prove whether the remaining blocker is likely on the provider account side, but they do not grant entitlements by themselves. If a real key still returns `401 unauthorized` on inference while catalog access succeeds, the repo should be considered correctly implemented but still blocked by provider-side permission.
 
+## Verified provider record
+
+The first real provider verification record now lives here:
+
+- [docs/cloud-verification-2026-03-31-ollama-cloud.md](./cloud-verification-2026-03-31-ollama-cloud.md)
+
+That run confirmed a real `catalog_only_entitlement_blocked` case on `Ollama Cloud`:
+
+- `GET /api/tags` -> `200`
+- `GET /v1/models` -> `200`
+- `POST /api/chat` -> `401 unauthorized`
+- `POST /v1/chat/completions` -> `401 unauthorized`
+
+This is the reference example for “目录可读，但推理 entitlement 仍被 provider 挡住”.
+
 ## Pilot artifact rule
 
 For external-pilot signoff, keep one verification artifact per provider class:

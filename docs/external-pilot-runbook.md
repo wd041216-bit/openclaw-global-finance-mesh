@@ -73,6 +73,12 @@ Each run should produce:
 - manual verification commands
 - escalation template
 
+The first real record is now archived here:
+
+- [docs/cloud-verification-2026-03-31-ollama-cloud.md](./cloud-verification-2026-03-31-ollama-cloud.md)
+
+That verification proved a real `catalog_only_entitlement_blocked` case on `Ollama Cloud`, so the current system-page wording and provider escalation path are no longer hypothetical.
+
 ## How to read cloud outcomes
 
 - `fully_usable`: catalog and inference are both working; safe to keep current protocol.
