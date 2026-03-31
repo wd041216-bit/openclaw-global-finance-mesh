@@ -1,6 +1,6 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a summary-first operator console, and a tamper-evident SQLite audit ledger.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a summary-first operator console, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
@@ -17,8 +17,8 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - four-workspace Chinese-first web console for business and governance teams:
   - `工作台` for decisions, replay, assistant guidance, and system snapshots
   - `依据库` for legal-source search, review, and ingestion
-  - `治理中心` for integrity, exports, backups, and timelines
-  - `系统设置` for identity, runtime, and observability
+  - `治理中心` for integrity, exports, backups, restore drills, and timelines
+  - `系统设置` for identity, runtime, observability, and recovery controls
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
@@ -27,6 +27,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
 - append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
 - local-directory and S3-compatible backup replication for ledger/session snapshots
+- non-destructive restore drills that validate manifests, restored ledger integrity, and identity-state readability in an isolated path
 - `/api/dashboard/overview`, `/api/operations/health`, and Prometheus-friendly `/api/metrics`
 - structured request logging with request, actor, run, and backup references
 - persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
@@ -34,6 +35,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - example SaaS annual prepayment event
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
 - Docker single-instance baseline plus raw Kubernetes manifests for one-replica deployment
+- GitHub Actions CI and semver release workflows for server verification, browser smoke, restore smoke, Docker image publish, and npm publish
 
 ## Architecture
 
@@ -150,15 +152,28 @@ Privileged actions are part of the same audit chain.
 - `GET /api/operations/health` provides runtime, ledger, legal-library, and backup-target health in one response
 - `GET /api/metrics` exposes Prometheus text metrics for HTTP traffic, runs, sessions, integrity verification, and backups
 - `POST /api/operations/backups/run` creates a snapshot bundle under `data/backups/` and replicates it to configured targets
+- `GET /api/operations/restores`, `POST /api/operations/restores/run`, and `GET /api/operations/restores/:id` drive isolated recovery drills from S3, mounted-directory, or local snapshot sources
 - `FINANCE_MESH_BACKUP_LOCAL_DIR` enables mounted-directory replication
 - `FINANCE_MESH_BACKUP_S3_*` enables S3-compatible object replication
+- `FINANCE_MESH_RESTORE_DRILL_RETENTION_DAYS` controls how long drill directories are kept under `data/restore-drills/`
+- `FINANCE_MESH_RESTORE_DRILL_WARN_HOURS` controls when recovery readiness is marked stale in health and dashboard summaries
 - `FINANCE_MESH_LOG_FORMAT=json` enables structured logs for containerized or aggregator environments
+
+Restore drills are non-destructive. They materialize a backup into `data/restore-drills/<timestamp>-<drillId>/restored/`, verify `manifest.json`, re-check the restored ledger hash chain, and confirm the restored identity-state files can be read before reporting readiness.
 
 ## Deployment baseline
 
 - `Dockerfile` and `docker-compose.yml` provide a single-instance container baseline
 - `deploy/kubernetes/` contains ConfigMap, Secret example, Deployment, Service, PVC, and Ingress example manifests
 - the deployment posture is intentionally stateful and single-replica; it is a beta baseline, not an HA claim
+
+## CI and release baseline
+
+- `.github/workflows/ci.yml` runs `npm ci`, `npm test`, `npm run verify:server`, `npm run verify:manifests`, `docker build`, `npm run smoke:restore`, and `npm run smoke:ui` on pull requests and `main`
+- `.github/workflows/release.yml` only publishes on `workflow_dispatch` or a semver tag such as `v0.3.0`
+- `npm run release:check -- --tag v0.3.0` verifies that the git tag, `package.json` version, and `CHANGELOG.md` heading all match before release publish starts
+- CI provisions a disposable kind cluster before `npm run verify:manifests`, because `kubectl` dry-run still needs API discovery for built-in resource mapping
+- release publish targets are `ghcr.io/wd041216-bit/zhouheng-global-finance-mesh` for container images and the public npm registry for the package
 
 ## Finance flow
 
@@ -189,6 +204,7 @@ If you still need OpenClaw compatibility, load the adapter from `integrations/op
 This repo is intentionally honest about scope.
 
 - included: Pack authoring pattern, validation, deterministic decision generation, replay summary, hybrid OIDC/local identity, cookie sessions with CSRF, SQLite audit ledger, backup replication, runtime probe history, operator activity logging, integrity verification, export manifests, deployment/observability baseline, pluggable Ollama brain support, web console, and legal-library grounding
+- included: recovery drills, restore-readiness summaries, CI verification, and semver-gated release workflows
 - not yet included: SCIM or group sync, immutable archival audit persistence, HA session replication, ERP-side writeback adapters, or full production governance workflows
 
 See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid checklist.
@@ -196,6 +212,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 ## Docs
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
@@ -204,6 +221,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
+- [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 
 ## Contribution surface
 

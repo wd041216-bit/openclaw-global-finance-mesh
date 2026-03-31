@@ -18,9 +18,12 @@ export class FinanceMeshMetrics {
     this.register("finance_mesh_http_requests_total", "counter", "HTTP requests served by the control plane.");
     this.register("finance_mesh_runs_total", "counter", "Decision, replay, and probe runs by outcome.");
     this.register("finance_mesh_backup_jobs_total", "counter", "Backup jobs by outcome.");
+    this.register("finance_mesh_restore_drills_total", "counter", "Restore drill runs by outcome.");
+    this.register("finance_mesh_restore_drill_failures_total", "counter", "Failed restore drill runs.");
     this.register("finance_mesh_integrity_verifications_total", "counter", "Audit integrity verification runs by outcome.");
     this.register("finance_mesh_active_sessions", "gauge", "Currently active authenticated sessions.");
     this.register("finance_mesh_backup_targets_configured", "gauge", "Configured off-box backup targets.");
+    this.register("finance_mesh_restore_drill_last_success_timestamp", "gauge", "Unix timestamp of the latest successful restore drill.");
   }
 
   recordHttpRequest(input: { method: string; route: string; status: number }): void {
@@ -44,6 +47,15 @@ export class FinanceMeshMetrics {
     });
   }
 
+  recordRestoreDrill(status: "success" | "degraded" | "failure"): void {
+    this.increment("finance_mesh_restore_drills_total", {
+      status,
+    });
+    if (status === "failure") {
+      this.increment("finance_mesh_restore_drill_failures_total", {});
+    }
+  }
+
   recordIntegrityVerification(status: "verified" | "pending" | "mismatch"): void {
     this.increment("finance_mesh_integrity_verifications_total", {
       status,
@@ -56,6 +68,10 @@ export class FinanceMeshMetrics {
 
   setBackupTargetsConfigured(count: number): void {
     this.set("finance_mesh_backup_targets_configured", {}, count);
+  }
+
+  setRestoreLastSuccessTimestamp(timestampSeconds: number): void {
+    this.set("finance_mesh_restore_drill_last_success_timestamp", {}, timestampSeconds);
   }
 
   render(): string {

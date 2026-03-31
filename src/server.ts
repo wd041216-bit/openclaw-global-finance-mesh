@@ -18,6 +18,7 @@ import { FinanceMeshLogger } from "./logging.ts";
 import { FinanceMeshMetrics } from "./metrics.ts";
 import { OperationsService } from "./operations-service.ts";
 import { runReplay } from "./replay.ts";
+import { RestoreDrillStore } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
 import { validatePackCollection } from "./validation.ts";
 
@@ -37,6 +38,7 @@ const auditRuns = new AuditRunStore({ ledger: auditLedger });
 const accessControl = new AccessControlStore();
 const operatorActivity = new OperatorActivityStore({ ledger: auditLedger });
 const backups = new BackupReplicationStore({ ledger: auditLedger });
+const restores = new RestoreDrillStore({ ledger: auditLedger, backups });
 const logger = new FinanceMeshLogger();
 const metrics = new FinanceMeshMetrics();
 const operations = new OperationsService({
@@ -47,6 +49,7 @@ const operations = new OperationsService({
   auditLedger,
   auditRuns,
   backups,
+  restores,
 });
 
 let scheduledBackupInFlight = false;
@@ -96,6 +99,7 @@ const server = http.createServer(async (req, res) => {
       actorRole: requestContext.actor?.role,
       runId: requestContext.runId,
       backupId: requestContext.backupId,
+      restoreId: requestContext.restoreId,
     });
   }
 });
@@ -134,6 +138,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
   if (req.method === "GET" && requestUrl.pathname === "/api/metrics") {
     metrics.setActiveSessions(await accessControl.countActiveSessions());
     metrics.setBackupTargetsConfigured(backups.getConfigurationStatus().configuredTargetCount);
+    const latestSuccessfulRestore = await restores.getLatestSuccessful();
+    metrics.setRestoreLastSuccessTimestamp(
+      latestSuccessfulRestore?.createdAt ? Math.floor(Date.parse(latestSuccessfulRestore.createdAt) / 1000) : 0,
+    );
     res.writeHead(200, {
       "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
     });
@@ -1184,6 +1192,94 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     return;
   }
 
+  if (req.method === "GET" && requestUrl.pathname === "/api/operations/restores") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const limit = Number(requestUrl.searchParams.get("limit") || 12);
+    sendJson(res, 200, {
+      ok: true,
+      restores: await restores.list(Number.isFinite(limit) ? limit : 12),
+    });
+    return;
+  }
+
+  if (req.method === "POST" && requestUrl.pathname === "/api/operations/restores/run") {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const body = await readJsonBody(req);
+    const restore = await restores.runDrill({
+      actor: auth.actor,
+      backupId: typeof body.backupId === "string" ? body.backupId : undefined,
+      sourceType: isRestoreSourceType(body.sourceType) ? body.sourceType : undefined,
+    });
+    metrics.recordRestoreDrill(restore.status);
+    setRequestRunReference(req, {
+      actor: auth.actor,
+      restoreId: restore.drillId,
+    });
+    await operatorActivity.record({
+      action: "operations.restore_drill",
+      outcome: restore.status === "failure" ? "failure" : "success",
+      actor: auth.actor,
+      subject: restore.sourceType,
+      message:
+        restore.status === "success"
+          ? `Completed restore drill from ${restore.sourceType}.`
+          : restore.status === "degraded"
+            ? `Restore drill from ${restore.sourceType} completed with warnings.`
+            : `Restore drill from ${restore.sourceType} failed.`,
+      detail: {
+        drillId: restore.drillId,
+        backupId: restore.backupId,
+        sourceType: restore.sourceType,
+        sourceLocation: restore.sourceLocation,
+        status: restore.status,
+        checks: restore.checks,
+      },
+    });
+    logger.info("restore.manual.completed", {
+      requestId: getRequestContext(req).requestId,
+      restoreId: restore.drillId,
+      actorId: auth.actor?.id,
+      actorRole: auth.actor?.role,
+      status: restore.status,
+      sourceType: restore.sourceType,
+      backupId: restore.backupId,
+    });
+    sendJson(res, 200, {
+      ok: true,
+      restore,
+      health: await operations.getHealthStatus(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/api/operations/restores/")) {
+    const auth = await requireRole(req, res, "admin");
+    if (!auth) {
+      return;
+    }
+    const drillId = requestUrl.pathname.slice("/api/operations/restores/".length).trim();
+    if (!drillId) {
+      sendJson(res, 400, { ok: false, error: "restore id is required" });
+      return;
+    }
+    const restore = await restores.get(drillId);
+    if (!restore) {
+      sendJson(res, 404, { ok: false, error: "Restore drill not found" });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      restore,
+    });
+    return;
+  }
+
   if (req.method === "GET" && requestUrl.pathname === "/api/access-control/activity") {
     const auth = await requireRole(req, res, "admin");
     if (!auth) {
@@ -1468,6 +1564,7 @@ type RequestContext = {
   actor: import("./access-control.ts").AuthenticatedActor | null;
   runId?: string;
   backupId?: string;
+  restoreId?: string;
 };
 
 function attachRequestContext(req: http.IncomingMessage, requestUrl: URL): RequestContext {
@@ -1500,6 +1597,7 @@ function setRequestRunReference(
     actor?: import("./access-control.ts").AuthenticatedActor | null;
     runId?: string;
     backupId?: string;
+    restoreId?: string;
   },
 ): void {
   const context = getRequestContext(req);
@@ -1511,6 +1609,9 @@ function setRequestRunReference(
   }
   if (value.backupId) {
     context.backupId = value.backupId;
+  }
+  if (value.restoreId) {
+    context.restoreId = value.restoreId;
   }
 }
 
@@ -1526,7 +1627,12 @@ function inferWorkspace(req: http.IncomingMessage, pathname: string): string {
   if (pathname.startsWith("/api/legal-library")) {
     return "library";
   }
-  if (pathname.startsWith("/api/audit") || pathname.startsWith("/api/operations/backups") || pathname.startsWith("/api/access-control/activity")) {
+  if (
+    pathname.startsWith("/api/audit")
+    || pathname.startsWith("/api/operations/backups")
+    || pathname.startsWith("/api/operations/restores")
+    || pathname.startsWith("/api/access-control/activity")
+  ) {
     return "governance";
   }
   if (
@@ -1559,6 +1665,9 @@ function normalizeRouteForMetrics(method: string, pathname: string): string {
   if (pathname.startsWith("/api/operations/backups/")) {
     return `${method.toUpperCase()} /api/operations/backups/:id`;
   }
+  if (pathname.startsWith("/api/operations/restores/")) {
+    return `${method.toUpperCase()} /api/operations/restores/:id`;
+  }
   if (pathname.startsWith("/api/access-control/activity/")) {
     return `${method.toUpperCase()} /api/access-control/activity/:id`;
   }
@@ -1571,4 +1680,8 @@ function normalizePositiveInteger(value: unknown): number | undefined {
     return Math.floor(numeric);
   }
   return undefined;
+}
+
+function isRestoreSourceType(value: unknown): value is import("./restore-drill-store.ts").RestoreSourceType {
+  return value === "s3" || value === "mounted_dir" || value === "local_snapshot";
 }

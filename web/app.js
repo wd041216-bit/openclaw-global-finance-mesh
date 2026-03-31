@@ -36,6 +36,9 @@ const state = {
   exportBatches: [],
   selectedExportId: null,
   selectedExportDetail: null,
+  restoreDrills: [],
+  selectedRestoreId: null,
+  selectedRestoreDetail: null,
   backupJobs: [],
   backupConfig: null,
   selectedBackupId: null,
@@ -97,6 +100,11 @@ const elements = {
   exportForm: byId("export-form"),
   exportList: byId("export-list"),
   exportDetail: byId("export-detail"),
+  refreshRestoresButton: byId("refresh-restores"),
+  runRestoreDrillButton: byId("run-restore-drill"),
+  restoreList: byId("restore-list"),
+  restoreDetail: byId("restore-detail"),
+  restoresSummary: byId("restores-summary"),
   refreshBackupsButton: byId("refresh-backups"),
   runBackupButton: byId("run-backup"),
   backupsSummary: byId("backups-summary"),
@@ -134,6 +142,8 @@ const elements = {
   probeOutput: byId("probe-output"),
   modelsOutput: byId("models-output"),
   operationsSummary: byId("operations-summary"),
+  restoreGuidance: byId("restore-guidance"),
+  runRestoreDrillSystemButton: byId("run-restore-drill-system"),
   metricsOutput: byId("metrics-output"),
 };
 
@@ -226,6 +236,12 @@ function bindEvents() {
   elements.exportForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     await createAuditExport();
+  });
+  elements.refreshRestoresButton.addEventListener("click", async () => {
+    await refreshRestores();
+  });
+  elements.runRestoreDrillButton.addEventListener("click", async () => {
+    await runRestoreDrill();
   });
 
   elements.refreshBackupsButton.addEventListener("click", async () => {
@@ -333,6 +349,13 @@ function bindEvents() {
     }
     void openOperatorActivity(target.getAttribute("data-activity-id"));
   });
+  elements.restoreList.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-restore-id]");
+    if (!target) {
+      return;
+    }
+    void openRestoreDrill(target.getAttribute("data-restore-id"));
+  });
 
   elements.bindingList.addEventListener("click", (event) => {
     const target = event.target.closest("[data-binding-id]");
@@ -349,6 +372,9 @@ function bindEvents() {
     }
     void revokeAccessSession(target.getAttribute("data-session-id"));
   });
+  elements.runRestoreDrillSystemButton.addEventListener("click", async () => {
+    await runRestoreDrill();
+  });
 }
 
 async function refreshAll() {
@@ -361,6 +387,7 @@ async function refreshAll() {
     refreshLibrary(),
     refreshAuditIntegrity(),
     refreshAuditExports(),
+    refreshRestores(),
     refreshAuditHistory(),
     refreshProbeHistory(),
     refreshOperatorActivity(),
@@ -444,10 +471,12 @@ async function refreshOperationsHealth() {
         ledger: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
         legalLibrary: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
         backupTargets: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
+        recoveryDrill: { status: "down", summary: String(error.message || error), checkedAt: new Date().toISOString() },
       },
       recent: {
         probe: null,
         backup: null,
+        restoreDrill: null,
       },
     };
   }
@@ -551,6 +580,34 @@ async function refreshAuditExports(preferredId) {
     };
   }
   renderAuditExports();
+}
+
+async function refreshRestores(preferredId) {
+  if (!canManageRestoreDrills()) {
+    state.restoreDrills = [];
+    state.selectedRestoreId = null;
+    state.selectedRestoreDetail = null;
+    renderRestores();
+    return;
+  }
+  try {
+    const result = await api("/api/operations/restores?limit=12");
+    state.restoreDrills = result.restores || [];
+    selectPreferred("selectedRestoreId", state.restoreDrills, preferredId, "drillId");
+    if (state.selectedRestoreId) {
+      await openRestoreDrill(state.selectedRestoreId);
+    } else {
+      state.selectedRestoreDetail = null;
+    }
+  } catch (error) {
+    state.restoreDrills = [];
+    state.selectedRestoreId = null;
+    state.selectedRestoreDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderRestores();
+  renderOperationsSummary();
 }
 
 async function refreshAuditHistory(preferredId) {
@@ -663,6 +720,31 @@ async function refreshBackups(preferredId) {
   }
   renderBackups();
   renderOperationsSummary();
+}
+
+async function runRestoreDrill() {
+  if (!canManageRestoreDrills()) {
+    renderMessageCard(elements.restoresSummary, "只有管理员可以执行恢复演练。");
+    return;
+  }
+  renderMessageCard(elements.restoresSummary, "正在从最近可用备份源执行隔离恢复演练…");
+  try {
+    const result = await api("/api/operations/restores/run", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    rememberAction("已执行恢复演练");
+    await Promise.allSettled([
+      refreshDashboardOverview(),
+      refreshOperationsHealth(),
+      refreshRestores(result.restore?.drillId),
+      refreshOperatorActivity(),
+      refreshMetricsPreview(),
+    ]);
+  } catch (error) {
+    rememberAction(`恢复演练失败：${String(error.message || error)}`);
+    renderMessageCard(elements.restoreDetail, String(error.message || error));
+  }
 }
 
 async function runDecision() {
@@ -1044,6 +1126,22 @@ async function openBackupJob(backupId) {
   renderBackups();
 }
 
+async function openRestoreDrill(drillId) {
+  if (!drillId) {
+    return;
+  }
+  state.selectedRestoreId = drillId;
+  try {
+    const result = await api(`/api/operations/restores/${encodeURIComponent(drillId)}`);
+    state.selectedRestoreDetail = result.restore;
+  } catch (error) {
+    state.selectedRestoreDetail = {
+      error: String(error.message || error),
+    };
+  }
+  renderRestores();
+}
+
 async function loginWithLocalToken() {
   renderMessageCard(elements.accessSummary, "正在建立本地应急会话…");
   try {
@@ -1296,6 +1394,12 @@ async function handleQuickAction(input) {
     case "verify_audit_chain":
       setWorkspace(canViewGovernanceWorkspace() ? "governance" : "workbench");
       break;
+    case "run_restore_drill":
+      setWorkspace(canViewGovernanceWorkspace() ? "governance" : "workbench");
+      if (canManageRestoreDrills()) {
+        await runRestoreDrill();
+      }
+      break;
     case "configure_backups":
       setWorkspace(canViewSystemWorkspace() ? "system" : "workbench");
       break;
@@ -1318,6 +1422,7 @@ function renderAll() {
   renderAssistantSummary();
   renderLibrary();
   renderGovernance();
+  renderRestores();
   renderAccessControl();
   renderRuntimeConfig();
   renderOperationsSummary();
@@ -1384,7 +1489,7 @@ function renderFrame() {
     kicker: "治理状态",
     title: state.overview?.governance?.integrity?.summary || "正在读取治理摘要",
     pill: statusPill(statusToneFromIntegrity(state.overview?.governance?.integrity), integrityLabel(state.overview?.governance?.integrity)),
-    note: state.overview?.governance?.backups?.summary || "尚未读取备份状态。",
+    note: state.overview?.governance?.recovery?.summary || state.overview?.governance?.backups?.summary || "尚未读取治理状态。",
     meta: [
       state.overview?.governance?.legalLibrary ? `待审核资料：${state.overview.governance.legalLibrary.draftCount}` : null,
       state.overview?.governance?.sessions ? `活跃会话：${state.overview.governance.sessions.activeCount}` : null,
@@ -1474,6 +1579,15 @@ function renderWorkbenchSummary() {
         `Approved：${overview.governance.legalLibrary.approvedCount}`,
       ],
     }),
+    renderSummaryCard({
+      kicker: "恢复就绪度",
+      title: overview.governance.recovery.summary,
+      pill: statusPill(statusToneFromRecovery(overview.governance.recovery), recoveryLabel(overview.governance.recovery)),
+      note: overview.governance.recovery.recommendedAction,
+      meta: [
+        overview.governance.recovery.lastSuccessAt ? `最近成功：${formatDateTime(overview.governance.recovery.lastSuccessAt)}` : null,
+      ].filter(Boolean),
+    }),
   ].join("");
 }
 
@@ -1517,6 +1631,19 @@ function renderWorkbenchHealth() {
       meta: [
         state.overview?.governance?.backups?.configuredTargetCount != null
           ? `已配置目标：${state.overview.governance.backups.configuredTargetCount}`
+          : null,
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "恢复演练",
+      title: health.checks.recoveryDrill.summary,
+      pill: statusPill(statusToneFromStatus(health.checks.recoveryDrill.status), translateStatus(health.checks.recoveryDrill.status)),
+      note: health.recent.restoreDrill
+        ? `最近演练：${formatDateTime(health.recent.restoreDrill.createdAt)}`
+        : "还没有恢复演练记录。",
+      meta: [
+        state.overview?.governance?.recovery?.lastSuccessAt
+          ? `最近成功：${formatDateTime(state.overview.governance.recovery.lastSuccessAt)}`
           : null,
       ].filter(Boolean),
     }),
@@ -1728,12 +1855,14 @@ function renderLibraryDetail() {
 function renderGovernance() {
   renderIntegritySummary();
   renderAuditExports();
+  renderRestores();
   renderAuditHistory();
   renderProbeHistory();
   renderOperatorActivity();
   renderBackups();
 
   elements.verifyIntegrityButton.hidden = !canManageAuditIntegrity();
+  elements.runRestoreDrillButton.hidden = !canManageRestoreDrills();
   elements.runBackupButton.hidden = !canManageIdentitySessions();
   elements.exportForm.classList.toggle("hidden", !canManageAuditIntegrity());
 }
@@ -1836,6 +1965,88 @@ function renderAuditExports() {
       .join("");
   }
   renderDetailCard(elements.exportDetail, state.selectedExportDetail, "导出详情", renderExportDetailCard);
+}
+
+function renderRestores() {
+  if (!canManageRestoreDrills()) {
+    renderMessageCard(elements.restoresSummary, "只有管理员可以查看恢复演练历史和执行入口。");
+    elements.restoreList.innerHTML = emptyState("恢复演练历史仅对管理员可见。");
+    renderMessageCard(elements.restoreDetail, "恢复演练详情仅对管理员可见。");
+    return;
+  }
+
+  const recovery = state.overview?.governance?.recovery || null;
+  const latest = state.restoreDrills[0] || null;
+  const latestFailure = state.restoreDrills.find((item) => item.status === "failure") || null;
+
+  elements.restoresSummary.innerHTML = [
+    renderSummaryCard({
+      kicker: "恢复就绪度",
+      title: recovery?.summary || "正在读取恢复状态。",
+      pill: statusPill(statusToneFromRecovery(recovery), recoveryLabel(recovery)),
+      note: recovery?.recommendedAction || "建议优先验证 S3 或挂载目录的恢复路径。",
+      meta: [
+        recovery?.lastSuccessAt ? `最近成功：${formatDateTime(recovery.lastSuccessAt)}` : null,
+        recovery?.lastDrillAt ? `最近演练：${formatDateTime(recovery.lastDrillAt)}` : null,
+      ].filter(Boolean),
+    }),
+    latest
+      ? renderSummaryCard({
+          kicker: "最近演练",
+          title: translateRestoreStatus(latest.status),
+          pill: statusPill(statusToneFromRestore(latest.status), `#${latest.sequence}`),
+          note: latest.error || latest.checks?.[0]?.summary || "恢复演练已写入审计链。",
+          meta: [
+            `来源：${translateRestoreSource(latest.sourceType)}`,
+            latest.backupId ? `Backup：${latest.backupId.slice(0, 8)}` : null,
+          ].filter(Boolean),
+        })
+      : emptyState("还没有恢复演练记录。"),
+    latestFailure
+      ? renderSummaryCard({
+          kicker: "最近失败点",
+          title: latestFailure.error || "恢复演练失败",
+          pill: statusPill("bad", translateRestoreStatus(latestFailure.status)),
+          note: `失败发生于 ${formatDateTime(latestFailure.createdAt)}，建议先查看右侧详情中的首个失败检查项。`,
+          meta: [
+            `来源：${translateRestoreSource(latestFailure.sourceType)}`,
+          ],
+        })
+      : renderSummaryCard({
+          kicker: "最近失败点",
+          title: "当前没有新的恢复失败",
+          pill: statusPill("good", "稳定"),
+          note: "一旦演练失败，这里会直接显示第一条需要处理的错误。",
+          meta: [],
+        }),
+  ].join("");
+
+  if (!state.restoreDrills.length) {
+    elements.restoreList.innerHTML = emptyState("执行一次恢复演练后，这里会保留最近历史。");
+  } else {
+    elements.restoreList.innerHTML = state.restoreDrills
+      .map(
+        (item) => `
+          <button
+            type="button"
+            class="record-item ${item.drillId === state.selectedRestoreId ? "active" : ""}"
+            data-restore-id="${escapeHtml(item.drillId)}"
+          >
+            <div class="record-head">
+              <strong>${escapeHtml(translateRestoreStatus(item.status))}</strong>
+              ${statusPill(statusToneFromRestore(item.status), translateRestoreSource(item.sourceType))}
+            </div>
+            <p class="record-copy">${escapeHtml(item.error || item.checks?.[0]?.summary || "恢复演练已完成")}</p>
+            <div class="record-meta">
+              <span>${escapeHtml(formatDateTime(item.createdAt))}</span>
+              <span>${escapeHtml(item.backupId ? item.backupId.slice(0, 8) : "adhoc")}</span>
+            </div>
+          </button>
+        `,
+      )
+      .join("");
+  }
+  renderDetailCard(elements.restoreDetail, state.selectedRestoreDetail, "恢复演练详情", renderRestoreDetailCard);
 }
 
 function renderBackups() {
@@ -2218,12 +2429,14 @@ function renderRuntimeConfig() {
 function renderOperationsSummary() {
   if (!canViewSystemWorkspace()) {
     renderMessageCard(elements.operationsSummary, "系统设置对当前角色不可见。");
+    elements.restoreGuidance.innerHTML = emptyState("恢复说明对当前角色不可见。");
     elements.metricsOutput.textContent = state.metricsPreview || "";
     return;
   }
   const health = state.operationsHealth;
   if (!health) {
     renderMessageCard(elements.operationsSummary, "正在读取部署与观测基线。");
+    elements.restoreGuidance.innerHTML = emptyState("恢复说明正在读取。");
     return;
   }
   elements.operationsSummary.innerHTML = [
@@ -2248,6 +2461,29 @@ function renderOperationsSummary() {
       meta: [
         state.backupConfig?.localDir ? `Local dir：${state.backupConfig.localDir}` : null,
         state.backupConfig?.s3?.bucket ? `S3：${state.backupConfig.s3.bucket}` : null,
+      ].filter(Boolean),
+    }),
+    renderSummaryCard({
+      kicker: "恢复演练",
+      title: health.checks.recoveryDrill.summary,
+      pill: statusPill(statusToneFromStatus(health.checks.recoveryDrill.status), translateStatus(health.checks.recoveryDrill.status)),
+      note: state.overview?.governance?.recovery?.recommendedAction || "建议保持定期恢复演练。",
+      meta: [
+        health.recent.restoreDrill ? `最近演练：${formatDateTime(health.recent.restoreDrill.createdAt)}` : null,
+        state.overview?.governance?.recovery?.lastSuccessAt ? `最近成功：${formatDateTime(state.overview.governance.recovery.lastSuccessAt)}` : null,
+      ].filter(Boolean),
+    }),
+  ].join("");
+  elements.restoreGuidance.innerHTML = [
+    renderSummaryCard({
+      kicker: "恢复说明",
+      title: "恢复演练始终在隔离目录中执行",
+      pill: statusPill(canManageRestoreDrills() ? "info" : "neutral", canManageRestoreDrills() ? "可执行" : "只读"),
+      note: canManageRestoreDrills()
+        ? "系统页的按钮会直接复用治理中心同一条恢复逻辑，不会覆盖当前运行中的 data 目录。"
+        : "需要管理员身份才能从控制台触发恢复演练。",
+      meta: [
+        state.overview?.governance?.recovery?.isStale ? "最近成功演练已过期" : null,
       ].filter(Boolean),
     }),
   ].join("");
@@ -2309,6 +2545,48 @@ function renderBackupDetailCard(detail) {
           meta: [
             target.transferredFiles != null ? `文件数：${target.transferredFiles}` : null,
             target.totalBytes != null ? `大小：${formatBytes(target.totalBytes)}` : null,
+          ].filter(Boolean),
+        })).join("")}
+      </div>
+    ` : ""}
+    ${rawDetails(detail)}
+  `;
+}
+
+function renderRestoreDetailCard(detail) {
+  if (!detail) {
+    return emptyState("从左侧选择一次恢复演练，查看 manifest 校验、账本复算与身份状态检查。");
+  }
+  if (detail.error && !detail.checks) {
+    return emptyState(detail.error);
+  }
+  return `
+    <div class="record-head">
+      <strong>${escapeHtml(translateRestoreStatus(detail.status))}</strong>
+      ${statusPill(statusToneFromRestore(detail.status), translateRestoreSource(detail.sourceType || "local_snapshot"))}
+    </div>
+    <p class="summary-note">${escapeHtml(detail.error || "恢复演练已完成，检查项见下方摘要。")}</p>
+    <div class="metric-list">
+      ${metricRow("Restore ID", detail.drillId)}
+      ${metricRow("Backup ID", detail.backupId || "adhoc")}
+      ${metricRow("来源", translateRestoreSource(detail.sourceType || "local_snapshot"))}
+      ${metricRow("恢复目录", detail.restorePath)}
+      ${metricRow("保留到", detail.detail?.cleanupCutoffAt ? formatDateTime(detail.detail.cleanupCutoffAt) : "unknown")}
+    </div>
+    ${detail.checks?.length ? `
+      <div class="summary-stack">
+        ${detail.checks.map((check) => renderSummaryCard({
+          kicker: check.label,
+          title: check.summary,
+          pill: statusPill(
+            check.status === "success" ? "good" : check.status === "warning" ? "warn" : "bad",
+            translateRestoreCheckStatus(check.status),
+          ),
+          note: check.detail?.sourceLocation || check.detail?.manifestPath || check.detail?.configPath || "检查详情已记录。",
+          meta: [
+            check.detail?.backupId ? `Backup：${check.detail.backupId}` : null,
+            check.detail?.latestSequence != null ? `Ledger：#${check.detail.latestSequence}` : null,
+            check.detail?.fileCount != null ? `文件数：${check.detail.fileCount}` : null,
           ].filter(Boolean),
         })).join("")}
       </div>
@@ -2717,8 +2995,12 @@ function canManageIdentitySessions() {
   return isOpenMode() || hasRole("admin");
 }
 
+function canManageRestoreDrills() {
+  return isOpenMode() || hasRole("admin");
+}
+
 function canViewSystemWorkspace() {
-  return isOpenMode() || hasRole("admin") || Boolean(state.access?.config?.bootstrapRequired);
+  return isOpenMode() || Boolean(state.access?.config?.enabled) || Boolean(state.access?.config?.bootstrapRequired);
 }
 
 function isOpenMode() {
@@ -2777,6 +3059,14 @@ function statusToneFromBackup(status) {
   return statusToneFromStatus(status || "not_configured");
 }
 
+function statusToneFromRestore(status) {
+  return statusToneFromStatus(status || "pending");
+}
+
+function statusToneFromRecovery(recovery) {
+  return recovery ? statusToneFromStatus(recovery.status) : "neutral";
+}
+
 function integrityLabel(integrity) {
   if (!integrity) {
     return "未知";
@@ -2801,6 +3091,22 @@ function integritySummaryTitle(integrity) {
     return "审计链已通过最近一次完整校验";
   }
   return "审计链尚未做过完整校验";
+}
+
+function recoveryLabel(recovery) {
+  if (!recovery) {
+    return "未知";
+  }
+  if (recovery.status === "failure") {
+    return "恢复失败";
+  }
+  if (recovery.status === "degraded") {
+    return "需复核";
+  }
+  if (recovery.status === "pending") {
+    return "未演练";
+  }
+  return "已验证";
 }
 
 function translateStatus(status) {
@@ -2839,6 +3145,39 @@ function translateBackupStatus(status) {
     return "备份失败";
   }
   return "未配置目标";
+}
+
+function translateRestoreStatus(status) {
+  if (status === "success") {
+    return "恢复演练成功";
+  }
+  if (status === "degraded") {
+    return "恢复演练有告警";
+  }
+  if (status === "failure") {
+    return "恢复演练失败";
+  }
+  return "恢复状态未知";
+}
+
+function translateRestoreSource(sourceType) {
+  if (sourceType === "s3") {
+    return "S3 对象存储";
+  }
+  if (sourceType === "mounted_dir") {
+    return "挂载目录";
+  }
+  return "本地快照";
+}
+
+function translateRestoreCheckStatus(status) {
+  if (status === "success") {
+    return "通过";
+  }
+  if (status === "warning") {
+    return "告警";
+  }
+  return "失败";
 }
 
 function translateTargetStatus(status) {

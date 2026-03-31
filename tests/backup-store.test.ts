@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { AuditLedgerStore } from "../src/audit-ledger.ts";
 import { BackupReplicationStore, type S3ReplicationUploader } from "../src/backup-store.ts";
@@ -18,7 +19,15 @@ async function makeBackupFixture(rootDir: string): Promise<{
 
   await fs.mkdir(exportDir, { recursive: true });
   await fs.mkdir(runtimeDir, { recursive: true });
-  await fs.writeFile(path.join(runtimeDir, "auth-sessions.sqlite"), "sqlite-session-state", "utf8");
+  const sessionDb = new DatabaseSync(path.join(runtimeDir, "auth-sessions.sqlite"));
+  sessionDb.exec(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      session_id TEXT PRIMARY KEY,
+      actor_name TEXT NOT NULL
+    );
+    INSERT INTO auth_sessions (session_id, actor_name) VALUES ('session-1', 'Alice Admin');
+  `);
+  sessionDb.close();
   await fs.writeFile(path.join(runtimeDir, "access-control.json"), JSON.stringify({ enabled: true }, null, 2), "utf8");
   await fs.writeFile(
     path.join(runtimeDir, "access-control.secrets.json"),

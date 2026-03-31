@@ -15,6 +15,8 @@
 - `FINANCE_MESH_BACKUP_LOCAL_DIR`: mounted-directory replication target for off-box snapshots.
 - `FINANCE_MESH_BACKUP_INTERVAL_MINUTES`: optional in-process scheduler interval for automatic backup runs.
 - `FINANCE_MESH_BACKUP_S3_*`: S3-compatible replication target settings for snapshot upload.
+- `FINANCE_MESH_RESTORE_DRILL_RETENTION_DAYS`: how long restore-drill directories are kept under `data/restore-drills/`. Default `7`.
+- `FINANCE_MESH_RESTORE_DRILL_WARN_HOURS`: how long a successful restore drill can age before health/dashboard mark recovery readiness stale. Default `168`.
 
 Audit APIs are normally exercised from an authenticated reviewer/admin browser session or an admin break-glass token that mints a session first. See [identity-operations.md](./identity-operations.md) for login and CSRF details.
 
@@ -39,6 +41,19 @@ Audit APIs are normally exercised from an authenticated reviewer/admin browser s
 5. Compare the restored ledger against the latest export manifest in `data/audit/exports/`.
 6. If the restored environment also reused session state, revoke sessions that should not survive the incident window.
 
+## Restore drill workflow
+
+1. Inspect `GET /api/operations/restores` or the Governance workspace for the latest drill summary.
+2. Trigger `POST /api/operations/restores/run` as an admin when you need a fresh recovery readiness check.
+3. Let the service choose the source in this order unless you pin one explicitly: `s3`, then mounted directory, then local snapshot fallback.
+4. Confirm the drill materialized into `data/restore-drills/<timestamp>-<drillId>/restored/` and did not overwrite the active `data/` directory.
+5. Review the recorded checks:
+   - `manifest.json` present and file SHA-256 values match
+   - restored `ledger.sqlite` passes integrity inspection
+   - `auth-sessions.sqlite`, `access-control.json`, and `access-control.secrets.json` are readable
+6. Treat a `degraded` result as "backup exists, but off-box recovery was not proven" because the drill fell back to a local snapshot.
+7. Investigate any `failure` result before calling the environment recovery-ready.
+
 ## Backup workflow
 
 1. Check `GET /api/operations/backups` for configured targets and the latest job result.
@@ -52,5 +67,6 @@ Audit APIs are normally exercised from an authenticated reviewer/admin browser s
 - The ledger is append-only from the application perspective. There is no purge path in the current product.
 - Integrity verification and export batches are themselves written back into the ledger, so verification and backup operations are auditable events.
 - Backup replication events are also ledger-native, so manual and scheduled backup runs remain attributable.
+- Restore-drill events are ledger-native as `restore_drill`, so recovery testing is attributable and historically reviewable.
 - The current design is tamper-evident on a single-node SQLite deployment. Mounted-directory and S3-compatible replication improve durability, but this is still not immutable archival storage.
 - If a restored environment also restores browser sessions, revoke old sessions and run an integrity verification before reopening operator access.

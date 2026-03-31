@@ -16,9 +16,12 @@
 - persisted operator activity timeline for privileged actions
 - integrity verification and export-manifest workflow
 - local-directory and S3-compatible backup replication with backup job history in the audit chain
+- non-destructive restore drills with manifest verification, restored-ledger integrity inspection, and identity-state readability checks
 - structured logging plus Prometheus-friendly `/api/metrics`
-- detailed `/api/operations/health` endpoint for runtime, ledger, legal-library, and backup-target status
+- detailed `/api/operations/health` endpoint for runtime, ledger, legal-library, backup-target, and recovery-readiness status
 - Docker single-instance baseline and Kubernetes raw manifests for a one-replica deployment
+- GitHub Actions CI with restore smoke, browser smoke, Docker build, and Kubernetes manifest validation
+- tag-gated GHCR and npm release workflow with release metadata checks
 - governed legal-library document states with draft/reviewed/approved/retired lifecycle
 - local or cloud LLM routing
 - legal library ingestion and grounding
@@ -26,7 +29,7 @@
 
 ## What still needs work before an honest enterprise-ready claim
 
-- immutable or off-box audit storage
+- immutable audit storage stronger than off-box replicated SQLite snapshots
 - production-grade identity federation completeness such as group sync, SCIM, and IdP lifecycle automation
 - HA session storage or documented session failover posture
 - encryption and secrets-management posture
@@ -48,3 +51,5 @@ The product should only be called enterprise-ready when:
 6. legal source provenance is reviewable
 7. replay gates are part of release workflow
 8. integration failures have recovery paths
+9. restore drills prove the off-box recovery path on a recurring basis
+10. release automation cannot publish artifacts when version metadata drifts

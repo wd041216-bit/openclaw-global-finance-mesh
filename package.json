@@ -1,6 +1,6 @@
 {
   "name": "@wd041216-bit/zhouheng-global-finance-mesh",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": false,
   "description": "Enterprise beta finance control plane with OIDC-ready sessions, audit ledger integrity, decision replay, and legal-library grounding.",
   "license": "MIT",
@@ -29,7 +29,12 @@
     "dev": "node src/server.ts",
     "start": "node src/server.ts",
     "test": "node --test tests/*.test.ts",
-    "verify": "npm test"
+    "verify": "npm test",
+    "verify:server": "node scripts/verify-server.ts",
+    "verify:manifests": "node scripts/verify-manifests.ts",
+    "smoke:restore": "node scripts/smoke-restore.ts",
+    "smoke:ui": "node scripts/smoke-ui.ts",
+    "release:check": "node scripts/release-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.910.0",
@@ -53,5 +58,8 @@
     "legal-library",
     "replay-analysis",
     "global-finance"
-  ]
+  ],
+  "devDependencies": {
+    "playwright": "^1.58.2"
+  }
 }

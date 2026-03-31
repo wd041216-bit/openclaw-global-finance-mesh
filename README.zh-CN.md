@@ -1,6 +1,6 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、四工作区中文控制台、异地备份能力，以及基于 SQLite 的防篡改审计账本。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、四工作区中文控制台、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
 
 ## 控制台截图
 
@@ -15,8 +15,8 @@
 - 四工作区中文控制台，给非技术人员也能直接上手：
   - `工作台`：运行决策、回放影响、法规问答、系统快照
   - `依据库`：搜索、治理、资料采集
-  - `治理中心`：审计链、导出、备份、时间线
-  - `系统设置`：身份、运行时、部署与观测
+  - `治理中心`：审计链、导出、备份、恢复演练、时间线
+  - `系统设置`：身份、运行时、部署观测与恢复控制
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
 - `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
@@ -25,12 +25,14 @@
 - 法律资料库采集、检索、治理状态流转、引用注入链路
 - 基于 SQLite 的 append-only 审计账本，统一记录 decision / replay / runtime probe / integrity verify / export batch / operator activity
 - 目录复制与 S3-compatible 对象存储两种异地备份目标
+- 非破坏性的恢复演练，支持从挂载目录、S3-compatible 目标或本地 snapshot 验证恢复可行性
 - `/api/dashboard/overview`、`/api/operations/health`、`/api/metrics` 三个聚合 / 观测接口
 - 结构化日志，便于请求、actor、run、backup 的串联排查
 - 持久化 operator activity timeline，记录 RBAC、session、运行时配置、法规治理和执行动作
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
 - Docker 单实例基线与 Kubernetes 原生单副本清单
+- GitHub Actions CI 与 semver 发布流程，覆盖语法校验、restore smoke、浏览器 smoke、镜像发布和 npm 发布
 
 ## 当前定位
 
@@ -119,15 +121,28 @@ npm run dev
 - `GET /api/operations/health`：面向运维和系统页的详细健康状态
 - `GET /api/metrics`：Prometheus 文本指标
 - `POST /api/operations/backups/run`：手动生成快照并复制到已配置目标
+- `GET /api/operations/restores`、`POST /api/operations/restores/run`、`GET /api/operations/restores/:id`：在隔离目录里执行恢复演练并返回摘要结果
 - `FINANCE_MESH_BACKUP_LOCAL_DIR`：挂载目录复制
 - `FINANCE_MESH_BACKUP_S3_*`：S3-compatible 对象存储复制
+- `FINANCE_MESH_RESTORE_DRILL_RETENTION_DAYS`：控制 `data/restore-drills/` 下恢复演练目录的保留天数
+- `FINANCE_MESH_RESTORE_DRILL_WARN_HOURS`：控制恢复就绪度在概览页和健康检查中多久后判定为过期
 - `FINANCE_MESH_LOG_FORMAT=json`：容器化环境推荐的结构化日志模式
+
+恢复演练不会覆盖运行中的 `data/`。系统会先把备份副本展开到 `data/restore-drills/<timestamp>-<drillId>/restored/`，然后校验 `manifest.json`、恢复后的账本完整性，以及身份状态文件是否可读，再给出就绪度结论。
 
 ## 部署基线
 
 - `Dockerfile` + `docker-compose.yml`：单实例容器运行基线
 - `deploy/kubernetes/`：ConfigMap、Secret 示例、Deployment、Service、PVC、Ingress 示例
 - 当前明确按“单副本 + 持久卷”的 beta 自托管方式设计，不宣称高可用
+
+## CI 与发布基线
+
+- `.github/workflows/ci.yml` 会在 PR 和 `main` 上执行 `npm ci`、`npm test`、`npm run verify:server`、`npm run verify:manifests`、`docker build`、`npm run smoke:restore`、`npm run smoke:ui`
+- `.github/workflows/release.yml` 只会在 `workflow_dispatch` 或 `v0.3.0` 这种 semver tag 上触发发布
+- `npm run release:check -- --tag v0.3.0` 会强校验 git tag、`package.json` 版本和 `CHANGELOG.md` 标题一致
+- CI 会在 `npm run verify:manifests` 前临时拉起一个 kind 集群，因为 `kubectl` 的 dry-run 仍然需要 API discovery 来识别内置资源
+- 发布产物固定是 `ghcr.io/wd041216-bit/zhouheng-global-finance-mesh` 容器镜像和 npm 公共包
 
 ## 法律资料治理
 
@@ -154,6 +169,8 @@ npm run dev
 - OIDC-ready 身份绑定、服务端 session、CSRF 与角色边界
 - SQLite 审计账本、integrity verify 和导出链路
 - 目录 / S3-compatible 备份复制
+- 非破坏性恢复演练与恢复就绪度摘要
+- CI 校验与 semver 发布基线
 - Docker / Kubernetes 单实例部署与基础观测
 
 仍需继续补齐：
@@ -165,6 +182,7 @@ npm run dev
 ## 相关文档
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
@@ -173,3 +191,4 @@ npm run dev
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
+- [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)

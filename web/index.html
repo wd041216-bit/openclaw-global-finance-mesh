@@ -408,6 +408,24 @@
             <section class="panel span-2">
               <div class="panel-head">
                 <div>
+                  <p class="section-kicker">恢复演练</p>
+                  <h3>恢复就绪度与隔离演练</h3>
+                </div>
+                <div class="actions compact">
+                  <button id="refresh-restores" type="button" class="ghost">刷新演练</button>
+                  <button id="run-restore-drill" type="button">立即执行演练</button>
+                </div>
+              </div>
+              <div id="restores-summary" class="summary-stack summary-stack-wide"></div>
+              <div class="detail-layout">
+                <div id="restore-list" class="record-list"></div>
+                <div id="restore-detail" class="detail-card"></div>
+              </div>
+            </section>
+
+            <section class="panel span-2">
+              <div class="panel-head">
+                <div>
                   <p class="section-kicker">异地备份</p>
                   <h3>快照与复制状态</h3>
                 </div>
@@ -754,8 +772,10 @@
                   <p class="section-kicker">部署与观测</p>
                   <h3>健康检查、指标与备份配置</h3>
                 </div>
+                <button id="run-restore-drill-system" type="button" class="ghost">从系统页执行恢复演练</button>
               </div>
               <div id="operations-summary" class="summary-stack summary-stack-wide"></div>
+              <div id="restore-guidance" class="summary-stack"></div>
               <details class="technical-details advanced-only">
                 <summary>查看 Prometheus 指标预览</summary>
                 <pre id="metrics-output" class="output"></pre>

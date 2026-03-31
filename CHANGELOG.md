@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - repositioned the repository as the standalone `zhouheng-global-finance-mesh` product
 - moved the OpenClaw compatibility layer into `integrations/openclaw/`
 - added persisted audit history APIs and an operator-facing audit timeline in the web console
@@ -17,6 +19,10 @@
 - rebuilt the console into four Chinese-first workspaces with summary-first UX for non-technical operators
 - added `/api/dashboard/overview`, `/api/operations/health`, and `/api/metrics`
 - added local-directory and S3-compatible backup replication plus scheduled backup support
+- added non-destructive restore drills with mounted-directory, S3-compatible, and local-snapshot source selection
+- added a governance/system recovery center with restore readiness, drill history, and actionable admin summaries
+- added GitHub Actions CI, semver release validation, GHCR image publishing, and npm release workflow baselines
+- added restore smoke, browser smoke, manifest verification, and release metadata validation scripts
 - added Docker and Kubernetes single-instance deployment baselines
 - refreshed README screenshots and deployment/operations documentation
 

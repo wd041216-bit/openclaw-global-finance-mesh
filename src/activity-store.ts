@@ -22,7 +22,8 @@ export type OperatorActivityAction =
   | "legal_library.ingest"
   | "legal_library.update_status"
   | "decision.run"
-  | "replay.run";
+  | "replay.run"
+  | "operations.restore_drill";
 
 export type OperatorActivityOutcome = "success" | "failure";
 

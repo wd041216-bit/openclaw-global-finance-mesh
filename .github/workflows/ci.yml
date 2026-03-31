@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: latest
+
+      - name: Create disposable kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: finance-mesh-ci
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run node tests
+        run: npm test
+
+      - name: Verify server syntax
+        run: npm run verify:server
+
+      - name: Verify Kubernetes manifests
+        run: npm run verify:manifests
+
+      - name: Build Docker image
+        run: docker build -t zhouheng-global-finance-mesh:ci .
+
+      - name: Smoke restore flow
+        run: npm run smoke:restore
+
+      - name: Smoke browser flow
+        run: npm run smoke:ui

@@ -13,7 +13,8 @@ export type LedgerKind =
   | "operator_activity"
   | "integrity_verification"
   | "export_batch"
-  | "backup_replication";
+  | "backup_replication"
+  | "restore_drill";
 
 export type LedgerChainStatus = "verified" | "pending" | "mismatch";
 
@@ -72,6 +73,17 @@ export interface IntegrityVerificationSummary extends LedgerMetadata {
   mismatchCount: number;
   mismatches: IntegrityMismatch[];
   status: LedgerChainStatus;
+}
+
+export interface IntegrityInspection {
+  status: Extract<LedgerChainStatus, "verified" | "mismatch">;
+  latestSequence: number;
+  verifiedThroughSequence: number;
+  mismatchCount: number;
+  mismatches: IntegrityMismatch[];
+  inspectedAt: string;
+  environment: string;
+  teamScope: string;
 }
 
 export interface AuditExportBatchSummary extends LedgerMetadata {
@@ -230,6 +242,11 @@ export class AuditLedgerStore {
   async verifyIntegrity(actor: AuthenticatedActor | null): Promise<IntegrityVerificationSummary> {
     await this.ensureReady();
     return this.runInTransaction(() => this.verifyIntegrityInTransaction(actor));
+  }
+
+  async inspectIntegrity(): Promise<IntegrityInspection> {
+    await this.ensureReady();
+    return this.inspectIntegrityRows();
   }
 
   async createExportBatch(
@@ -550,6 +567,39 @@ export class AuditLedgerStore {
   }
 
   private verifyIntegrityInTransaction(actor: AuthenticatedActor | null): IntegrityVerificationSummary {
+    const inspection = this.inspectIntegrityRows();
+    const nextSequence = inspection.latestSequence + 1;
+    const createdAt = new Date().toISOString();
+    const record: IntegrityVerificationSummary = {
+      id: crypto.randomUUID(),
+      createdAt,
+      verifiedThroughSequence: nextSequence,
+      latestSequence: nextSequence,
+      mismatchCount: inspection.mismatchCount,
+      mismatches: inspection.mismatches,
+      status: inspection.status,
+      sequence: 0,
+      prevHash: "",
+      entryHash: "",
+      environment: this.environment,
+      teamScope: this.teamScope,
+      chainStatus: inspection.status,
+      chainVerifiedAt: createdAt,
+    };
+
+    const entry = this.insertEntry({
+      entryId: record.id,
+      kind: "integrity_verification",
+      createdAt,
+      actor,
+      subject: inspection.mismatchCount > 0 ? `${inspection.mismatchCount} mismatches` : "chain verified",
+      payload: record,
+    });
+
+    return this.toIntegrityVerificationSummary(entry);
+  }
+
+  private inspectIntegrityRows(): IntegrityInspection {
     const rows = this.selectRows({
       limit: Number.MAX_SAFE_INTEGER,
     }).reverse();
@@ -586,35 +636,17 @@ export class AuditLedgerStore {
       previousHash = row.entry_hash;
     }
 
-    const nextSequence = (rows.at(-1)?.sequence ?? 0) + 1;
-    const createdAt = new Date().toISOString();
-    const record: IntegrityVerificationSummary = {
-      id: crypto.randomUUID(),
-      createdAt,
-      verifiedThroughSequence: nextSequence,
-      latestSequence: nextSequence,
+    const latestSequence = rows.at(-1)?.sequence ?? 0;
+    return {
+      status: mismatches.length > 0 ? "mismatch" : "verified",
+      latestSequence,
+      verifiedThroughSequence: latestSequence,
       mismatchCount: mismatches.length,
       mismatches: mismatches.slice(0, 20),
-      status: mismatches.length > 0 ? "mismatch" : "verified",
-      sequence: 0,
-      prevHash: "",
-      entryHash: "",
+      inspectedAt: new Date().toISOString(),
       environment: this.environment,
       teamScope: this.teamScope,
-      chainStatus: mismatches.length > 0 ? "mismatch" : "verified",
-      chainVerifiedAt: createdAt,
     };
-
-    const entry = this.insertEntry({
-      entryId: record.id,
-      kind: "integrity_verification",
-      createdAt,
-      actor,
-      subject: mismatches.length > 0 ? `${mismatches.length} mismatches` : "chain verified",
-      payload: record,
-    });
-
-    return this.toIntegrityVerificationSummary(entry);
   }
 
   private selectRows(options?: { kinds?: LedgerKind[]; limit?: number }): LedgerRow[] {

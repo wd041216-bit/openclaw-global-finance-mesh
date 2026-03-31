@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 import { AuditLedgerStore } from "./audit-ledger.ts";
@@ -93,6 +94,10 @@ export interface S3ReplicationUploader {
     snapshotDir: string;
     snapshotName: string;
     totalBytes: number;
+  }): Promise<Omit<BackupTargetResult, "type" | "configured">>;
+  downloadDirectory?(input: {
+    location: string;
+    destinationDir: string;
   }): Promise<Omit<BackupTargetResult, "type" | "configured">>;
 }
 
@@ -257,6 +262,47 @@ export class BackupReplicationStore {
     };
   }
 
+  async downloadFromS3(location: string, destinationDir: string): Promise<BackupTargetResult> {
+    if (!this.s3Config) {
+      return {
+        type: "s3",
+        configured: false,
+        status: "not_configured",
+      };
+    }
+
+    const uploader = this.s3Uploader ?? new AwsS3ReplicationUploader(this.s3Config);
+    if (typeof uploader.downloadDirectory !== "function") {
+      return {
+        type: "s3",
+        configured: true,
+        status: "failure",
+        location,
+        error: "Configured S3 transport does not support restore downloads.",
+      };
+    }
+
+    try {
+      const result = await uploader.downloadDirectory({
+        location,
+        destinationDir,
+      });
+      return {
+        type: "s3",
+        configured: true,
+        ...result,
+      };
+    } catch (error) {
+      return {
+        type: "s3",
+        configured: true,
+        status: "failure",
+        location,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   private async createSnapshot(snapshotDir: string): Promise<{
     files: BackupFileSnapshot[];
     missingFiles: string[];
@@ -278,10 +324,10 @@ export class BackupReplicationStore {
         continue;
       }
 
-      const content = await fs.readFile(file.absolutePath);
       const destinationPath = path.join(snapshotDir, file.relativePath);
       await fs.mkdir(path.dirname(destinationPath), { recursive: true });
-      await fs.writeFile(destinationPath, content);
+      await snapshotSourceFile(file.absolutePath, destinationPath);
+      const content = await fs.readFile(destinationPath);
       files.push({
         path: file.relativePath,
         bytes: content.byteLength,
@@ -460,6 +506,72 @@ class AwsS3ReplicationUploader implements S3ReplicationUploader {
       totalBytes: input.totalBytes,
     };
   }
+
+  async downloadDirectory(input: {
+    location: string;
+    destinationDir: string;
+  }): Promise<Omit<BackupTargetResult, "type" | "configured">> {
+    const { S3Client, GetObjectCommand, ListObjectsV2Command } = await import("@aws-sdk/client-s3");
+    const client = new S3Client({
+      region: this.config.region,
+      endpoint: this.config.endpoint,
+      forcePathStyle: this.config.forcePathStyle,
+      credentials: {
+        accessKeyId: this.config.accessKeyId,
+        secretAccessKey: this.config.secretAccessKey,
+      },
+    });
+    const parsed = parseS3Location(input.location);
+    if (parsed.bucket !== this.config.bucket) {
+      throw new Error(`Restore bucket ${parsed.bucket} does not match configured backup bucket ${this.config.bucket}.`);
+    }
+
+    await fs.mkdir(input.destinationDir, { recursive: true });
+    let continuationToken: string | undefined;
+    let transferredFiles = 0;
+    let totalBytes = 0;
+
+    do {
+      const page = await client.send(
+        new ListObjectsV2Command({
+          Bucket: parsed.bucket,
+          Prefix: parsed.prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+      const contents = page.Contents ?? [];
+      for (const item of contents) {
+        if (!item.Key || item.Key.endsWith("/")) {
+          continue;
+        }
+        const relativePath = item.Key.slice(parsed.prefix.length).replace(/^\/+/, "");
+        const destinationPath = path.join(input.destinationDir, relativePath.replaceAll("/", path.sep));
+        await fs.mkdir(path.dirname(destinationPath), { recursive: true });
+        const object = await client.send(
+          new GetObjectCommand({
+            Bucket: parsed.bucket,
+            Key: item.Key,
+          }),
+        );
+        const buffer = Buffer.from(await object.Body?.transformToByteArray?.() ?? []);
+        await fs.writeFile(destinationPath, buffer);
+        transferredFiles += 1;
+        totalBytes += buffer.byteLength;
+      }
+    } while (continuationToken);
+
+    if (transferredFiles === 0) {
+      throw new Error(`No objects found under ${input.location}.`);
+    }
+
+    return {
+      status: "success",
+      location: input.location,
+      transferredFiles,
+      totalBytes,
+    };
+  }
 }
 
 function normalizeS3Config(value?: Partial<S3BackupConfig>): S3BackupConfig | null {
@@ -486,6 +598,17 @@ function normalizeS3Config(value?: Partial<S3BackupConfig>): S3BackupConfig | nu
       value?.forcePathStyle ?? process.env.FINANCE_MESH_BACKUP_S3_FORCE_PATH_STYLE,
       false,
     ),
+  };
+}
+
+function parseS3Location(location: string): { bucket: string; prefix: string } {
+  const match = location.match(/^s3:\/\/([^/]+)\/?(.*)$/i);
+  if (!match?.[1]) {
+    throw new Error(`Invalid S3 location: ${location}`);
+  }
+  return {
+    bucket: match[1],
+    prefix: match[2] || "",
   };
 }
 
@@ -533,6 +656,25 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
     return false;
   }
   return fallback;
+}
+
+async function snapshotSourceFile(sourcePath: string, destinationPath: string): Promise<void> {
+  if (sourcePath.endsWith(".sqlite")) {
+    await snapshotSqliteDatabase(sourcePath, destinationPath);
+    return;
+  }
+
+  await fs.writeFile(destinationPath, await fs.readFile(sourcePath));
+}
+
+async function snapshotSqliteDatabase(sourcePath: string, destinationPath: string): Promise<void> {
+  await fs.rm(destinationPath, { force: true });
+  const database = new DatabaseSync(sourcePath);
+  try {
+    database.exec(`VACUUM INTO ${toSqliteStringLiteral(destinationPath)}`);
+  } finally {
+    database.close();
+  }
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -587,4 +729,8 @@ function hashContent(value: string): string {
 
 function hashBuffer(value: Buffer): string {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function toSqliteStringLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }

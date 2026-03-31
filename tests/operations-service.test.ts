@@ -12,6 +12,7 @@ import { runDecision } from "../src/engine.ts";
 import { LegalLibraryStore } from "../src/legal-library.ts";
 import { OperationsService } from "../src/operations-service.ts";
 import { runReplay } from "../src/replay.ts";
+import { RestoreDrillStore } from "../src/restore-drill-store.ts";
 import { RuntimeConfigStore } from "../src/runtime-config.ts";
 
 import type { EventPayload, FinancePack } from "../src/types.ts";
@@ -232,6 +233,18 @@ test("operations service returns a business-friendly overview and keeps open mod
       environment: "beta",
       teamScope: "north-america-finance",
     }),
+    restores: new RestoreDrillStore({
+      ledger,
+      backups: new BackupReplicationStore({
+        ledger,
+        sourceRoot: tempDir,
+        backupRoot: path.join(tempDir, "data", "backups"),
+        environment: "beta",
+        teamScope: "north-america-finance",
+      }),
+      drillRoot: path.join(tempDir, "data", "restore-drills"),
+      warnHours: 24,
+    }),
   });
 
   const overview = await operations.getDashboardOverview({
@@ -248,6 +261,7 @@ test("operations service returns a business-friendly overview and keeps open mod
   assert.equal(overview.decisioning.counts24h.replay, 1);
   assert.equal(overview.governance.legalLibrary.draftCount, 1);
   assert.equal(overview.governance.legalLibrary.approvedCount, 1);
+  assert.equal(overview.governance.recovery.status, "pending");
   assert.equal(overview.governance.backups.configuredTargetCount, 0);
   assert.ok(overview.actions.some((item) => item.intent === "run_example_decision"));
   assert.ok(overview.actions.some((item) => item.intent === "search_legal_library"));
@@ -334,6 +348,15 @@ test("operations health marks backup targets degraded when replication only part
     actor: login.actor,
     trigger: "manual",
   });
+  const restores = new RestoreDrillStore({
+    ledger,
+    backups,
+    drillRoot: path.join(tempDir, "data", "restore-drills"),
+    warnHours: 24,
+  });
+  await restores.runDrill({
+    actor: login.actor,
+  });
 
   const operations = new OperationsService({
     version: "0.1.0",
@@ -344,6 +367,7 @@ test("operations health marks backup targets degraded when replication only part
     auditLedger: ledger,
     auditRuns,
     backups,
+    restores,
   });
 
   const health = await operations.getHealthStatus();
@@ -357,9 +381,14 @@ test("operations health marks backup targets degraded when replication only part
 
   assert.equal(health.checks.runtime.status, "healthy");
   assert.equal(health.checks.backupTargets.status, "degraded");
+  assert.equal(health.checks.recoveryDrill.status, "healthy");
   assert.match(health.checks.backupTargets.summary, /部分成功/);
+  assert.match(health.checks.recoveryDrill.summary, /恢复演练已完成/);
   assert.equal(health.recent.backup?.status, "partial_failure");
+  assert.equal(health.recent.restoreDrill?.status, "success");
   assert.equal(overview.governance.backups.configuredTargetCount, 2);
+  assert.equal(overview.governance.recovery.status, "success");
   assert.ok(overview.governance.backups.lastBackup);
+  assert.ok(overview.governance.recovery.latestDrill);
   assert.match(overview.governance.backups.summary, /部分成功/);
 });

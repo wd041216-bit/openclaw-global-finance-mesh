@@ -3,6 +3,7 @@ import { AuditLedgerStore, type AuditIntegrityStatus } from "./audit-ledger.ts";
 import { AuditRunStore, type AuditRunSummary } from "./audit-store.ts";
 import { AccessControlStore, type AccessSessionState, type AuthenticatedActor } from "./access-control.ts";
 import { LegalLibraryStore } from "./legal-library.ts";
+import { RestoreDrillStore, type RestoreDrillSummary } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
 
 export type DashboardWorkspace = "workbench" | "library" | "governance" | "system";
@@ -54,6 +55,15 @@ export interface DashboardOverview {
     sessions: {
       activeCount: number;
     };
+    recovery: {
+      status: RestoreDrillStatusCard["status"];
+      lastDrillAt?: string;
+      lastSuccessAt?: string;
+      isStale: boolean;
+      summary: string;
+      recommendedAction: string;
+      latestDrill: RestoreDrillStatusCard | null;
+    };
     backups: {
       configuredTargetCount: number;
       summary: string;
@@ -74,6 +84,7 @@ export interface DashboardQuickAction {
     | "search_legal_library"
     | "open_system_health"
     | "verify_audit_chain"
+    | "run_restore_drill"
     | "configure_backups"
     | "review_draft_documents"
     | "open_login";
@@ -92,10 +103,12 @@ export interface OperationsHealthStatus {
     ledger: OperationsCheck;
     legalLibrary: OperationsCheck;
     backupTargets: OperationsCheck;
+    recoveryDrill: OperationsCheck;
   };
   recent: {
     probe: RunHealthSummary | null;
     backup: BackupSummaryCard | null;
+    restoreDrill: RestoreDrillStatusCard | null;
   };
 }
 
@@ -135,6 +148,18 @@ interface BackupSummaryCard {
   successfulTargetCount: number;
 }
 
+interface RestoreDrillStatusCard {
+  drillId: string;
+  backupId?: string;
+  createdAt: string;
+  completedAt?: string;
+  sourceType: string;
+  status: "success" | "degraded" | "failure";
+  summary: string;
+  warningCount: number;
+  failureCount: number;
+}
+
 interface OperationsServiceOptions {
   version: string;
   startedAt?: number;
@@ -144,6 +169,7 @@ interface OperationsServiceOptions {
   auditLedger: AuditLedgerStore;
   auditRuns: AuditRunStore;
   backups: BackupReplicationStore;
+  restores: RestoreDrillStore;
 }
 
 export class OperationsService {
@@ -155,6 +181,7 @@ export class OperationsService {
   private readonly auditLedger: AuditLedgerStore;
   private readonly auditRuns: AuditRunStore;
   private readonly backups: BackupReplicationStore;
+  private readonly restores: RestoreDrillStore;
 
   constructor(options: OperationsServiceOptions) {
     this.version = options.version;
@@ -165,13 +192,14 @@ export class OperationsService {
     this.auditLedger = options.auditLedger;
     this.auditRuns = options.auditRuns;
     this.backups = options.backups;
+    this.restores = options.restores;
   }
 
   async getDashboardOverview(session: AccessSessionState): Promise<DashboardOverview> {
     const generatedAt = new Date().toISOString();
     const accessConfig = await this.accessControl.getPublicConfig(session.actor);
     const runtimeConfig = await this.runtimeStore.getPublic();
-    const [legalStats, integrity, latestProbe, latestDecision, latestReplay, lastBackup, activeSessions, decisionCount24h, replayCount24h] =
+    const [legalStats, integrity, latestProbe, latestDecision, latestReplay, lastBackup, latestRestore, lastSuccessfulRestore, activeSessions, decisionCount24h, replayCount24h] =
       await Promise.all([
         this.legalLibrary.getStats(),
         this.auditLedger.getIntegrityStatus(),
@@ -179,10 +207,13 @@ export class OperationsService {
         this.getLatestRun("decision"),
         this.getLatestRun("replay"),
         this.backups.getLatest(),
+        this.restores.getLatest(),
+        this.restores.getLatestSuccessful(),
         this.accessControl.countActiveSessions(),
         this.auditRuns.countSince(hoursAgo(24), { types: ["decision"] }),
         this.auditRuns.countSince(hoursAgo(24), { types: ["replay"] }),
       ]);
+    const recovery = summarizeRecovery(latestRestore, lastSuccessfulRestore, this.restores.getWarnHours());
 
     const overview: DashboardOverview = {
       generatedAt,
@@ -230,6 +261,15 @@ export class OperationsService {
         sessions: {
           activeCount: activeSessions,
         },
+        recovery: {
+          status: recovery.status,
+          lastDrillAt: recovery.lastDrillAt,
+          lastSuccessAt: recovery.lastSuccessAt,
+          isStale: recovery.isStale,
+          summary: recovery.summary,
+          recommendedAction: recovery.recommendedAction,
+          latestDrill: recovery.latestDrill,
+        },
         backups: {
           configuredTargetCount: this.backups.getConfigurationStatus().configuredTargetCount,
           summary: summarizeBackupStatus(this.backups.getConfigurationStatus(), lastBackup),
@@ -242,6 +282,7 @@ export class OperationsService {
         draftCount: legalStats.byStatus.draft,
         integrity,
         backupConfigured: this.backups.getConfigurationStatus().anyConfigured,
+        recovery,
       }),
     };
 
@@ -250,14 +291,17 @@ export class OperationsService {
 
   async getHealthStatus(): Promise<OperationsHealthStatus> {
     const checkedAt = new Date().toISOString();
-    const [runtimeConfig, legalStats, integrity, latestProbe, latestBackup] = await Promise.all([
+    const [runtimeConfig, legalStats, integrity, latestProbe, latestBackup, latestRestore, lastSuccessfulRestore] = await Promise.all([
       this.runtimeStore.getPublic(),
       this.legalLibrary.getStats(),
       this.auditLedger.getIntegrityStatus(),
       this.getLatestRun("probe"),
       this.backups.getLatest(),
+      this.restores.getLatest(),
+      this.restores.getLatestSuccessful(),
     ]);
     const backupConfig = this.backups.getConfigurationStatus();
+    const recovery = summarizeRecovery(latestRestore, lastSuccessfulRestore, this.restores.getWarnHours());
 
     return {
       service: "zhouheng-global-finance-mesh",
@@ -271,10 +315,12 @@ export class OperationsService {
         ledger: buildLedgerCheck(checkedAt, integrity),
         legalLibrary: buildLegalLibraryCheck(checkedAt, legalStats),
         backupTargets: buildBackupCheck(checkedAt, backupConfig, latestBackup),
+        recoveryDrill: buildRecoveryCheck(checkedAt, recovery),
       },
       recent: {
         probe: latestProbe ? summarizeProbe(latestProbe) : null,
         backup: latestBackup ? summarizeBackup(latestBackup) : null,
+        restoreDrill: recovery.latestDrill,
       },
     };
   }
@@ -406,12 +452,102 @@ function summarizeBackup(backup: BackupJobSummary): BackupSummaryCard {
   };
 }
 
+function summarizeRestoreDrill(restore: RestoreDrillSummary): RestoreDrillStatusCard {
+  const warningCount = restore.checks.filter((item) => item.status === "warning").length;
+  const failureCount = restore.checks.filter((item) => item.status === "failure").length;
+  const summary =
+    restore.status === "success"
+      ? "最近一次恢复演练已完成，off-box 备份可以被验证性恢复。"
+      : restore.status === "degraded"
+        ? "最近一次恢复演练可用，但仍有恢复风险需要处理。"
+        : "最近一次恢复演练失败，需要先修复恢复链路。";
+
+  return {
+    drillId: restore.drillId,
+    backupId: restore.backupId,
+    createdAt: restore.createdAt,
+    completedAt: restore.completedAt,
+    sourceType: restore.sourceType,
+    status: restore.status,
+    summary,
+    warningCount,
+    failureCount,
+  };
+}
+
+function summarizeRecovery(
+  latestRestore: RestoreDrillSummary | null,
+  lastSuccessfulRestore: RestoreDrillSummary | null,
+  warnHours: number,
+): {
+  status: RestoreDrillStatusCard["status"] | "pending";
+  summary: string;
+  recommendedAction: string;
+  isStale: boolean;
+  lastDrillAt?: string;
+  lastSuccessAt?: string;
+  latestDrill: RestoreDrillStatusCard | null;
+} {
+  if (!latestRestore) {
+    return {
+      status: "pending",
+      summary: "还没有执行过恢复演练，当前只能证明能备份，不能证明能恢复。",
+      recommendedAction: "建议管理员立即执行一次恢复演练，优先验证 S3 或挂载目录恢复链路。",
+      isStale: true,
+      latestDrill: null,
+    };
+  }
+
+  const latestDrill = summarizeRestoreDrill(latestRestore);
+  const lastSuccessAt = lastSuccessfulRestore?.createdAt;
+  const isStale = isOlderThan(lastSuccessAt ?? latestRestore.createdAt, warnHours);
+
+  if (latestRestore.status === "failure") {
+    return {
+      status: "failure",
+      summary: latestDrill.summary,
+      recommendedAction: "先修复失败检查项，再重新运行恢复演练。",
+      isStale: true,
+      lastDrillAt: latestRestore.createdAt,
+      lastSuccessAt,
+      latestDrill,
+    };
+  }
+
+  if (latestRestore.status === "degraded" || isStale) {
+    return {
+      status: "degraded",
+      summary: latestRestore.status === "degraded"
+        ? latestDrill.summary
+        : "最近一次成功恢复演练已经过期，建议重新验证恢复路径。",
+      recommendedAction: latestRestore.status === "degraded"
+        ? "优先把恢复源切换到 off-box 目标，并清理 warning 后重新演练。"
+        : "建议重新运行恢复演练，确认最近备份仍可恢复。",
+      isStale,
+      lastDrillAt: latestRestore.createdAt,
+      lastSuccessAt,
+      latestDrill,
+    };
+  }
+
+  return {
+    status: "success",
+    summary: latestDrill.summary,
+    recommendedAction: "当前恢复链路健康，继续保持按周期演练即可。",
+    isStale: false,
+    lastDrillAt: latestRestore.createdAt,
+    lastSuccessAt,
+    latestDrill,
+  };
+}
+
 function buildActions(input: {
   session: AccessSessionState;
   accessConfig: Awaited<ReturnType<AccessControlStore["getPublicConfig"]>>;
   draftCount: number;
   integrity: AuditIntegrityStatus;
   backupConfigured: boolean;
+  recovery: ReturnType<typeof summarizeRecovery>;
 }): DashboardQuickAction[] {
   const actions: DashboardQuickAction[] = [];
 
@@ -491,6 +627,17 @@ function buildActions(input: {
       description: "为审计账本和会话状态启用目录或 S3 兼容备份。",
       workspace: "system",
       intent: "configure_backups",
+      tone: "warning",
+    });
+  }
+
+  if ((input.recovery.status === "failure" || input.recovery.status === "degraded" || input.recovery.status === "pending") && hasRole(input.session.actor, "admin")) {
+    actions.push({
+      id: "run-restore-drill",
+      title: "执行恢复演练",
+      description: input.recovery.recommendedAction,
+      workspace: "governance",
+      intent: "run_restore_drill",
       tone: "warning",
     });
   }
@@ -626,6 +773,54 @@ function buildBackupCheck(
   };
 }
 
+function buildRecoveryCheck(
+  checkedAt: string,
+  recovery: ReturnType<typeof summarizeRecovery>,
+): OperationsCheck {
+  if (recovery.status === "pending") {
+    return {
+      status: "degraded",
+      summary: recovery.summary,
+      checkedAt,
+      detail: {
+        recommendation: recovery.recommendedAction,
+      },
+    };
+  }
+  if (recovery.status === "failure") {
+    return {
+      status: "down",
+      summary: recovery.summary,
+      checkedAt,
+      detail: {
+        lastDrillAt: recovery.lastDrillAt,
+        recommendation: recovery.recommendedAction,
+      },
+    };
+  }
+  if (recovery.status === "degraded") {
+    return {
+      status: "degraded",
+      summary: recovery.summary,
+      checkedAt,
+      detail: {
+        lastDrillAt: recovery.lastDrillAt,
+        lastSuccessAt: recovery.lastSuccessAt,
+        recommendation: recovery.recommendedAction,
+      },
+    };
+  }
+  return {
+    status: "healthy",
+    summary: recovery.summary,
+    checkedAt,
+    detail: {
+      lastDrillAt: recovery.lastDrillAt,
+      lastSuccessAt: recovery.lastSuccessAt,
+    },
+  };
+}
+
 function translateAuthMethod(value: string | undefined): string {
   if (value === "oidc") {
     return "企业身份";
@@ -670,4 +865,15 @@ function hasRole(actor: AuthenticatedActor | null, requiredRole: "reviewer" | "a
 
 function hoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
+function isOlderThan(value: string | undefined, warnHours: number): boolean {
+  if (!value) {
+    return true;
+  }
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    return true;
+  }
+  return Date.now() - timestamp > warnHours * 60 * 60 * 1000;
 }
