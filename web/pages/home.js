@@ -188,10 +188,10 @@ function render() {
           ${sectionHubCard({
             kicker: "兼容层",
             title: "Agent Hub",
-            note: "继续查看 OpenClaw、Claude、Manus 的接入方式，但不会干扰主业务路径。",
+            note: "继续查看 OpenClaw、Claude、Manus、Cursor、Cline、Cherry Studio 的接入方式，但不会干扰主业务路径。",
             href: "/agents.html",
             buttonLabel: "查看 Agent Hub",
-            meta: ["统一 adapter registry"],
+            meta: ["统一 adapter registry", experience?.nextRecommendedInstall ? `建议先接入 ${experience.nextRecommendedInstall.title}` : "共享 MCP 入口"],
             pillHtml: pill("info", "Agent"),
           })}
         </div>

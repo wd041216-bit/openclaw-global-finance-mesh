@@ -11,11 +11,15 @@ const REPO_ROOT = path.resolve(TEST_DIR, "..");
 
 test("agent adapter registry exposes unified metadata and artifacts", async () => {
   const adapters = listAgentAdapters();
-  assert.deepEqual(adapters.map((item) => item.id).sort(), ["claude", "manus", "openclaw"]);
+  assert.deepEqual(adapters.map((item) => item.id).sort(), ["cherry", "claude", "cline", "cursor", "manus", "openclaw"]);
 
   for (const adapter of adapters) {
     assert.ok(adapter.supportLevel);
     assert.ok(adapter.smokeCommand);
+    assert.ok(Array.isArray(adapter.hosts));
+    assert.ok(adapter.hosts.length >= 1);
+    assert.ok(Array.isArray(adapter.platforms));
+    assert.ok(adapter.platforms.length >= 1);
     assert.ok(Array.isArray(adapter.testedHosts));
     assert.ok(adapter.testedHosts.length >= 1);
     assert.ok(Array.isArray(adapter.troubleshooting));
@@ -29,10 +33,35 @@ test("agent adapter registry exposes unified metadata and artifacts", async () =
 
   const claude = getAgentAdapterOrThrow("claude");
   const manus = getAgentAdapterOrThrow("manus");
+  const cursor = getAgentAdapterOrThrow("cursor");
+  const cline = getAgentAdapterOrThrow("cline");
+  const cherry = getAgentAdapterOrThrow("cherry");
   assert.equal(claude.entrypoint, "integrations/mcp/server.ts");
   assert.equal(manus.entrypoint, "integrations/mcp/server.ts");
+  assert.equal(cursor.entrypoint, "integrations/mcp/server.ts");
+  assert.equal(cline.entrypoint, "integrations/mcp/server.ts");
+  assert.equal(cherry.entrypoint, "integrations/mcp/server.ts");
   assert.equal(claude.smokeCommand, "npm run smoke:mcp");
   assert.equal(manus.smokeCommand, "npm run smoke:mcp");
+  assert.equal(cursor.smokeCommand, "npm run smoke:mcp");
+  assert.equal(cline.smokeCommand, "npm run smoke:mcp");
+  assert.equal(cherry.smokeCommand, "npm run smoke:mcp");
+
+  for (const adapterId of ["claude", "manus", "cursor", "cline", "cherry"] as const) {
+    const adapter = getAgentAdapterOrThrow(adapterId);
+    const configPath = path.join(REPO_ROOT, adapter.configTemplatePath);
+    const docsPath = path.join(REPO_ROOT, adapter.docsPath);
+    const [configRaw, docsRaw] = await Promise.all([
+      fs.readFile(configPath, "utf8"),
+      fs.readFile(docsPath, "utf8"),
+    ]);
+    assert.match(configRaw, /integrations\/mcp\/server\.ts/);
+    assert.match(configRaw, /FINANCE_MESH_REPO_ROOT/);
+    assert.match(configRaw, /FINANCE_MESH_MCP_PACK_ROOTS/);
+    assert.match(docsRaw, /## Local setup/);
+    assert.match(docsRaw, /## Verification/);
+    assert.match(docsRaw, /## Common failures/);
+  }
 });
 
 test("openclaw config example stays aligned with the registry contract", async () => {

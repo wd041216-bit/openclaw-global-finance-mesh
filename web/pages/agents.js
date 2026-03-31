@@ -28,7 +28,7 @@ async function render() {
               <div>
                 <p class="section-kicker">接入原则</p>
                 <h3>先统一契约，再区分宿主</h3>
-                <p class="section-copy">OpenClaw 走原生 plugin，Claude / Manus 走同一个共享 MCP 入口。业务能力保持同一事实源，不为不同宿主复制一套实现。</p>
+                <p class="section-copy">OpenClaw 走原生 plugin，Claude / Manus / Cursor / Cline / Cherry Studio 走同一个共享 MCP 入口。业务能力保持同一事实源，不为不同宿主复制一套实现。</p>
               </div>
             </div>
             <div class="summary-grid">
@@ -41,10 +41,10 @@ async function render() {
               })}
               ${summaryCard({
                 kicker: "当前策略",
-                title: "Claude / Manus = Shared MCP",
-                note: "两者复用同一个本地 stdio MCP server，避免 host-specific 分叉。",
+                title: "Claude / Manus / Cursor / Cline / Cherry = Shared MCP",
+                note: "五个宿主复用同一个本地 stdio MCP server，避免 host-specific 分叉。",
                 pillHtml: pill("warn", "shared_mcp_beta"),
-                meta: ["工具面：5 个 finance_mesh_* 工具"],
+                meta: ["工具面：5 个 finance_mesh_* 工具", "统一入口：integrations/mcp/server.ts"],
               })}
             </div>
           </article>
@@ -64,7 +64,7 @@ async function render() {
               ${stepCard({
                 step: "02",
                 title: "再确认工具能被列出",
-                note: "Claude / Manus 至少要看到五个 finance_mesh_* 工具；OpenClaw 至少要看到三个原生工具。",
+                note: "Claude / Manus / Cursor / Cline / Cherry 至少要看到五个 finance_mesh_* 工具；OpenClaw 至少要看到三个原生工具。",
               })}
               ${stepCard({
                 step: "03",
@@ -75,7 +75,7 @@ async function render() {
                 step: "04",
                 title: "统一跑一遍宿主诊断",
                 note: "当你不确定问题在配置、入口还是工具契约时，直接执行 npm run doctor:hosts。",
-                footer: "这条命令会串起 MCP smoke、OpenClaw fixture smoke，以及三家接入文档/配置模板检查。",
+                footer: "这条命令会串起 MCP smoke、OpenClaw fixture smoke，以及六家宿主的接入文档/配置模板检查。",
               })}
             </div>
           </article>
@@ -103,7 +103,7 @@ function renderAdapterCard(adapter) {
   const startArtifact = findArtifact(adapter, "command");
   const verifyArtifact = findArtifact(adapter, "verify");
   return `
-    <article class="install-card agent-card">
+    <article id="adapter-${adapter.id}" class="install-card agent-card">
       <div class="record-head">
         <div>
           <p class="section-kicker">${adapter.kind === "openclaw_plugin" ? "OpenClaw Plugin" : "MCP Connector"}</p>
@@ -120,7 +120,11 @@ function renderAdapterCard(adapter) {
         title: adapter.installGuide.title,
         note: adapter.installGuide.summary,
         pillHtml: pill("info", adapter.installMode),
-        meta: adapter.testedHosts?.length ? adapter.testedHosts : [],
+        meta: [
+          ...(adapter.hosts?.length ? [`宿主 ${adapter.hosts.join(" / ")}`] : []),
+          ...(adapter.platforms?.length ? [`平台 ${adapter.platforms.join(" / ")}`] : []),
+          ...(adapter.testedHosts?.length ? adapter.testedHosts : []),
+        ],
       })}
       <div>
         <p class="section-kicker">能力覆盖</p>

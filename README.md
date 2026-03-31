@@ -12,7 +12,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
   <img src="./docs/assets/governance-apple-ui.png" alt="Governance center with summary-first integrity and export status" width="15%" />
   <img src="./docs/assets/system-apple-ui.png" alt="System page with identity and runtime summaries" width="15%" />
   <img src="./docs/assets/recovery-apple-ui.png" alt="Recovery center with backup and restore readiness" width="15%" />
-  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw, Claude, and Manus setup cards" width="15%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw plus Claude/Manus/Cursor/Cline/Cherry Studio setup cards" width="15%" />
 </p>
 
 ## What ships in the current baseline
@@ -26,7 +26,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
   - `治理中心` for integrity, exports, and operator activity
   - `恢复中心` for backups, restore drills, and recovery guidance
   - `系统设置` for identity, session, runtime, and observability controls
-  - `Agent Hub` for OpenClaw, Claude, and Manus connector guidance ordered as capabilities, start, verify, then technical details
+  - `Agent Hub` for OpenClaw plus Claude/Manus/Cursor/Cline/Cherry Studio connector guidance ordered as capabilities, start, verify, then technical details
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
@@ -46,7 +46,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
   - audit integrity read
 - structured request logging with request, actor, run, and backup references
 - persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
-- unified local-first adapter registry for OpenClaw native plugin mode plus Claude/Manus MCP connector mode
+- unified local-first adapter registry for OpenClaw native plugin mode plus Claude/Manus/Cursor/Cline/Cherry Studio MCP connector mode
 - example Country, Industry, Entity, Control, and Output Packs
 - example SaaS annual prepayment event
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
@@ -175,7 +175,7 @@ Recommended install path:
 - install the app into `/Applications`
 - launch `Zhouheng Finance Mesh.app`
 
-The desktop app now runs as a menu bar controller, keeps user state under `~/Library/Application Support/Zhouheng Finance Mesh`, opens `system.html` on first launch, and defaults to:
+The desktop app now runs as a menu bar controller, keeps user state under `~/Library/Application Support/Zhouheng Finance Mesh`, opens `getting-started.html?mode=admin&entry=desktop` on first launch, and defaults to:
 
 - `OLLAMA_MODE=cloud`
 - `OLLAMA_MODEL=kimi-k2.5`
@@ -267,6 +267,9 @@ Zhouheng now has a unified adapter registry instead of a one-off OpenClaw-only i
 - `integrations/mcp/server.ts` is the shared local-first MCP entrypoint
 - `integrations/claude/` contains Claude connector docs and example MCP config
 - `integrations/manus/` contains Manus connector docs and example MCP config
+- `integrations/cursor/` contains Cursor connector docs and example MCP config
+- `integrations/cline/` contains Cline connector docs and example MCP config
+- `integrations/cherry-studio/` contains Cherry Studio connector docs and example MCP config
 - `npm run mcp:serve` starts the shared MCP connector directly
 - `npm run smoke:mcp` validates that the MCP server lists all five tools and can execute structured decision/legal-library calls locally
 - `npm run smoke:openclaw` loads the native OpenClaw adapter in a fixture host and verifies three tools plus prompt guidance
@@ -286,7 +289,7 @@ All five shared MCP tools now return:
 - stable `structuredContent`
 - an explicit `outputSchema`
 
-This keeps Claude and Manus on the same contract, while OpenClaw continues to use its native plugin surface with artifact drift checked against the same contract.
+This keeps Claude/Manus/Cursor/Cline/Cherry Studio on one shared contract, while OpenClaw continues to use its native plugin surface with artifact drift checked against the same contract.
 
 ## Legal library governance
 
@@ -386,6 +389,9 @@ See:
 - [integrations/mcp/README.md](./integrations/mcp/README.md)
 - [integrations/claude/README.md](./integrations/claude/README.md)
 - [integrations/manus/README.md](./integrations/manus/README.md)
+- [integrations/cursor/README.md](./integrations/cursor/README.md)
+- [integrations/cline/README.md](./integrations/cline/README.md)
+- [integrations/cherry-studio/README.md](./integrations/cherry-studio/README.md)
 
 ## Delivery posture
 

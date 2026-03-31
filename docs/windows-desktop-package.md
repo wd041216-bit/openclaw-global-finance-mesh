@@ -48,15 +48,17 @@ On first launch the tray app:
    - `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
    - `FINANCE_MESH_BASE_URL=http://127.0.0.1:3030`
 3. starts the local service
-4. opens the workbench or system page in the browser
+4. opens `getting-started.html?mode=admin&entry=desktop` as the unified first-launch onboarding
 
 ## Tray experience
 
 The Windows package includes a tray controller that can:
 
+- open `首次向导`
 - open `工作台`
 - open `系统设置`
 - open `恢复中心`
+- open `Agent Hub`
 - restart / stop the local service
 - open the desktop config
 - open the data directory

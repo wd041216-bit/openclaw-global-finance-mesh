@@ -71,7 +71,7 @@ function render() {
   const runtime = overview?.runtime;
   const runtimeDiagnosis = runtime?.diagnosis;
   const runtimeDoctorReport = runtime?.verification || runtime?.doctorReport;
-  const startCallout = buildPilotStartCallout(overview, runtimeDoctorReport);
+  const startCallout = buildPilotStartCallout(globalData, overview, runtimeDoctorReport);
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -189,7 +189,20 @@ function render() {
   `;
 }
 
-function buildPilotStartCallout(overview, verification) {
+function buildPilotStartCallout(globalData, overview, verification) {
+  if (globalData?.prefs?.desktopOnboardingSeen && !globalData?.prefs?.desktopOnboardingCompleted) {
+    return calloutCard({
+      kicker: "桌面首次向导",
+      title: "建议先回到向导完成管理员链路",
+      note: overview?.experience?.desktopEntry?.summary || "首次向导未完成时，业务页建议先读摘要，不要直接开展正式试点动作。",
+      tone: "warning",
+      meta: [
+        "入口：开始使用（desktop）",
+        ...(overview?.experience?.desktopBlockers?.slice(0, 1) || []),
+      ],
+    });
+  }
+
   if (overview?.identity?.bootstrapRequired) {
     return calloutCard({
       kicker: "试点第一步",

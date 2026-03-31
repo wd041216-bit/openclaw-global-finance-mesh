@@ -22,7 +22,7 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 async function main() {
   const adapters = listAgentAdapters();
-  assert.equal(adapters.length, 3);
+  assert.equal(adapters.length, 6);
 
   for (const adapter of adapters) {
     await assertFileExists(resolveRepoPath(adapter.docsPath), `${adapter.id} docs`);
@@ -42,26 +42,88 @@ async function main() {
 }
 
 async function verifySharedMcpTemplates() {
-  const claude = getAgentAdapterOrThrow("claude");
-  const manus = getAgentAdapterOrThrow("manus");
-  const claudeConfig = JSON.parse(await fs.readFile(resolveRepoPath(claude.configTemplatePath), "utf8"));
-  const manusConfig = JSON.parse(await fs.readFile(resolveRepoPath(manus.configTemplatePath), "utf8"));
+  const mcpAdapterIds = ["claude", "manus", "cursor", "cline", "cherry"] as const;
+  let sharedEntrypoint: string | null = null;
 
-  assert.equal(claude.entrypoint, "integrations/mcp/server.ts");
-  assert.equal(manus.entrypoint, "integrations/mcp/server.ts");
-  assert.equal(claudeConfig.mcpServers["zhouheng-global-finance-mesh"].args[0], manusConfig.args[0]);
-  assert.match(String(claudeConfig.mcpServers["zhouheng-global-finance-mesh"].args[0]), /integrations\/mcp\/server\.ts$/);
-  assert.equal(
-    claudeConfig.mcpServers["zhouheng-global-finance-mesh"].env.FINANCE_MESH_MCP_PACK_ROOTS,
-    manusConfig.env.FINANCE_MESH_MCP_PACK_ROOTS,
-  );
+  for (const adapterId of mcpAdapterIds) {
+    const adapter = getAgentAdapterOrThrow(adapterId);
+    const config = JSON.parse(await fs.readFile(resolveRepoPath(adapter.configTemplatePath), "utf8"));
+    const templateInfo = readMcpTemplateInfo(adapterId, config);
 
-  const claudeDoc = await fs.readFile(resolveRepoPath(claude.docsPath), "utf8");
-  const manusDoc = await fs.readFile(resolveRepoPath(manus.docsPath), "utf8");
-  for (const marker of ["## Local setup", "## Verification", "## Common failures"]) {
-    assert.match(claudeDoc, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(manusDoc, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.equal(adapter.entrypoint, "integrations/mcp/server.ts");
+    assert.match(templateInfo.serverArg, /integrations\/mcp\/server\.ts$/);
+    assert.equal(templateInfo.packRoots, "examples/packs");
+    assert.match(templateInfo.repoRoot, /zhouheng-global-finance-mesh$/);
+    if (sharedEntrypoint == null) {
+      sharedEntrypoint = templateInfo.serverArg;
+    } else {
+      assert.equal(templateInfo.serverArg, sharedEntrypoint);
+    }
+
+    const doc = await fs.readFile(resolveRepoPath(adapter.docsPath), "utf8");
+    for (const marker of ["## Local setup", "## Verification", "## Common failures"]) {
+      assert.match(doc, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
   }
+}
+
+function readMcpTemplateInfo(adapterId: string, config: Record<string, unknown>): {
+  serverArg: string;
+  repoRoot: string;
+  packRoots: string;
+} {
+  if (adapterId === "manus") {
+    return readServerShape(config);
+  }
+  if (adapterId === "claude" || adapterId === "cursor") {
+    const server = (
+      config as {
+        mcpServers?: Record<string, unknown>;
+      }
+    ).mcpServers?.["zhouheng-global-finance-mesh"];
+    return readServerShape(server);
+  }
+  if (adapterId === "cline") {
+    const server = (
+      config as {
+        "mcp.servers"?: Record<string, unknown>;
+      }
+    )["mcp.servers"]?.["zhouheng-global-finance-mesh"];
+    return readServerShape(server);
+  }
+  if (adapterId === "cherry") {
+    const server = (
+      config as {
+        mcp?: {
+          servers?: Record<string, unknown>;
+        };
+      }
+    ).mcp?.servers?.["zhouheng-global-finance-mesh"];
+    return readServerShape(server);
+  }
+  throw new Error(`Unsupported MCP adapter template parser: ${adapterId}`);
+}
+
+function readServerShape(server: unknown): {
+  serverArg: string;
+  repoRoot: string;
+  packRoots: string;
+} {
+  const entry = server as {
+    args?: unknown[];
+    env?: Record<string, unknown>;
+  };
+  const arg0 = String(entry?.args?.[0] ?? "");
+  const repoRoot = String(entry?.env?.FINANCE_MESH_REPO_ROOT ?? "");
+  const packRoots = String(entry?.env?.FINANCE_MESH_MCP_PACK_ROOTS ?? "");
+  assert.ok(arg0.length > 0, "mcp template should include args[0]");
+  assert.ok(repoRoot.length > 0, "mcp template should include FINANCE_MESH_REPO_ROOT");
+  assert.ok(packRoots.length > 0, "mcp template should include FINANCE_MESH_MCP_PACK_ROOTS");
+  return {
+    serverArg: arg0,
+    repoRoot,
+    packRoots,
+  };
 }
 
 async function verifyOpenClawArtifacts() {

@@ -4,6 +4,8 @@ const STORAGE_KEYS = {
   lastAction: "financeMesh.lastAction",
   preferredRoleEntry: "financeMesh.preferredRoleEntry",
   preferredConsoleMode: "financeMesh.preferredConsoleMode",
+  desktopOnboardingSeen: "financeMesh.desktopOnboardingSeen",
+  desktopOnboardingCompleted: "financeMesh.desktopOnboardingCompleted",
 };
 
 const sessionState = {
@@ -19,6 +21,8 @@ export function getPrefs() {
     lastAction: window.localStorage.getItem(STORAGE_KEYS.lastAction) || "",
     preferredRoleEntry: window.localStorage.getItem(STORAGE_KEYS.preferredRoleEntry) || "workbench",
     preferredConsoleMode: window.localStorage.getItem(STORAGE_KEYS.preferredConsoleMode) || "",
+    desktopOnboardingSeen: window.localStorage.getItem(STORAGE_KEYS.desktopOnboardingSeen) === "true",
+    desktopOnboardingCompleted: window.localStorage.getItem(STORAGE_KEYS.desktopOnboardingCompleted) === "true",
   };
 }
 
@@ -47,6 +51,14 @@ export function setPreferredRoleEntry(entry) {
 
 export function setPreferredConsoleMode(mode) {
   window.localStorage.setItem(STORAGE_KEYS.preferredConsoleMode, mode);
+}
+
+export function setDesktopOnboardingSeen(seen = true) {
+  window.localStorage.setItem(STORAGE_KEYS.desktopOnboardingSeen, String(Boolean(seen)));
+}
+
+export function setDesktopOnboardingCompleted(completed = true) {
+  window.localStorage.setItem(STORAGE_KEYS.desktopOnboardingCompleted, String(Boolean(completed)));
 }
 
 export function getPreferredConsoleMode(globalData) {

@@ -97,13 +97,15 @@ On first launch the app:
    - `FINANCE_MESH_DATA_ROOT=~/Library/Application Support/Zhouheng Finance Mesh/data`
 3. starts the local service
 4. appears in the macOS menu bar
-5. opens `system.html` for bootstrap and runtime setup
+5. opens `getting-started.html?mode=admin&entry=desktop` as the unified first-launch onboarding
 
 After the first launch, the menu bar app lets you:
 
+- open `首次向导`
 - open `工作台`
 - open `系统设置`
 - open `恢复中心`
+- open `Agent Hub`
 - restart or stop the local service
 - open the desktop config, data folder, and server log
 
