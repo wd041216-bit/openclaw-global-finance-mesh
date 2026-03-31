@@ -26,7 +26,7 @@ Make cloud runtime failures diagnosable without guessing whether the problem is:
 
 ```bash
 export OLLAMA_MODE=cloud
-export OLLAMA_MODEL=qwen3:8b
+export OLLAMA_MODEL=kimi-k2.5
 export OLLAMA_CLOUD_BASE_URL=https://ollama.com
 export OLLAMA_API_KEY=replace_me
 export FINANCE_MESH_CLOUD_API_FLAVOR=auto
@@ -49,6 +49,14 @@ You will get:
 - the normalized diagnosis object
 - a cloud doctor report with provider guess, suggested protocol, manual `curl` checks, and escalation text
 - a standardized verification record you can archive for pilot signoff
+
+For the current external pilot, the target end-state is:
+
+- provider: `Ollama Cloud`
+- model: `kimi-k2.5`
+- `verificationStatus=fully_usable`
+- `goLiveReady=true`
+- `validatedFlavor=ollama_native`
 
 ## How to read the result
 
@@ -140,11 +148,12 @@ These diagnostics can prove whether the remaining blocker is likely on the provi
 
 ## Verified provider record
 
-The first real provider verification record now lives here:
+The reference provider records now live here:
 
 - [docs/cloud-verification-2026-03-31-ollama-cloud.md](./cloud-verification-2026-03-31-ollama-cloud.md)
+- [docs/cloud-verification-2026-03-31-ollama-cloud-kimi-k2-5.md](./cloud-verification-2026-03-31-ollama-cloud-kimi-k2-5.md)
 
-That run confirmed a real `catalog_only_entitlement_blocked` case on `Ollama Cloud`:
+The first record confirmed a real `catalog_only_entitlement_blocked` case on `Ollama Cloud`:
 
 - `GET /api/tags` -> `200`
 - `GET /v1/models` -> `200`
@@ -153,12 +162,26 @@ That run confirmed a real `catalog_only_entitlement_blocked` case on `Ollama Clo
 
 This is the reference example for “目录可读，但推理 entitlement 仍被 provider 挡住”.
 
+The second record confirms the current formal pilot default:
+
+- provider: `Ollama Cloud`
+- model: `kimi-k2.5`
+- `GET /api/tags` -> `200`
+- `GET /v1/models` -> `200`
+- `POST /api/chat` -> `200`
+- `POST /v1/chat/completions` -> `200`
+- `validatedFlavor=ollama_native`
+- `verificationStatus=fully_usable`
+- `goLiveReady=true`
+
 ## Pilot artifact rule
 
-For external-pilot signoff, keep one verification artifact per provider class:
+For the current external pilot signoff, `Ollama Cloud` is the only hard runtime gate. OpenAI-compatible gateways remain optional follow-on validation work, not a blocker for this release.
 
-- one for `Ollama Cloud`
-- one for an `OpenAI-compatible gateway`
+Keep at least these two artifacts:
+
+- one blocked `Ollama Cloud` example for entitlement troubleshooting
+- one successful `Ollama Cloud + kimi-k2.5` example for go-live proof
 
 Each artifact should include:
 

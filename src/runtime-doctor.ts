@@ -54,8 +54,12 @@ export interface RuntimeDoctorReport {
   currentFlavorLabel: string;
   recommendedFlavor: CloudApiFlavor;
   recommendedFlavorLabel: string;
+  verifiedModel?: string;
   validatedFlavor?: CloudApiFlavorResolved;
   validatedFlavorLabel?: string;
+  goLiveReady: boolean;
+  goLiveBlockers: string[];
+  requiresProviderAction: boolean;
   catalogAccess: "ready" | "blocked" | "not_checked";
   inferenceAccess: "ready" | "blocked" | "not_checked";
   blockedReason?: string;
@@ -87,6 +91,16 @@ export function buildRuntimeDoctorReport(
   const recommendedFlavor = selectRecommendedFlavor(config, diagnosis, validatedFlavor);
   const escalation = buildEscalation(config, diagnosis, probe, recommendedFlavor);
   const verificationStatus = determineVerificationStatus(config, diagnosis);
+  const verifiedModel = detectVerifiedModel(config, probe);
+  const goLiveBlockers = buildGoLiveBlockers({
+    config,
+    diagnosis,
+    provider,
+    verificationStatus,
+    verifiedModel,
+  });
+  const goLiveReady = goLiveBlockers.length === 0;
+  const requiresProviderAction = determineProviderActionRequirement(verificationStatus, diagnosis);
 
   return {
     summary: diagnosis.summary,
@@ -98,8 +112,12 @@ export function buildRuntimeDoctorReport(
     currentFlavorLabel: translateCloudFlavor(config.cloudApiFlavor),
     recommendedFlavor,
     recommendedFlavorLabel: translateCloudFlavor(recommendedFlavor),
+    verifiedModel,
     validatedFlavor: validatedFlavor || undefined,
     validatedFlavorLabel: validatedFlavor ? translateCloudFlavor(validatedFlavor) : undefined,
+    goLiveReady,
+    goLiveBlockers,
+    requiresProviderAction,
     catalogAccess: determineAccessStatus(probe?.listModelsOk, probe?.catalogChecks.length),
     inferenceAccess: determineAccessStatus(probe?.inferenceOk, probe?.inferenceChecks.length),
     blockedReason: buildBlockedReason(config, diagnosis, configuredModelVisible),
@@ -389,6 +407,88 @@ function determineAccessStatus(
     return "blocked";
   }
   return "not_checked";
+}
+
+function detectVerifiedModel(
+  config: RuntimeDoctorSnapshot,
+  probe?: BrainProbeResult | null,
+): string | undefined {
+  if (!probe?.inferenceOk) {
+    return undefined;
+  }
+  return probe.model || config.model;
+}
+
+function buildGoLiveBlockers(input: {
+  config: RuntimeDoctorSnapshot;
+  diagnosis: RuntimeDiagnosis;
+  provider: RuntimeDoctorProviderGuess;
+  verificationStatus: RuntimeDoctorReport["verificationStatus"];
+  verifiedModel?: string;
+}): string[] {
+  const blockers: string[] = [];
+
+  if (input.config.mode !== "cloud") {
+    blockers.push("正式试点默认路径要求使用 Ollama Cloud，而当前仍是本地模式。");
+  }
+
+  if (input.config.mode === "cloud" && input.provider.id !== "ollama_cloud") {
+    blockers.push("当前 provider 不是 Ollama Cloud，本轮正式试点不会按这个 provider 放行。");
+  }
+
+  switch (input.verificationStatus) {
+    case "fully_usable":
+      break;
+    case "catalog_only_entitlement_blocked":
+      blockers.push("当前 Ollama Cloud 账号可读取模型目录，但还没有推理权限或稳定的推理放行结论。");
+      break;
+    case "cloud_unauthorized":
+      blockers.push(
+        input.diagnosis.errorKind === "missing_api_key"
+          ? "当前还没有配置可用的 Ollama Cloud API Key。"
+          : "当前 Ollama Cloud 账号或 API key 还没有完成授权。",
+      );
+      break;
+    case "protocol_mismatch":
+      blockers.push("当前 cloud protocol 还没有命中稳定可用的 Ollama Cloud 推理接口。");
+      break;
+    case "model_visibility_gap":
+      blockers.push(`当前模型 ${input.config.model} 还没有在可见目录里命中。`);
+      break;
+    case "network_or_tls_failure":
+      blockers.push("当前部署环境还没有稳定连通 Ollama Cloud。");
+      break;
+    case "not_verified":
+      blockers.push("尚未完成 Ollama Cloud 的真实验证。");
+      break;
+    case "local_attention":
+      blockers.push("本地模式仍有待处理问题，当前不适合作为正式试点路径。");
+      break;
+    case "local_ready":
+      blockers.push("当前虽然本地模式正常，但本轮正式试点要求使用 Ollama Cloud。");
+      break;
+    default:
+      break;
+  }
+
+  if (input.verificationStatus === "fully_usable" && !input.verifiedModel) {
+    blockers.push("当前还没有形成可归档的已验证试点模型。");
+  }
+
+  return uniqueStrings(blockers);
+}
+
+function determineProviderActionRequirement(
+  verificationStatus: RuntimeDoctorReport["verificationStatus"],
+  diagnosis: RuntimeDiagnosis,
+): boolean {
+  if (verificationStatus === "catalog_only_entitlement_blocked") {
+    return true;
+  }
+  if (verificationStatus === "cloud_unauthorized" && diagnosis.errorKind === "unauthorized") {
+    return true;
+  }
+  return false;
 }
 
 function buildBlockedReason(

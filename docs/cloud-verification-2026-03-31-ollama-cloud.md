@@ -69,6 +69,14 @@ We verified this Ollama Cloud API key against both catalog and inference surface
 The tested model was ministral-3:8b, and it was present in the visible model directory. This suggests the integration path is live, but the account or API key still lacks inference entitlement. Please confirm whether this key is allowed to perform cloud inference, or whether an additional entitlement step is required.
 ```
 
-## Remaining gap
+## How to use this record now
 
-The external-pilot cloud matrix is only partially complete until a second real `OpenAI-compatible gateway` key is verified. This Ollama Cloud result is now confirmed and can be used in the system page guidance, the pilot runbook, and provider escalation.
+This document is no longer the pilot default. Keep it as the canonical blocked example for:
+
+- `catalog_only_entitlement_blocked`
+- provider escalation wording
+- explaining why “catalog 可读” does not mean “推理可用”
+
+The current formal pilot default is archived separately in:
+
+- [docs/cloud-verification-2026-03-31-ollama-cloud-kimi-k2-5.md](./cloud-verification-2026-03-31-ollama-cloud-kimi-k2-5.md)

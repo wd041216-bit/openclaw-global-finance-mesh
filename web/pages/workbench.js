@@ -130,13 +130,17 @@ function render() {
           })}
           ${summaryCard({
             kicker: "运行时状态",
-            title: runtime?.businessStatus || "等待运行时摘要",
-            note: runtime?.summary || "系统设置页会把目录读取、推理协议和权限问题拆开讲清楚。",
-            pillHtml: pill(runtime?.lastProbe?.inferenceOk ? "good" : runtime?.mode === "cloud" ? "warn" : "info", runtime?.cloudApiFlavor || "local"),
+            title: runtimeDoctorReport?.goLiveReady ? "现在可正式试点" : runtime?.businessStatus || "等待运行时摘要",
+            note: runtimeDoctorReport?.goLiveReady
+              ? "Ollama Cloud 已完成真实验证，可以直接用默认示例决策带业务用户上手。"
+              : runtimeDoctorReport?.goLiveBlockers?.[0]
+                || runtime?.summary
+                || "系统设置页会把目录读取、推理协议和权限问题拆开讲清楚。",
+            pillHtml: pill(runtimeDoctorReport?.goLiveReady ? "good" : runtime?.mode === "cloud" ? "warn" : "info", runtimeDoctorReport?.goLiveReady ? "可正式试点" : runtime?.cloudApiFlavor || "local"),
             meta: [
-              runtime?.model ? `模型 ${runtime.model}` : null,
+              runtimeDoctorReport?.verifiedModel ? `已验证模型 ${runtimeDoctorReport.verifiedModel}` : runtime?.model ? `模型 ${runtime.model}` : null,
               runtimeDoctorReport?.provider?.label ? `Provider ${runtimeDoctorReport.provider.label}` : null,
-              runtimeDiagnosis?.nextActionTitle || null,
+              runtimeDoctorReport?.validatedFlavorLabel ? `已验证协议 ${runtimeDoctorReport.validatedFlavorLabel}` : runtimeDiagnosis?.nextActionTitle || null,
               runtime?.lastProbe?.createdAt ? formatDateTime(runtime.lastProbe.createdAt) : "尚未探针",
             ].filter(Boolean),
           })}
@@ -206,14 +210,15 @@ function buildPilotStartCallout(overview, verification) {
     });
   }
 
-  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
+  if (verification && !verification.goLiveReady) {
     return calloutCard({
       kicker: "试点阻塞项",
-      title: verification.recommendedAction,
-      note: verification.blockedReason || "先把运行时链路打通，再让业务用户开始真实试点。",
+      title: verification.requiresProviderAction ? "Provider 待开通推理权限" : "先完成 Ollama Cloud 验证",
+      note: verification.goLiveBlockers?.[0] || verification.blockedReason || "先把运行时链路打通，再让业务用户开始真实试点。",
       tone: verification.catalogAccess === "ready" && verification.inferenceAccess !== "ready" ? "warning" : "info",
       meta: [
         verification.provider?.label ? `Provider ${verification.provider.label}` : null,
+        verification.verifiedModel ? `已验证模型 ${verification.verifiedModel}` : "默认目标模型 kimi-k2.5",
         verification.lastVerifiedAt ? `最近验证 ${formatDateTime(verification.lastVerifiedAt)}` : "尚未形成真实验证时间",
       ].filter(Boolean),
     });

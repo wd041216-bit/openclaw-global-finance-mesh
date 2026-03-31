@@ -47,7 +47,7 @@
 - load and failover testing
 - full connector hardening for ERP, invoicing, and approval systems
 - vendor-grade host-by-host certification beyond local-first OpenClaw fixture smoke and shared MCP smoke coverage
-- real cloud-provider entitlement validation beyond the current doctor report and account-side `401 unauthorized` classification
+- broader cloud-provider certification beyond the current validated `Ollama Cloud + kimi-k2.5` pilot path
 
 ## Standard to hold
 

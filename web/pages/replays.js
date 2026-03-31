@@ -267,18 +267,23 @@ function renderResult() {
   if (!container) {
     return;
   }
+  const verification = shell.getGlobal().overview?.runtime?.verification || shell.getGlobal().overview?.runtime?.doctorReport;
+  const runtimeGate = renderRuntimeGateCallout(verification);
   if (!state.result) {
-    container.innerHTML = calloutCard({
+    container.innerHTML = `
+      ${runtimeGate}
+      ${calloutCard({
       kicker: "等待运行",
       title: "还没有新的回放结果",
       note: "先选择事件来源与基线/候选 Pack，再点击“运行回放”。",
       tone: "info",
       meta: ["建议第一次先用示例事件", "高风险差异会单独高亮"],
-    });
+      })}
+    `;
     return;
   }
   if (state.result.error) {
-    container.innerHTML = emptyState(state.result.error);
+    container.innerHTML = `${runtimeGate}${emptyState(state.result.error)}`;
     return;
   }
   const replay = state.result.replay || state.result;
@@ -289,6 +294,7 @@ function renderResult() {
   });
 
   container.innerHTML = `
+    ${runtimeGate}
     ${summaryCard({
       kicker: "Replay Summary",
       title: replay.changed_events != null ? `共有 ${replay.changed_events} 个事件发生变化` : "回放已完成",
@@ -340,6 +346,34 @@ function renderResult() {
     ])}
     ${jsonDetails("查看技术详情", state.result)}
   `;
+}
+
+function renderRuntimeGateCallout(verification) {
+  if (!verification?.goLiveReady) {
+    return calloutCard({
+      kicker: "试点提示",
+      title: verification?.requiresProviderAction ? "Provider 侧还需要放行推理权限" : "建议先完成 Ollama Cloud 验证",
+      note: verification?.goLiveBlockers?.[0]
+        || verification?.blockedReason
+        || "回放流程已经就绪，但正式试点前仍建议先在系统设置页完成 runtime 放行。",
+      tone: verification?.requiresProviderAction ? "warning" : "info",
+      meta: [
+        verification?.provider?.label ? `Provider ${verification.provider.label}` : "入口：系统设置",
+        verification?.verifiedModel ? `已验证模型 ${verification.verifiedModel}` : "默认模型 kimi-k2.5",
+      ],
+    });
+  }
+
+  return calloutCard({
+    kicker: "试点状态",
+    title: "当前运行时已通过正式试点放行",
+    note: "可以直接运行示例回放，先看 changed events 和高风险变化，再决定是否发布。",
+    tone: "good",
+    meta: [
+      verification?.provider?.label ? `Provider ${verification.provider.label}` : null,
+      verification?.verifiedModel ? `模型 ${verification.verifiedModel}` : null,
+    ].filter(Boolean),
+  });
 }
 
 function renderHistory() {

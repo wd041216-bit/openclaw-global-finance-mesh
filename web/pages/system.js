@@ -1038,39 +1038,71 @@ function renderRuntime() {
     ? `
       <div class="summary-band three-up">
         ${summaryCard({
-          kicker: "运行摘要",
-          title: doctorReport?.verificationLabel || (runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置"),
-          note: diagnosis?.summary || runtimeOverview?.summary || health.checks.runtime?.summary || "系统运行状态会显示在这里。",
+          kicker: "正式试点放行",
+          title: doctorReport?.goLiveReady ? "现在可正式试点" : "当前还不能正式试点",
+          note: doctorReport?.goLiveReady
+            ? "Ollama Cloud 已完成真实目录与推理验证，可以继续对外开放小规模试点。"
+            : doctorReport?.goLiveBlockers?.[0]
+              || diagnosis?.summary
+              || runtimeOverview?.summary
+              || health.checks.runtime?.summary
+              || "系统运行状态会显示在这里。",
           pillHtml: pill(
-            doctorReport ? toneFromVerificationStatus(doctorReport.verificationStatus) : health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
-            runtimeBusinessStatus,
+            doctorReport?.goLiveReady
+              ? "good"
+              : doctorReport?.requiresProviderAction
+                ? "warn"
+                : doctorReport
+                  ? toneFromVerificationStatus(doctorReport.verificationStatus)
+                  : health.checks.runtime?.status === "healthy"
+                    ? "good"
+                    : health.checks.runtime?.status === "degraded"
+                      ? "warn"
+                      : "neutral",
+            doctorReport?.goLiveReady ? "可正式试点" : "blocked",
           ),
           meta: [
             `${health.environment}/${health.teamScope}`,
             doctorReport?.provider?.label ? `Provider ${doctorReport.provider.label}` : null,
+            doctorReport?.verifiedModel ? `已验证模型 ${doctorReport.verifiedModel}` : runtime?.model ? `当前模型 ${runtime.model}` : null,
             doctorReport?.lastVerifiedAt ? `最近验证 ${formatDateTime(doctorReport.lastVerifiedAt)}` : null,
-            `已运行 ${humanizeSeconds(health.uptimeSeconds)}`,
-            health.recent?.backup?.createdAt ? `最近备份 ${formatDateTime(health.recent.backup.createdAt)}` : "尚无备份",
+            doctorReport?.validatedFlavorLabel ? `已验证协议 ${doctorReport.validatedFlavorLabel}` : `已运行 ${humanizeSeconds(health.uptimeSeconds)}`,
           ].filter(Boolean),
         })}
         ${summaryCard({
-          kicker: "目录读取",
-          title: formatCatalogStatus(runtime, diagnosis || lastProbe),
-          note: diagnosis?.catalog?.summary || doctorReport?.blockedReason || describeCatalogStatus(runtime, lastProbe),
-          pillHtml: pill(toneFromAccessStatus(doctorReport?.catalogAccess), formatAccessStatus(doctorReport?.catalogAccess, "catalog")),
+          kicker: "Provider 与模型",
+          title: doctorReport?.provider?.label || (runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置"),
+          note: doctorReport?.verifiedModel
+            ? `当前默认试点模型为 ${doctorReport.verifiedModel}${doctorReport.validatedFlavorLabel ? `，并已通过 ${doctorReport.validatedFlavorLabel} 验证。` : "，并已形成真实验证记录。"}`
+            : runtime?.mode === "cloud"
+              ? "本轮正式试点默认模型应为 kimi-k2.5；如果还没形成验证模型，请先完成一次真实 probe。"
+              : "当前还没有切到 Ollama Cloud 试点路径。",
+          pillHtml: pill(
+            doctorReport?.validatedFlavor ? "good" : runtime?.mode === "cloud" ? "info" : "neutral",
+            doctorReport?.validatedFlavorLabel || (runtime?.mode === "cloud" ? formatCloudFlavor(runtime.cloudApiFlavor) : "local"),
+          ),
           meta: [
-            doctorReport?.currentFlavorLabel ? `协议 ${doctorReport.currentFlavorLabel}` : runtime?.mode === "cloud" ? `协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
-            diagnosis?.catalog?.selectedEndpoint || lastProbe?.selectedCatalogEndpoint || "等待探针",
+            doctorReport?.currentFlavorLabel ? `当前协议 ${doctorReport.currentFlavorLabel}` : runtime?.mode === "cloud" ? `当前协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
+            doctorReport?.validatedFlavorLabel ? `已验证 ${doctorReport.validatedFlavorLabel}` : "尚未形成验证协议",
+            health.recent?.backup?.createdAt ? `最近备份 ${formatDateTime(health.recent.backup.createdAt)}` : "尚无备份",
           ],
         })}
-        ${calloutCard({
-          kicker: "推理诊断",
-          title: formatInferenceStatus(runtime, diagnosis || lastProbe),
+        ${summaryCard({
+          kicker: "目录 / 推理",
+          title: `${formatAccessStatus(doctorReport?.catalogAccess, "catalog")} / ${formatAccessStatus(doctorReport?.inferenceAccess, "inference")}`,
           note: diagnosis?.inference?.summary || doctorReport?.blockedReason || describeInferenceStatus(runtime, lastProbe),
-          tone: toneFromAccessStatus(doctorReport?.inferenceAccess),
+          pillHtml: pill(
+            doctorReport?.inferenceAccess === "ready"
+              ? "good"
+              : doctorReport?.catalogAccess === "ready"
+                ? "warn"
+                : "info",
+            runtimeBusinessStatus,
+          ),
           meta: [
-            `错误分类 ${formatErrorKind(lastProbe?.errorKind)}`,
-            `鉴权状态 ${formatAuthStatus(lastProbe?.authStatus, runtime)}`,
+            diagnosis?.catalog?.selectedEndpoint || lastProbe?.selectedCatalogEndpoint || "等待目录接口",
+            diagnosis?.inference?.selectedEndpoint || lastProbe?.selectedInferenceEndpoint || "等待推理接口",
+            `鉴权 ${formatAuthStatus(lastProbe?.authStatus, runtime)}`,
           ],
         })}
       </div>
@@ -1081,13 +1113,15 @@ function renderRuntime() {
     ${runtimeSummary}
     ${calloutCard({
       kicker: "下一步",
-      title: doctorReport?.recommendedAction || diagnosis?.nextActionTitle || buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
+      title: buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health, doctorReport),
       note: canOperateNow
-        ? (diagnosis?.recommendedActions?.join(" ") || doctorReport?.blockedReason || buildRuntimeActionNote(runtime, runtimeOverview, lastProbe))
+        ? buildRuntimeActionNote(runtime, runtimeOverview, lastProbe, doctorReport, diagnosis)
         : "当前角色只能看摘要，探针动作需要 operator 或 admin。",
-      tone: doctorReport ? calloutToneFromVerificationStatus(doctorReport.verificationStatus) : lastProbe?.inferenceOk ? "good" : "warning",
+      tone: doctorReport?.goLiveReady ? "good" : doctorReport ? calloutToneFromVerificationStatus(doctorReport.verificationStatus) : lastProbe?.inferenceOk ? "good" : "warning",
       meta: [
         health?.metricsAvailable ? "metrics 已启用" : "metrics 未启用",
+        doctorReport?.goLiveReady ? "当前已通过正式试点放行" : "当前仍有试点阻断项",
+        doctorReport?.requiresProviderAction ? "需要 provider 动作" : null,
         doctorReport?.lastVerifiedAt ? `最近验证 ${formatDateTime(doctorReport.lastVerifiedAt)}` : lastProbe?.createdAt ? `最近探针 ${formatDateTime(lastProbe.createdAt)}` : "尚未探针",
       ],
     })}
@@ -1105,7 +1139,7 @@ function renderRuntime() {
           kicker: "运行时配置",
           title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待读取运行时配置",
           note: runtime?.mode === "cloud"
-            ? `当前 cloud protocol 为 ${formatCloudFlavor(runtime.cloudApiFlavor)}。`
+            ? `当前 cloud protocol 为 ${formatCloudFlavor(runtime.cloudApiFlavor)}，正式试点默认模型应为 kimi-k2.5。`
             : runtime?.systemPrompt
               ? "系统提示词已配置，可在下方折叠区修改。"
               : "当前还没有系统提示词配置。",
@@ -1130,7 +1164,7 @@ function renderRuntime() {
                 </label>
                 <label>
                   模型名称
-                  <input name="model" value="${escapeHtml(runtime?.model || "")}" placeholder="qwen3:8b" />
+                  <input name="model" value="${escapeHtml(runtime?.model || "")}" placeholder="kimi-k2.5" />
                 </label>
                 <label>
                   Temperature
@@ -1401,9 +1435,15 @@ function formatAuthStatus(value, runtime) {
   return "等待探针";
 }
 
-function buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health) {
+function buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health, doctorReport) {
+  if (doctorReport?.goLiveReady) {
+    return "当前已经满足正式试点放行条件";
+  }
+  if (doctorReport?.requiresProviderAction) {
+    return "先联系 provider 开通推理权限";
+  }
   if (runtimeOverview?.businessStatus === "云端可用" || lastProbe?.inferenceOk) {
-    return "当前云端推理已经可用";
+    return "当前云端推理已经可用，但还要补齐正式试点放行记录";
   }
   if (lastProbe?.errorKind === "unauthorized" && lastProbe?.listModelsOk) {
     return "先补云端推理权限，不要再改代码路径";
@@ -1423,7 +1463,16 @@ function buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health) {
   return health?.checks.recoveryDrill?.summary || "先补一次探针或恢复演练";
 }
 
-function buildRuntimeActionNote(runtime, runtimeOverview, lastProbe) {
+function buildRuntimeActionNote(runtime, runtimeOverview, lastProbe, doctorReport, diagnosis) {
+  if (doctorReport?.goLiveReady) {
+    return "建议下一步按顺序完成示例决策、备份成功和恢复演练，再对外开放小规模试点。";
+  }
+  if (doctorReport?.goLiveBlockers?.length) {
+    return doctorReport.goLiveBlockers.join(" ");
+  }
+  if (doctorReport?.requiresProviderAction) {
+    return "代码路径已经通了，下一步应该带着系统页里的 escalation 文案去找 provider，而不是继续改 endpoint。";
+  }
   if (runtimeOverview?.businessStatus === "云端可用" || lastProbe?.inferenceOk) {
     return "如果今天刚改过模型或基础地址，再执行一次探针确认协议和推理能力没有漂移。";
   }
@@ -1436,7 +1485,7 @@ function buildRuntimeActionNote(runtime, runtimeOverview, lastProbe) {
   if (runtime?.mode === "cloud" && !runtime?.hasApiKey) {
     return "先保存 API Key，再执行探针，系统会告诉你目录和推理分别是否可用。";
   }
-  return "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。";
+  return diagnosis?.recommendedActions?.join(" ") || "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。";
 }
 
 function renderRuntimeRecommendations(diagnosis) {
@@ -1483,12 +1532,14 @@ function renderDoctorReport(report) {
   return `
     <article class="detail-card">
       <p class="section-kicker">云端联调报告</p>
-      <h4>${escapeHtml(report.summary)}</h4>
+      <h4>${escapeHtml(report.goLiveReady ? "Ollama Cloud 已通过正式试点验证" : report.summary)}</h4>
       <div class="summary-band three-up top-gap">
         ${summaryCard({
           kicker: "验证状态",
           title: report.verificationLabel,
-          note: report.blockedReason || report.provider.reason,
+          note: report.goLiveReady
+            ? "目录与推理都已经跑通，当前可以把这条配置作为正式试点默认路径。"
+            : report.blockedReason || report.provider.reason,
           pillHtml: pill(
             toneFromVerificationStatus(report.verificationStatus),
             report.verificationStatus,
@@ -1499,37 +1550,39 @@ function renderDoctorReport(report) {
           ],
         })}
         ${summaryCard({
-          kicker: "Provider 与协议",
+          kicker: "正式试点放行",
+          title: report.goLiveReady ? "可正式试点" : "尚未达到正式试点门槛",
+          note: report.goLiveReady
+            ? "Provider、协议和模型已经形成真实验证记录。"
+            : report.goLiveBlockers[0] || report.recommendedAction,
+          pillHtml: pill(report.goLiveReady ? "good" : report.requiresProviderAction ? "warn" : "info", report.goLiveReady ? "ready" : "blocked"),
+          meta: [
+            report.requiresProviderAction ? "需要 provider 动作" : "可在控制台内继续处理",
+            report.lastVerifiedAt ? `最近验证 ${formatDateTime(report.lastVerifiedAt)}` : "尚未形成真实验证时间",
+          ],
+        })}
+        ${summaryCard({
+          kicker: "Provider 与模型",
           title: report.provider.label,
-          note: report.validatedFlavorLabel
-            ? `最近一次已命中 ${report.validatedFlavorLabel}。`
-            : `当前配置协议为 ${report.currentFlavorLabel}，建议优先按 ${report.recommendedFlavorLabel} 排查。`,
+          note: report.verifiedModel
+            ? `当前已验证模型为 ${report.verifiedModel}。`
+            : "当前还没有形成可归档的已验证模型。",
           pillHtml: pill(report.provider.confidence === "high" ? "good" : report.provider.confidence === "medium" ? "info" : "warn", report.provider.confidence),
           meta: [
             `当前 ${report.currentFlavorLabel}`,
             report.validatedFlavorLabel ? `已验证 ${report.validatedFlavorLabel}` : `建议 ${report.recommendedFlavorLabel}`,
-          ],
-        })}
-        ${summaryCard({
-          kicker: "目录 / 推理",
-          title: `${formatAccessStatus(report.catalogAccess, "catalog")} / ${formatAccessStatus(report.inferenceAccess, "inference")}`,
-          note: report.recommendedAction,
-          pillHtml: pill(
-            report.inferenceAccess === "ready"
-              ? "good"
-              : report.catalogAccess === "ready"
-                ? "warn"
-                : "info",
-            report.provider.id,
-          ),
-          meta: [
-            `目录 ${formatAccessStatus(report.catalogAccess, "catalog")}`,
-            `推理 ${formatAccessStatus(report.inferenceAccess, "inference")}`,
+            report.verifiedModel ? `模型 ${report.verifiedModel}` : `当前模型 ${report.visibleModels[0] || "未验证"}`,
           ],
         })}
       </div>
       <div class="page-grid two-up top-gap">
         <div class="detail-card">
+          <p class="section-kicker">正式试点阻断项</p>
+          <h4>${report.goLiveReady ? "当前没有阻断项" : "先把这些问题处理掉"}</h4>
+          ${report.goLiveBlockers.length
+            ? bulletList(report.goLiveBlockers, "step-list")
+            : `<p class="summary-note">当前 provider、协议与模型都已经通过真实验证。</p>`}
+          <div class="soft-divider"></div>
           <p class="section-kicker">操作清单</p>
           <h4>按这个顺序排障</h4>
           ${bulletList(report.operatorChecklist, "step-list")}

@@ -275,18 +275,23 @@ function renderResult() {
   if (!container) {
     return;
   }
+  const verification = shell.getGlobal().overview?.runtime?.verification || shell.getGlobal().overview?.runtime?.doctorReport;
+  const runtimeGate = renderRuntimeGateCallout(verification);
   if (!state.result) {
-    container.innerHTML = calloutCard({
+    container.innerHTML = `
+      ${runtimeGate}
+      ${calloutCard({
       kicker: "等待运行",
       title: "还没有新的决策结果",
       note: "先选择示例事件、文件路径或粘贴 JSON，再点击“运行决策”。",
       tone: "info",
       meta: ["建议第一次先用示例事件", "技术详情默认折叠"],
-    });
+      })}
+    `;
     return;
   }
   if (state.result.error) {
-    container.innerHTML = emptyState(state.result.error);
+    container.innerHTML = `${runtimeGate}${emptyState(state.result.error)}`;
     return;
   }
 
@@ -299,6 +304,7 @@ function renderResult() {
   const auditMeta = state.result.auditRun;
 
   container.innerHTML = `
+    ${runtimeGate}
     ${summaryCard({
       kicker: "Decision Packet",
       title: packet?.summary || "决策已生成",
@@ -357,6 +363,34 @@ function renderResult() {
     }) : ""}
     ${jsonDetails("查看技术详情", state.result)}
   `;
+}
+
+function renderRuntimeGateCallout(verification) {
+  if (!verification?.goLiveReady) {
+    return calloutCard({
+      kicker: "试点提示",
+      title: verification?.requiresProviderAction ? "Provider 侧还需要放行推理权限" : "建议先完成 Ollama Cloud 验证",
+      note: verification?.goLiveBlockers?.[0]
+        || verification?.blockedReason
+        || "系统设置页会告诉你当前 provider、协议、验证模型和具体阻塞项。",
+      tone: verification?.requiresProviderAction ? "warning" : "info",
+      meta: [
+        verification?.provider?.label ? `Provider ${verification.provider.label}` : "入口：系统设置",
+        verification?.verifiedModel ? `已验证模型 ${verification.verifiedModel}` : "默认模型 kimi-k2.5",
+      ],
+    });
+  }
+
+  return calloutCard({
+    kicker: "试点状态",
+    title: "当前运行时已通过正式试点放行",
+    note: "你可以直接用示例事件运行决策，再把结论给业务同事阅读。",
+    tone: "good",
+    meta: [
+      verification?.provider?.label ? `Provider ${verification.provider.label}` : null,
+      verification?.verifiedModel ? `模型 ${verification.verifiedModel}` : null,
+    ].filter(Boolean),
+  });
 }
 
 function renderHistory() {

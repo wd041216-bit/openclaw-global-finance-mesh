@@ -740,18 +740,12 @@ function buildActions(input: {
   }
 
   if (
-    input.runtime.doctorReport.verificationStatus === "not_verified"
-    || input.runtime.doctorReport.verificationStatus === "local_attention"
-    || input.runtime.doctorReport.verificationStatus === "catalog_only_entitlement_blocked"
-    || input.runtime.doctorReport.verificationStatus === "cloud_unauthorized"
-    || input.runtime.doctorReport.verificationStatus === "protocol_mismatch"
-    || input.runtime.doctorReport.verificationStatus === "model_visibility_gap"
-    || input.runtime.doctorReport.verificationStatus === "network_or_tls_failure"
+    !input.runtime.doctorReport.goLiveReady
   ) {
     actions.push({
       id: "open-system-health-priority",
-      title: input.runtime.mode === "cloud" ? "先打通云端运行时" : "先修复本地运行时",
-      description: input.runtime.doctorReport.recommendedAction,
+      title: input.runtime.mode === "cloud" ? "先完成 Ollama Cloud 放行" : "先切回 Ollama Cloud 试点路径",
+      description: input.runtime.doctorReport.goLiveBlockers[0] || input.runtime.doctorReport.recommendedAction,
       workspace: "system",
       intent: "open_system_health",
       tone: "warning",
@@ -847,7 +841,7 @@ function buildRuntimeCheck(
   if (!summary.lastProbe) {
     return {
       status: runtimeConfig.mode === "local" ? "degraded" : runtimeConfig.hasApiKey ? "degraded" : "down",
-      summary: summary.summary,
+      summary: summary.doctorReport.goLiveBlockers[0] || summary.summary,
       checkedAt,
       detail: {
         mode: runtimeConfig.mode,
@@ -858,15 +852,26 @@ function buildRuntimeCheck(
         verificationStatus: summary.doctorReport.verificationStatus,
         verificationLabel: summary.doctorReport.verificationLabel,
         provider: summary.doctorReport.provider,
+        verifiedModel: summary.doctorReport.verifiedModel,
+        validatedFlavor: summary.doctorReport.validatedFlavor,
+        goLiveReady: summary.doctorReport.goLiveReady,
+        goLiveBlockers: summary.doctorReport.goLiveBlockers,
+        requiresProviderAction: summary.doctorReport.requiresProviderAction,
+        lastVerifiedAt: summary.doctorReport.lastVerifiedAt,
         nextActionTitle: summary.diagnosis.nextActionTitle,
         recommendedActions: summary.diagnosis.recommendedActions,
       },
     };
   }
   const latest = summary.lastProbe;
+  const status = summary.doctorReport.goLiveReady
+    ? latest.status
+    : latest.status === "down"
+      ? "down"
+      : "degraded";
   return {
-    status: latest.status,
-    summary: latest.summary,
+    status,
+    summary: summary.doctorReport.goLiveBlockers[0] || latest.summary,
     checkedAt,
     detail: {
       runId: latest.id,
@@ -879,6 +884,11 @@ function buildRuntimeCheck(
       verificationLabel: summary.doctorReport.verificationLabel,
       provider: summary.doctorReport.provider,
       lastVerifiedAt: summary.doctorReport.lastVerifiedAt,
+      verifiedModel: summary.doctorReport.verifiedModel,
+      validatedFlavor: summary.doctorReport.validatedFlavor,
+      goLiveReady: summary.doctorReport.goLiveReady,
+      goLiveBlockers: summary.doctorReport.goLiveBlockers,
+      requiresProviderAction: summary.doctorReport.requiresProviderAction,
       selectedCatalogEndpoint: latest.selectedCatalogEndpoint,
       selectedInferenceEndpoint: latest.selectedInferenceEndpoint,
       nextActionTitle: latest.diagnosis.nextActionTitle,

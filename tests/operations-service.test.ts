@@ -127,7 +127,7 @@ async function buildOperationsHarness() {
   };
 }
 
-test("operations service returns a business-friendly overview and keeps open mode usable without login", async () => {
+test("operations service returns a pilot-ready overview for ollama cloud kimi-k2.5", async () => {
   const harness = await buildOperationsHarness();
   const {
     tempDir,
@@ -145,8 +145,8 @@ test("operations service returns a business-friendly overview and keeps open mod
   });
   await runtimeStore.update({
     mode: "cloud",
-    model: "qwen3:8b",
-    cloudBaseUrl: "https://ollama.example.com",
+    model: "kimi-k2.5",
+    cloudBaseUrl: "https://ollama.com",
     cloudApiFlavor: "auto",
     apiKey: "cloud-secret",
     persistSecret: true,
@@ -202,23 +202,41 @@ test("operations service returns a business-friendly overview and keeps open mod
   await auditRuns.recordProbe({
     config: {
       mode: "cloud",
-      model: "qwen3:8b",
+      model: "kimi-k2.5",
       localBaseUrl: "http://127.0.0.1:11434",
-      cloudBaseUrl: "https://ollama.example.com",
+      cloudBaseUrl: "https://ollama.com",
       cloudApiFlavor: "auto",
       hasApiKey: true,
     },
     probe: {
       ok: true,
       mode: "cloud",
-      model: "qwen3:8b",
+      model: "kimi-k2.5",
       cloudApiFlavor: "auto",
       listModelsOk: true,
       inferenceOk: true,
-      availableModels: ["qwen3:8b"],
+      availableModels: ["kimi-k2.5", "gemini-3-flash-preview", "glm-5"],
       authStatus: "authorized",
-      catalogChecks: [],
-      inferenceChecks: [],
+      catalogChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/tags",
+          ok: true,
+          latencyMs: 52,
+          authStatus: "authorized",
+          modelCount: 3,
+          availableModels: ["kimi-k2.5", "gemini-3-flash-preview", "glm-5"],
+        },
+      ],
+      inferenceChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/chat",
+          ok: true,
+          latencyMs: 114,
+          authStatus: "authorized",
+        },
+      ],
       selectedCatalogEndpoint: "/api/tags",
       selectedInferenceEndpoint: "/api/chat",
       latencyMs: 240,
@@ -268,6 +286,12 @@ test("operations service returns a business-friendly overview and keeps open mod
   assert.equal(overview.runtime.cloudApiFlavor, "auto");
   assert.equal(overview.runtime.businessStatus, "云端可用");
   assert.equal(overview.runtime.diagnosis.businessStatus, "云端可用");
+  assert.equal(overview.runtime.verification.verificationStatus, "fully_usable");
+  assert.equal(overview.runtime.verification.verifiedModel, "kimi-k2.5");
+  assert.equal(overview.runtime.verification.validatedFlavor, "ollama_native");
+  assert.equal(overview.runtime.verification.goLiveReady, true);
+  assert.deepEqual(overview.runtime.verification.goLiveBlockers, []);
+  assert.equal(overview.runtime.verification.provider.id, "ollama_cloud");
   assert.equal(overview.decisioning.counts24h.decision, 1);
   assert.equal(overview.decisioning.counts24h.replay, 1);
   assert.equal(overview.governance.legalLibrary.draftCount, 1);
@@ -277,6 +301,7 @@ test("operations service returns a business-friendly overview and keeps open mod
   assert.ok(overview.actions.some((item) => item.intent === "run_example_decision"));
   assert.ok(overview.actions.some((item) => item.intent === "search_legal_library"));
   assert.ok(!overview.actions.some((item) => item.intent === "open_login"));
+  assert.ok(!overview.actions.some((item) => item.intent === "open_system_health" && item.tone === "warning"));
 });
 
 test("operations health marks backup targets degraded when replication only partially succeeds", async () => {
@@ -397,7 +422,9 @@ test("operations health marks backup targets degraded when replication only part
     csrfToken: login.csrfToken,
   });
 
-  assert.equal(health.checks.runtime.status, "healthy");
+  assert.equal(health.checks.runtime.status, "degraded");
+  assert.equal(health.checks.runtime.detail?.goLiveReady, false);
+  assert.match(String(health.checks.runtime.summary), /Ollama Cloud|本地模式/);
   assert.equal(health.checks.backupTargets.status, "degraded");
   assert.equal(health.checks.recoveryDrill.status, "healthy");
   assert.match(health.checks.backupTargets.summary, /部分成功/);
@@ -431,7 +458,7 @@ test("operations overview translates cloud catalog-only access into business-fri
   await runtimeStore.update({
     mode: "cloud",
     model: "qwen3:8b",
-    cloudBaseUrl: "https://ollama.example.com",
+    cloudBaseUrl: "https://ollama.com",
     cloudApiFlavor: "auto",
     apiKey: "cloud-secret",
     persistSecret: true,
@@ -448,7 +475,7 @@ test("operations overview translates cloud catalog-only access into business-fri
       mode: "cloud",
       model: "qwen3:8b",
       localBaseUrl: "http://127.0.0.1:11434",
-      cloudBaseUrl: "https://ollama.example.com",
+      cloudBaseUrl: "https://ollama.com",
       cloudApiFlavor: "auto",
       hasApiKey: true,
     },
@@ -536,7 +563,10 @@ test("operations overview translates cloud catalog-only access into business-fri
   assert.equal(overview.runtime.verification.verificationStatus, "catalog_only_entitlement_blocked");
   assert.equal(overview.runtime.verification.catalogAccess, "ready");
   assert.equal(overview.runtime.verification.inferenceAccess, "blocked");
-  assert.equal(overview.runtime.doctorReport.provider.id, "custom_cloud");
+  assert.equal(overview.runtime.verification.goLiveReady, false);
+  assert.ok(overview.runtime.verification.goLiveBlockers.length > 0);
+  assert.equal(overview.runtime.verification.requiresProviderAction, true);
+  assert.equal(overview.runtime.doctorReport.provider.id, "ollama_cloud");
   assert.equal(overview.runtime.doctorReport.recommendedFlavor, "ollama_native");
   assert.ok(overview.runtime.doctorReport.manualChecks.some((command) => command.endpoint === "/api/chat"));
   assert.match(overview.runtime.doctorReport.escalationNote || "", /entitlement|推理权限|401/);
@@ -544,5 +574,6 @@ test("operations overview translates cloud catalog-only access into business-fri
   assert.equal(overview.runtime.lastProbe?.diagnosis.businessStatus, "仅模型目录可用");
   assert.equal(health.checks.runtime.status, "degraded");
   assert.equal(health.checks.runtime.detail?.verificationStatus, "catalog_only_entitlement_blocked");
+  assert.equal(health.checks.runtime.detail?.goLiveReady, false);
   assert.match(health.checks.runtime.summary, /推理权限/);
 });

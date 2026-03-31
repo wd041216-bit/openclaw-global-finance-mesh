@@ -71,7 +71,7 @@ npm run dev
 ```bash
 export OLLAMA_MODE=cloud
 export OLLAMA_API_KEY=你的本地环境变量
-export OLLAMA_MODEL=qwen3:8b
+export OLLAMA_MODEL=kimi-k2.5
 export FINANCE_MESH_CLOUD_API_FLAVOR=auto
 npm run dev
 ```
@@ -83,6 +83,8 @@ npm run dev
 - `auto`：同时探测 Ollama Native 与 OpenAI Compatible 两套目录/推理接口，再优先复用探测成功的那条链路
 - `ollama_native`：固定走 `/api/tags` 和 `/api/chat`
 - `openai_compatible`：固定走 `/v1/models` 和 `/v1/chat/completions`
+
+当前外部试点的正式默认路径已经收敛为 `Ollama Cloud + kimi-k2.5`。OpenAI-compatible gateway 仍然支持，但不再阻塞这轮试点放行。
 
 最小云端验证命令：
 
@@ -101,6 +103,14 @@ npm run verify:cloud-provider -- --out output/cloud-verification.json
 - `errorKind=unauthorized`：优先检查 key / 账号权限
 - `errorKind=endpoint_not_supported`：优先切换 `FINANCE_MESH_CLOUD_API_FLAVOR` 或确认服务端兼容面
 
+当前试点的目标结果是：
+
+- provider：`Ollama Cloud`
+- model：`kimi-k2.5`
+- `verificationStatus=fully_usable`
+- `goLiveReady=true`
+- `validatedFlavor=ollama_native`
+
 要特别注意：能读模型目录，不代表能做云端推理。
 
 系统设置页现在还会生成一份云端联调报告，里面会直接给出：
@@ -111,6 +121,7 @@ npm run verify:cloud-provider -- --out output/cloud-verification.json
 - 可直接复制的目录 / 推理 `curl` 命令
 - 当目录可读但推理被挡住时，可直接发给 provider 的升级说明
 - 标准化验证结论：`fully_usable`、`catalog_only_entitlement_blocked`、`cloud_unauthorized`、`protocol_mismatch`、`model_visibility_gap`、`network_or_tls_failure`
+- 正式试点放行字段：`verifiedModel`、`validatedFlavor`、`goLiveReady`、`goLiveBlockers`、`requiresProviderAction`
 
 完整排障路径见 [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)。
 外部试点落地顺序见 [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md)。
@@ -161,12 +172,13 @@ npm run dev
 
 建议按下面顺序把产品交给外部试点用户：
 
-1. 使用 `.env.pilot.example` 准备单实例环境
-2. 启动 Docker 单实例
-3. 在 `系统设置` 完成管理员初始化和登录
-4. 先跑 `npm run review:pilot`
-5. 用 `npm run verify:cloud-provider` 跑真实 provider 结果
-6. 确认备份和恢复演练已经通过，再开放给外部用户
+1. 先把 `.env.pilot.example` 复制成 `.env`
+2. 填入真实可用的 `OLLAMA_API_KEY`
+3. 启动 Docker 单实例
+4. 在 `系统设置` 完成管理员初始化和登录
+5. 先用 `npm run verify:cloud-provider` 验证 `kimi-k2.5`
+6. 再跑 `npm run review:pilot`，确认 runtime gate 已通过
+7. 确认备份和恢复演练已经通过，再开放给外部用户
 
 当前复查结论见 [docs/pilot-functional-review-2026-03-31.md](./docs/pilot-functional-review-2026-03-31.md)。
 

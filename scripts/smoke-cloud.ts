@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { OllamaBrainRuntime } from "../src/brain.ts";
-import { RuntimeConfigStore } from "../src/runtime-config.ts";
+import { RuntimeConfigStore, type BrainRuntimeConfig, type CloudApiFlavor } from "../src/runtime-config.ts";
 import { buildRuntimeDiagnosis } from "../src/runtime-diagnostics.ts";
 import { buildRuntimeDoctorReport } from "../src/runtime-doctor.ts";
 
@@ -22,8 +22,10 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const runtimeStore = new RuntimeConfigStore();
   const runtime = new OllamaBrainRuntime();
-  const config = await runtimeStore.get();
-  const publicConfig = await runtimeStore.getPublic();
+  const storedConfig = await runtimeStore.get();
+  const config = applyRuntimeEnvOverrides(storedConfig);
+  const publicConfig = toPublicConfig(config);
+  const usingEnvOverrides = hasRuntimeEnvOverrides();
 
   if (config.mode !== "cloud") {
     const skipped = {
@@ -31,7 +33,12 @@ async function main() {
       reason: "runtime mode is not cloud",
       mode: config.mode,
       model: config.model,
+      provider: "unknown",
+      verificationStatus: "not_verified",
+      goLiveReady: false,
+      goLiveBlockers: ["当前还没有切到 Ollama Cloud 试点路径。"],
       recommendedAction: "先把运行时切到 cloud 模式，再执行真实 provider 联调。",
+      usingEnvOverrides,
     };
     await emitResult(skipped, args.out);
     return;
@@ -72,10 +79,14 @@ async function main() {
     provider: doctorReport.provider,
     verificationStatus: doctorReport.verificationStatus,
     verificationLabel: doctorReport.verificationLabel,
+    verifiedModel: doctorReport.verifiedModel,
     currentFlavor: doctorReport.currentFlavor,
     currentFlavorLabel: doctorReport.currentFlavorLabel,
     validatedFlavor: doctorReport.validatedFlavor,
     validatedFlavorLabel: doctorReport.validatedFlavorLabel,
+    goLiveReady: doctorReport.goLiveReady,
+    goLiveBlockers: doctorReport.goLiveBlockers,
+    requiresProviderAction: doctorReport.requiresProviderAction,
     catalog: {
       access: doctorReport.catalogAccess,
       ok: probe.listModelsOk,
@@ -98,6 +109,7 @@ async function main() {
   await emitResult(
     {
       config: publicConfig,
+      usingEnvOverrides,
       probe,
       diagnosis,
       doctorReport,
@@ -105,6 +117,74 @@ async function main() {
     },
     args.out,
   );
+}
+
+function applyRuntimeEnvOverrides(config: BrainRuntimeConfig): BrainRuntimeConfig {
+  const cloudApiFlavor = parseCloudApiFlavor(
+    process.env.FINANCE_MESH_CLOUD_API_FLAVOR ?? process.env.OLLAMA_CLOUD_API_FLAVOR,
+  );
+
+  return {
+    ...config,
+    mode: process.env.OLLAMA_MODE === "cloud" ? "cloud" : process.env.OLLAMA_MODE === "local" ? "local" : config.mode,
+    model: process.env.OLLAMA_MODEL?.trim() ? process.env.OLLAMA_MODEL.trim() : config.model,
+    localBaseUrl: process.env.OLLAMA_BASE_URL?.trim()
+      ? stripTrailingSlash(process.env.OLLAMA_BASE_URL.trim())
+      : config.localBaseUrl,
+    cloudBaseUrl: process.env.OLLAMA_CLOUD_BASE_URL?.trim()
+      ? stripTrailingSlash(process.env.OLLAMA_CLOUD_BASE_URL.trim())
+      : config.cloudBaseUrl,
+    cloudApiFlavor: cloudApiFlavor ?? config.cloudApiFlavor,
+    apiKey: process.env.OLLAMA_API_KEY?.trim() ? process.env.OLLAMA_API_KEY.trim() : config.apiKey,
+    temperature: parseTemperature(process.env.OLLAMA_TEMPERATURE, config.temperature),
+    systemPrompt: process.env.OLLAMA_SYSTEM_PROMPT?.trim() ? process.env.OLLAMA_SYSTEM_PROMPT.trim() : config.systemPrompt,
+  };
+}
+
+function hasRuntimeEnvOverrides(): boolean {
+  return [
+    "OLLAMA_MODE",
+    "OLLAMA_MODEL",
+    "OLLAMA_BASE_URL",
+    "OLLAMA_CLOUD_BASE_URL",
+    "FINANCE_MESH_CLOUD_API_FLAVOR",
+    "OLLAMA_CLOUD_API_FLAVOR",
+    "OLLAMA_API_KEY",
+    "OLLAMA_TEMPERATURE",
+    "OLLAMA_SYSTEM_PROMPT",
+  ].some((key) => Boolean(process.env[key]?.trim()));
+}
+
+function toPublicConfig(config: BrainRuntimeConfig) {
+  return {
+    mode: config.mode,
+    model: config.model,
+    localBaseUrl: config.localBaseUrl,
+    cloudBaseUrl: config.cloudBaseUrl,
+    cloudApiFlavor: config.cloudApiFlavor,
+    temperature: config.temperature,
+    systemPrompt: config.systemPrompt,
+    hasApiKey: Boolean(config.apiKey),
+  };
+}
+
+function parseCloudApiFlavor(value: string | undefined): CloudApiFlavor | null {
+  if (value === "ollama_native" || value === "openai_compatible" || value === "auto") {
+    return value;
+  }
+  return null;
+}
+
+function parseTemperature(value: string | undefined, fallback: number): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(2, numeric));
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
 }
 
 async function emitResult(payload: Record<string, unknown>, outPath?: string) {

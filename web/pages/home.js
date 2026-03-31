@@ -111,15 +111,16 @@ function render() {
             title: buildPilotLaunchTitle(globalData, runtimeVerification),
             note: buildPilotLaunchNote(globalData, runtimeVerification),
             pillHtml: pill(
-              runtimeVerification?.verificationStatus === "fully_usable" || runtimeVerification?.verificationStatus === "local_ready"
+              runtimeVerification?.goLiveReady
                 ? "good"
                 : actor
                   ? "warn"
                   : "info",
-              actor ? "可继续" : "先登录",
+              runtimeVerification?.goLiveReady ? "可正式试点" : actor ? "待放行" : "先登录",
             ),
             meta: [
               runtimeVerification?.provider?.label ? `Provider ${runtimeVerification.provider.label}` : null,
+              runtimeVerification?.verifiedModel ? `已验证模型 ${runtimeVerification.verifiedModel}` : null,
               runtimeVerification?.lastVerifiedAt ? `最近验证 ${formatDateTime(runtimeVerification.lastVerifiedAt)}` : null,
             ].filter(Boolean),
           })}
@@ -159,10 +160,13 @@ function buildPilotLaunchTitle(globalData, verification) {
   if (globalData.access?.config?.enabled && !globalData.access?.session?.authenticated) {
     return "先登录控制台";
   }
-  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
-    return verification.recommendedAction;
+  if (verification && !verification.goLiveReady) {
+    if (verification.requiresProviderAction) {
+      return "Provider 待开通推理权限";
+    }
+    return "先完成 Ollama Cloud 验证";
   }
-  return "可以开始外部试点";
+  return "现在可正式试点";
 }
 
 function buildPilotLaunchNote(globalData, verification) {
@@ -172,10 +176,12 @@ function buildPilotLaunchNote(globalData, verification) {
   if (globalData.access?.config?.enabled && !globalData.access?.session?.authenticated) {
     return "未登录时仍可浏览摘要，但真实业务操作和治理动作会继续要求身份门禁。";
   }
-  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
-    return verification.blockedReason || "先把运行时链路和模型可见性打通，再把系统交给外部试点用户。";
+  if (verification && !verification.goLiveReady) {
+    return verification.goLiveBlockers?.[0]
+      || verification.blockedReason
+      || "先把 Ollama Cloud 的真实模型与推理路径验证完成，再让外部试点用户进入。";
   }
-  return "建议从业务工作台的示例决策开始，再进入回放中心和依据库。";
+  return "建议从业务工作台的示例决策开始，再进入回放中心、依据库和治理摘要。";
 }
 
 function bindLinks() {

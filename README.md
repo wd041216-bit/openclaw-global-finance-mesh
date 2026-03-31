@@ -97,7 +97,7 @@ To wire a cloud brain without committing secrets, set environment variables loca
 ```bash
 export OLLAMA_MODE=cloud
 export OLLAMA_API_KEY=your_key_here
-export OLLAMA_MODEL=qwen3:8b
+export OLLAMA_MODEL=kimi-k2.5
 export FINANCE_MESH_CLOUD_API_FLAVOR=auto
 npm run dev
 ```
@@ -109,6 +109,8 @@ Cloud mode now supports three protocol strategies:
 - `auto`: probe both Ollama-native and OpenAI-compatible catalog/inference paths, then prefer the first working pair
 - `ollama_native`: force `/api/tags` and `/api/chat`
 - `openai_compatible`: force `/v1/models` and `/v1/chat/completions`
+
+The current external-pilot default is `Ollama Cloud + kimi-k2.5`. OpenAI-compatible gateways remain supported, but they are no longer a hard blocker for the current pilot go-live path.
 
 Minimal cloud verification flow:
 
@@ -127,6 +129,14 @@ Expected outcomes:
 - `errorKind=unauthorized`: the key or account lacks the required permission
 - `errorKind=endpoint_not_supported`: switch `FINANCE_MESH_CLOUD_API_FLAVOR` or confirm the provider surface
 
+For the current pilot, the target end-state is:
+
+- provider: `Ollama Cloud`
+- model: `kimi-k2.5`
+- `verificationStatus=fully_usable`
+- `goLiveReady=true`
+- `validatedFlavor=ollama_native`
+
 Catalog access is not the same as inference access. Do not treat a successful model listing as proof that cloud reasoning is enabled.
 
 The system page now also builds a cloud doctor report with:
@@ -137,6 +147,7 @@ The system page now also builds a cloud doctor report with:
 - copy-ready catalog and inference `curl` commands
 - an escalation note you can send to the provider when catalog works but inference is still blocked
 - a standardized verification status for pilot use: `fully_usable`, `catalog_only_entitlement_blocked`, `cloud_unauthorized`, `protocol_mismatch`, `model_visibility_gap`, or `network_or_tls_failure`
+- a go-live gate with `verifiedModel`, `validatedFlavor`, `goLiveReady`, `goLiveBlockers`, and `requiresProviderAction`
 
 See [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md) for the cloud runtime runbook.
 See [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md) for the single-instance external pilot path.
@@ -185,12 +196,13 @@ This keeps business work readable, while preserving advanced details for reviewe
 
 For a small external pilot, use this order:
 
-1. Copy `.env.pilot.example` into your environment.
-2. Start a single-instance Docker deployment.
-3. Complete admin bootstrap and login from `系统设置`.
-4. Verify runtime with `npm run review:pilot`.
-5. Run at least one real cloud-provider verification with `npm run verify:cloud-provider`.
-6. Capture backup + restore success before inviting external users.
+1. Copy `.env.pilot.example` to `.env`.
+2. Fill in a real `OLLAMA_API_KEY` for `Ollama Cloud`.
+3. Start the single-instance Docker deployment.
+4. Complete admin bootstrap and login from `系统设置`.
+5. Verify runtime with `npm run verify:cloud-provider` and confirm `kimi-k2.5` is fully usable.
+6. Run `npm run review:pilot` and confirm the runtime gate passes.
+7. Capture backup + restore success before inviting external users.
 
 Current pilot review status lives in [docs/pilot-functional-review-2026-03-31.md](./docs/pilot-functional-review-2026-03-31.md).
 
