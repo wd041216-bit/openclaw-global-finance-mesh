@@ -621,7 +621,13 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     if (!auth) {
       return;
     }
-    sendJson(res, 200, { ok: true, config: await runtimeStore.getPublic() });
+    const runtimeOverview = await operations.getRuntimeOverview();
+    sendJson(res, 200, {
+      ok: true,
+      config: await runtimeStore.getPublic(),
+      runtime: runtimeOverview,
+      verification: runtimeOverview.verification,
+    });
     return;
   }
 
@@ -654,7 +660,13 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
         persistedSecret: body.persistSecret === true,
       },
     });
-    sendJson(res, 200, { ok: true, config });
+    const runtimeOverview = await operations.getRuntimeOverview();
+    sendJson(res, 200, {
+      ok: true,
+      config,
+      runtime: runtimeOverview,
+      verification: runtimeOverview.verification,
+    });
     return;
   }
 
@@ -665,11 +677,13 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     }
     const config = await runtimeStore.get();
     const models = await brain.listModels(config);
+    const runtimeOverview = await operations.getRuntimeOverview();
     sendJson(res, 200, {
       ok: true,
       models,
       mode: config.mode,
       cloudApiFlavor: config.cloudApiFlavor,
+      verification: runtimeOverview.verification,
     });
     return;
   }
@@ -690,6 +704,12 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       },
       probe,
     );
+    const configSnapshot = toRuntimeConfigSnapshot(config);
+    const auditRun = await auditRuns.recordProbe({
+      config: configSnapshot,
+      probe,
+      actor: auth.actor,
+    });
     const doctorReport = buildRuntimeDoctorReport(
       {
         mode: config.mode,
@@ -701,13 +721,10 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       },
       probe,
       diagnosis,
+      {
+        lastVerifiedAt: auditRun.createdAt,
+      },
     );
-    const configSnapshot = toRuntimeConfigSnapshot(config);
-    const auditRun = await auditRuns.recordProbe({
-      config: configSnapshot,
-      probe,
-      actor: auth.actor,
-    });
     await operatorActivity.record({
       action: "runtime.probe",
       outcome: probe.ok ? "success" : "failure",
@@ -725,7 +742,14 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       actor: auth.actor,
       runId: auditRun.id,
     });
-    sendJson(res, 200, { ok: true, probe, diagnosis, doctorReport, auditRun });
+    sendJson(res, 200, {
+      ok: true,
+      probe,
+      diagnosis,
+      doctorReport,
+      verification: doctorReport,
+      auditRun,
+    });
     return;
   }
 

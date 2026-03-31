@@ -44,6 +44,7 @@
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
 - Docker 单实例基线与 Kubernetes 原生单副本清单
 - GitHub Actions CI 与 semver 发布流程，覆盖 Node 22 / 25 兼容性校验、语法校验、restore smoke、浏览器 smoke、镜像发布和 npm 发布
+- 面向外部试点的交付资产：`.env.pilot.example`、`npm run review:pilot`、`npm run verify:cloud-provider`、以及单机试点 runbook
 
 ## 当前定位
 
@@ -90,6 +91,7 @@ curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
 npm run smoke:cloud
 npm run doctor:cloud
+npm run verify:cloud-provider -- --out output/cloud-verification.json
 ```
 
 结果判断原则：
@@ -108,8 +110,10 @@ npm run doctor:cloud
 - 当前模型是否真实可见，以及替代模型建议
 - 可直接复制的目录 / 推理 `curl` 命令
 - 当目录可读但推理被挡住时，可直接发给 provider 的升级说明
+- 标准化验证结论：`fully_usable`、`catalog_only_entitlement_blocked`、`cloud_unauthorized`、`protocol_mismatch`、`model_visibility_gap`、`network_or_tls_failure`
 
 完整排障路径见 [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)。
+外部试点落地顺序见 [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md)。
 
 ## 身份与访问控制
 
@@ -152,6 +156,19 @@ npm run dev
 - `agents.html`：Agent Hub
 
 这样做的目标很直接：让非技术人员先看懂页面边界，再决定要不要进入高级详情。
+
+## 外部试点使用顺序
+
+建议按下面顺序把产品交给外部试点用户：
+
+1. 使用 `.env.pilot.example` 准备单实例环境
+2. 启动 Docker 单实例
+3. 在 `系统设置` 完成管理员初始化和登录
+4. 先跑 `npm run review:pilot`
+5. 用 `npm run verify:cloud-provider` 跑真实 provider 结果
+6. 确认备份和恢复演练已经通过，再开放给外部用户
+
+当前复查结论见 [docs/pilot-functional-review-2026-03-31.md](./docs/pilot-functional-review-2026-03-31.md)。
 
 ## 多 Agent 兼容层
 

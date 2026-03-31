@@ -26,6 +26,8 @@ Recommended production posture for the single-instance baseline:
 4. Point `FINANCE_MESH_BACKUP_LOCAL_DIR` or the `FINANCE_MESH_BACKUP_S3_*` variables at an off-box target.
 5. Set `FINANCE_MESH_RESTORE_DRILL_RETENTION_DAYS` and `FINANCE_MESH_RESTORE_DRILL_WARN_HOURS` if your ops policy differs from the default weekly drill posture.
 
+For a small external pilot, start from `.env.pilot.example` and the VM + Docker flow in [external-pilot-runbook.md](./external-pilot-runbook.md).
+
 ## Kubernetes
 
 The manifests under `deploy/kubernetes/` intentionally stay simple:

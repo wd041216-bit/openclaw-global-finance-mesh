@@ -38,23 +38,44 @@ export interface RuntimeDoctorCommand {
 export interface RuntimeDoctorReport {
   summary: string;
   provider: RuntimeDoctorProviderGuess;
+  verificationStatus:
+    | "not_verified"
+    | "local_ready"
+    | "local_attention"
+    | "fully_usable"
+    | "catalog_only_entitlement_blocked"
+    | "cloud_unauthorized"
+    | "protocol_mismatch"
+    | "model_visibility_gap"
+    | "network_or_tls_failure";
+  verificationLabel: string;
+  lastVerifiedAt?: string;
+  currentFlavor: CloudApiFlavor;
+  currentFlavorLabel: string;
   recommendedFlavor: CloudApiFlavor;
   recommendedFlavorLabel: string;
   validatedFlavor?: CloudApiFlavorResolved;
   validatedFlavorLabel?: string;
+  catalogAccess: "ready" | "blocked" | "not_checked";
+  inferenceAccess: "ready" | "blocked" | "not_checked";
+  blockedReason?: string;
+  recommendedAction: string;
   configuredModelVisible: boolean;
   visibleModelCount: number;
+  visibleModels: string[];
   suggestedModels: string[];
   operatorChecklist: string[];
   manualChecks: RuntimeDoctorCommand[];
   escalationTitle?: string;
   escalationNote?: string;
+  escalationTemplate?: string;
 }
 
 export function buildRuntimeDoctorReport(
   config: RuntimeDoctorSnapshot,
   probe?: BrainProbeResult | null,
   diagnosis: RuntimeDiagnosis = buildRuntimeDiagnosis(config, probe),
+  options?: { lastVerifiedAt?: string },
 ): RuntimeDoctorReport {
   const provider = guessProvider(config, probe);
   const visibleModels = uniqueStrings(probe?.availableModels ?? []);
@@ -64,20 +85,33 @@ export function buildRuntimeDoctorReport(
     : rankSuggestedModels(config.model, visibleModels).slice(0, 3);
   const validatedFlavor = detectValidatedFlavor(probe);
   const recommendedFlavor = selectRecommendedFlavor(config, diagnosis, validatedFlavor);
+  const escalation = buildEscalation(config, diagnosis, probe, recommendedFlavor);
+  const verificationStatus = determineVerificationStatus(config, diagnosis);
 
   return {
     summary: diagnosis.summary,
     provider,
+    verificationStatus,
+    verificationLabel: translateVerificationStatus(verificationStatus),
+    lastVerifiedAt: options?.lastVerifiedAt,
+    currentFlavor: config.cloudApiFlavor,
+    currentFlavorLabel: translateCloudFlavor(config.cloudApiFlavor),
     recommendedFlavor,
     recommendedFlavorLabel: translateCloudFlavor(recommendedFlavor),
     validatedFlavor: validatedFlavor || undefined,
     validatedFlavorLabel: validatedFlavor ? translateCloudFlavor(validatedFlavor) : undefined,
+    catalogAccess: determineAccessStatus(probe?.listModelsOk, probe?.catalogChecks.length),
+    inferenceAccess: determineAccessStatus(probe?.inferenceOk, probe?.inferenceChecks.length),
+    blockedReason: buildBlockedReason(config, diagnosis, configuredModelVisible),
+    recommendedAction: diagnosis.nextActionTitle,
     configuredModelVisible,
     visibleModelCount: visibleModels.length,
+    visibleModels,
     suggestedModels,
     operatorChecklist: buildChecklist(config, diagnosis, recommendedFlavor, configuredModelVisible, suggestedModels),
     manualChecks: buildManualChecks(config, diagnosis, probe, recommendedFlavor),
-    ...buildEscalation(config, diagnosis, probe, recommendedFlavor),
+    ...escalation,
+    escalationTemplate: escalation.escalationNote,
   };
 }
 
@@ -291,6 +325,87 @@ function buildEscalation(
   }
 
   return {};
+}
+
+function determineVerificationStatus(
+  config: RuntimeDoctorSnapshot,
+  diagnosis: RuntimeDiagnosis,
+): RuntimeDoctorReport["verificationStatus"] {
+  if (config.mode === "local") {
+    return diagnosis.businessStatusCode === "local_ok" ? "local_ready" : "local_attention";
+  }
+
+  switch (diagnosis.businessStatusCode) {
+    case "cloud_ok":
+      return "fully_usable";
+    case "catalog_only":
+      return "catalog_only_entitlement_blocked";
+    case "unauthorized":
+      return "cloud_unauthorized";
+    case "protocol_mismatch":
+      return "protocol_mismatch";
+    case "model_not_found":
+      return "model_visibility_gap";
+    case "network_error":
+      return "network_or_tls_failure";
+    default:
+      return "not_verified";
+  }
+}
+
+function translateVerificationStatus(
+  status: RuntimeDoctorReport["verificationStatus"],
+): string {
+  switch (status) {
+    case "local_ready":
+      return "本地模式正常";
+    case "local_attention":
+      return "本地模式待处理";
+    case "fully_usable":
+      return "云端可用";
+    case "catalog_only_entitlement_blocked":
+      return "仅目录可用";
+    case "cloud_unauthorized":
+      return "云端未授权";
+    case "protocol_mismatch":
+      return "协议未匹配";
+    case "model_visibility_gap":
+      return "模型不可用";
+    case "network_or_tls_failure":
+      return "网络或 TLS 失败";
+    default:
+      return "等待验证";
+  }
+}
+
+function determineAccessStatus(
+  ok: boolean | undefined,
+  checkCount: number | undefined,
+): RuntimeDoctorReport["catalogAccess"] {
+  if (ok === true) {
+    return "ready";
+  }
+  if ((checkCount || 0) > 0) {
+    return "blocked";
+  }
+  return "not_checked";
+}
+
+function buildBlockedReason(
+  config: RuntimeDoctorSnapshot,
+  diagnosis: RuntimeDiagnosis,
+  configuredModelVisible: boolean,
+): string | undefined {
+  if (config.mode === "local" && diagnosis.businessStatusCode === "local_attention") {
+    if (!configuredModelVisible) {
+      return `当前本地模型 ${config.model} 不在目录里。`;
+    }
+    return diagnosis.summary;
+  }
+  if (diagnosis.businessStatusCode === "cloud_ok") {
+    return undefined;
+  }
+  return diagnosis.summary;
 }
 
 function buildCurlCommand(

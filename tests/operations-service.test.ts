@@ -533,6 +533,9 @@ test("operations overview translates cloud catalog-only access into business-fri
   assert.equal(overview.runtime.diagnosis.catalog.status, "ready");
   assert.equal(overview.runtime.diagnosis.inference.status, "warning");
   assert.match(overview.runtime.diagnosis.nextActionTitle, /推理权限|entitlement/);
+  assert.equal(overview.runtime.verification.verificationStatus, "catalog_only_entitlement_blocked");
+  assert.equal(overview.runtime.verification.catalogAccess, "ready");
+  assert.equal(overview.runtime.verification.inferenceAccess, "blocked");
   assert.equal(overview.runtime.doctorReport.provider.id, "custom_cloud");
   assert.equal(overview.runtime.doctorReport.recommendedFlavor, "ollama_native");
   assert.ok(overview.runtime.doctorReport.manualChecks.some((command) => command.endpoint === "/api/chat"));
@@ -540,5 +543,6 @@ test("operations overview translates cloud catalog-only access into business-fri
   assert.equal(overview.runtime.lastProbe?.errorKind, "unauthorized");
   assert.equal(overview.runtime.lastProbe?.diagnosis.businessStatus, "仅模型目录可用");
   assert.equal(health.checks.runtime.status, "degraded");
+  assert.equal(health.checks.runtime.detail?.verificationStatus, "catalog_only_entitlement_blocked");
   assert.match(health.checks.runtime.summary, /推理权限/);
 });

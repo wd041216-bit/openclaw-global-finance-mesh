@@ -70,7 +70,8 @@ function render() {
     : buildFallbackActions(overview);
   const runtime = overview?.runtime;
   const runtimeDiagnosis = runtime?.diagnosis;
-  const runtimeDoctorReport = runtime?.doctorReport;
+  const runtimeDoctorReport = runtime?.verification || runtime?.doctorReport;
+  const startCallout = buildPilotStartCallout(overview, runtimeDoctorReport);
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -84,6 +85,9 @@ function render() {
         </div>
         <div class="feature-grid two-up">
           ${actions.slice(0, 4).map(renderActionCard).join("")}
+        </div>
+        <div class="top-gap">
+          ${startCallout}
         </div>
         <div class="soft-divider"></div>
         ${calloutCard({
@@ -179,6 +183,49 @@ function render() {
       </div>
     </section>
   `;
+}
+
+function buildPilotStartCallout(overview, verification) {
+  if (overview?.identity?.bootstrapRequired) {
+    return calloutCard({
+      kicker: "试点第一步",
+      title: "先创建首个管理员",
+      note: "完成 bootstrap 之后，控制台的身份、治理、恢复和运行时设置才会全部开放。",
+      tone: "warning",
+      meta: ["入口：系统设置", "完成后再登录控制台"],
+    });
+  }
+
+  if (overview?.identity?.authEnabled && !overview?.identity?.authenticated) {
+    return calloutCard({
+      kicker: "试点第一步",
+      title: "先登录控制台，再开始真实业务操作",
+      note: "未登录时仍能浏览首页和工作台摘要，但决策、回放、治理和系统动作都会继续要求身份门禁。",
+      tone: "info",
+      meta: ["入口：系统设置", overview?.identity?.summary || "支持本地应急令牌登录"],
+    });
+  }
+
+  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
+    return calloutCard({
+      kicker: "试点阻塞项",
+      title: verification.recommendedAction,
+      note: verification.blockedReason || "先把运行时链路打通，再让业务用户开始真实试点。",
+      tone: verification.catalogAccess === "ready" && verification.inferenceAccess !== "ready" ? "warning" : "info",
+      meta: [
+        verification.provider?.label ? `Provider ${verification.provider.label}` : null,
+        verification.lastVerifiedAt ? `最近验证 ${formatDateTime(verification.lastVerifiedAt)}` : "尚未形成真实验证时间",
+      ].filter(Boolean),
+    });
+  }
+
+  return calloutCard({
+    kicker: "试点第一步",
+    title: "可以直接从示例决策开始",
+    note: "先跑一次示例决策，再进入回放中心和依据库，会是最顺的外部试点 onboarding 路径。",
+    tone: "good",
+    meta: ["推荐顺序：决策 → 回放 → 依据 → 治理摘要"],
+  });
 }
 
 function renderActionCard(action) {

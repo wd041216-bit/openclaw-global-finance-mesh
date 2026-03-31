@@ -51,15 +51,24 @@ test("runtime doctor report turns catalog-only cloud access into an entitlement 
   };
 
   const diagnosis = buildRuntimeDiagnosis(config, probe);
-  const report = buildRuntimeDoctorReport(config, probe, diagnosis);
+  const report = buildRuntimeDoctorReport(config, probe, diagnosis, {
+    lastVerifiedAt: "2026-03-31T05:20:00.000Z",
+  });
 
   assert.equal(report.provider.id, "ollama_cloud");
+  assert.equal(report.verificationStatus, "catalog_only_entitlement_blocked");
+  assert.equal(report.verificationLabel, "仅目录可用");
+  assert.equal(report.catalogAccess, "ready");
+  assert.equal(report.inferenceAccess, "blocked");
+  assert.equal(report.lastVerifiedAt, "2026-03-31T05:20:00.000Z");
   assert.equal(report.recommendedFlavor, "ollama_native");
   assert.equal(report.configuredModelVisible, true);
+  assert.equal(report.recommendedAction, diagnosis.nextActionTitle);
   assert.match(report.operatorChecklist.join(" "), /entitlement|provider|401/);
   assert.ok(report.manualChecks.some((command) => command.endpoint === "/api/tags"));
   assert.ok(report.manualChecks.some((command) => command.endpoint === "/api/chat"));
   assert.match(report.escalationNote || "", /inference entitlement|401 unauthorized|推理/);
+  assert.match(report.escalationTemplate || "", /inference entitlement|401 unauthorized|推理/);
 });
 
 test("runtime doctor report suggests nearby visible models when the configured model is gone", () => {
@@ -112,8 +121,10 @@ test("runtime doctor report suggests nearby visible models when the configured m
   const report = buildRuntimeDoctorReport(config, probe, diagnosis);
 
   assert.equal(report.provider.id, "openai_compatible_gateway");
+  assert.equal(report.verificationStatus, "model_visibility_gap");
   assert.equal(report.configuredModelVisible, false);
   assert.ok(report.suggestedModels.includes("qwen3:32b"));
   assert.ok(report.suggestedModels.includes("qwen3:8b"));
+  assert.equal(report.visibleModels.length, 3);
   assert.match(report.operatorChecklist.join(" "), /模型名|目录/);
 });

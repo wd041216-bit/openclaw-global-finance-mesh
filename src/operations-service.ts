@@ -35,6 +35,7 @@ export interface DashboardOverview {
     summary: string;
     diagnosis: RuntimeDiagnosis;
     doctorReport: RuntimeDoctorReport;
+    verification: RuntimeDoctorReport;
     lastProbe: RunHealthSummary | null;
   };
   decisioning: {
@@ -189,6 +190,19 @@ interface OperationsServiceOptions {
   restores: RestoreDrillStore;
 }
 
+export interface RuntimeOverview {
+  mode: string;
+  model: string;
+  hasApiKey: boolean;
+  cloudApiFlavor: string;
+  businessStatus: string;
+  summary: string;
+  diagnosis: RuntimeDiagnosis;
+  doctorReport: RuntimeDoctorReport;
+  verification: RuntimeDoctorReport;
+  lastProbe: RunHealthSummary | null;
+}
+
 export class OperationsService {
   private readonly version: string;
   private readonly startedAt: number;
@@ -256,6 +270,7 @@ export class OperationsService {
         summary: runtimeSummary.summary,
         diagnosis: runtimeSummary.diagnosis,
         doctorReport: runtimeSummary.doctorReport,
+        verification: runtimeSummary.doctorReport,
         lastProbe: runtimeSummary.lastProbe,
       },
       decisioning: {
@@ -302,6 +317,7 @@ export class OperationsService {
       actions: buildActions({
         session,
         accessConfig,
+        runtime: runtimeSummary,
         draftCount: legalStats.byStatus.draft,
         integrity,
         backupConfigured: this.backups.getConfigurationStatus().anyConfigured,
@@ -345,6 +361,26 @@ export class OperationsService {
         backup: latestBackup ? summarizeBackup(latestBackup) : null,
         restoreDrill: recovery.latestDrill,
       },
+    };
+  }
+
+  async getRuntimeOverview(): Promise<RuntimeOverview> {
+    const [runtimeConfig, latestProbe] = await Promise.all([
+      this.runtimeStore.getPublic(),
+      this.getLatestRun("probe"),
+    ]);
+    const runtimeSummary = summarizeRuntimeState(runtimeConfig, latestProbe);
+    return {
+      mode: runtimeConfig.mode,
+      model: runtimeConfig.model,
+      hasApiKey: runtimeConfig.hasApiKey,
+      cloudApiFlavor: runtimeConfig.cloudApiFlavor,
+      businessStatus: runtimeSummary.businessStatus,
+      summary: runtimeSummary.summary,
+      diagnosis: runtimeSummary.diagnosis,
+      doctorReport: runtimeSummary.doctorReport,
+      verification: runtimeSummary.doctorReport,
+      lastProbe: runtimeSummary.lastProbe,
     };
   }
 
@@ -522,6 +558,9 @@ function summarizeRuntimeState(
     },
     probeSnapshot,
     diagnosis,
+    {
+      lastVerifiedAt: latestProbe?.createdAt,
+    },
   );
   if (!latestProbe) {
     return {
@@ -678,6 +717,7 @@ function summarizeRecovery(
 function buildActions(input: {
   session: AccessSessionState;
   accessConfig: Awaited<ReturnType<AccessControlStore["getPublicConfig"]>>;
+  runtime: ReturnType<typeof summarizeRuntimeState>;
   draftCount: number;
   integrity: AuditIntegrityStatus;
   backupConfigured: boolean;
@@ -697,6 +737,25 @@ function buildActions(input: {
       tone: "primary",
     });
     return actions;
+  }
+
+  if (
+    input.runtime.doctorReport.verificationStatus === "not_verified"
+    || input.runtime.doctorReport.verificationStatus === "local_attention"
+    || input.runtime.doctorReport.verificationStatus === "catalog_only_entitlement_blocked"
+    || input.runtime.doctorReport.verificationStatus === "cloud_unauthorized"
+    || input.runtime.doctorReport.verificationStatus === "protocol_mismatch"
+    || input.runtime.doctorReport.verificationStatus === "model_visibility_gap"
+    || input.runtime.doctorReport.verificationStatus === "network_or_tls_failure"
+  ) {
+    actions.push({
+      id: "open-system-health-priority",
+      title: input.runtime.mode === "cloud" ? "先打通云端运行时" : "先修复本地运行时",
+      description: input.runtime.doctorReport.recommendedAction,
+      workspace: "system",
+      intent: "open_system_health",
+      tone: "warning",
+    });
   }
 
   actions.push({
@@ -796,6 +855,9 @@ function buildRuntimeCheck(
         cloudApiFlavor: runtimeConfig.cloudApiFlavor,
         hasApiKey: runtimeConfig.hasApiKey,
         businessStatus: summary.businessStatus,
+        verificationStatus: summary.doctorReport.verificationStatus,
+        verificationLabel: summary.doctorReport.verificationLabel,
+        provider: summary.doctorReport.provider,
         nextActionTitle: summary.diagnosis.nextActionTitle,
         recommendedActions: summary.diagnosis.recommendedActions,
       },
@@ -813,6 +875,10 @@ function buildRuntimeCheck(
       mode: latest.mode,
       businessStatus: latest.businessStatus,
       cloudApiFlavor: latest.cloudApiFlavor,
+      verificationStatus: summary.doctorReport.verificationStatus,
+      verificationLabel: summary.doctorReport.verificationLabel,
+      provider: summary.doctorReport.provider,
+      lastVerifiedAt: summary.doctorReport.lastVerifiedAt,
       selectedCatalogEndpoint: latest.selectedCatalogEndpoint,
       selectedInferenceEndpoint: latest.selectedInferenceEndpoint,
       nextActionTitle: latest.diagnosis.nextActionTitle,

@@ -107,3 +107,51 @@ test("runtime diagnosis calls out protocol mismatch when both endpoints are unsu
     /auto|ollama_native|openai_compatible|cloudBaseUrl/,
   );
 });
+
+test("runtime diagnosis calls out local model visibility gaps instead of generic local failure", () => {
+  const diagnosis = buildRuntimeDiagnosis(
+    {
+      mode: "local",
+      model: "qwen3:8b",
+      hasApiKey: false,
+      cloudApiFlavor: "auto",
+    },
+    {
+      ok: false,
+      mode: "local",
+      model: "qwen3:8b",
+      cloudApiFlavor: "auto",
+      listModelsOk: true,
+      inferenceOk: false,
+      availableModels: ["qwen3:32b", "qwen3:14b"],
+      authStatus: "not_required",
+      catalogChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/tags",
+          ok: true,
+          latencyMs: 18,
+          authStatus: "not_required",
+          modelCount: 2,
+          availableModels: ["qwen3:32b", "qwen3:14b"],
+        },
+      ],
+      inferenceChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/chat",
+          ok: false,
+          latencyMs: 42,
+          authStatus: "not_required",
+          errorKind: "unknown",
+          error: "missing model",
+        },
+      ],
+    },
+  );
+
+  assert.equal(diagnosis.businessStatusCode, "local_attention");
+  assert.equal(diagnosis.businessStatus, "本地模型未就绪");
+  assert.match(diagnosis.summary, /qwen3:8b/);
+  assert.match(diagnosis.nextActionTitle, /模型名/);
+});

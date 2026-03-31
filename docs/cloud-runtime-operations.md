@@ -39,6 +39,7 @@ Run:
 ```bash
 npm run smoke:cloud
 npm run doctor:cloud
+npm run verify:cloud-provider -- --out output/cloud-verification.json
 ```
 
 You will get:
@@ -47,6 +48,7 @@ You will get:
 - the raw cloud probe result
 - the normalized diagnosis object
 - a cloud doctor report with provider guess, suggested protocol, manual `curl` checks, and escalation text
+- a standardized verification record you can archive for pilot signoff
 
 ## How to read the result
 
@@ -135,3 +137,20 @@ The workbench shows a business-readable runtime conclusion instead of a generic 
 ## Honest boundary
 
 These diagnostics can prove whether the remaining blocker is likely on the provider account side, but they do not grant entitlements by themselves. If a real key still returns `401 unauthorized` on inference while catalog access succeeds, the repo should be considered correctly implemented but still blocked by provider-side permission.
+
+## Pilot artifact rule
+
+For external-pilot signoff, keep one verification artifact per provider class:
+
+- one for `Ollama Cloud`
+- one for an `OpenAI-compatible gateway`
+
+Each artifact should include:
+
+- verification status
+- provider identity
+- current / validated protocol
+- catalog and inference outcomes
+- visible models
+- recommended action
+- escalation template

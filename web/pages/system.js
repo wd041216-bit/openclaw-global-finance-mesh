@@ -1030,7 +1030,7 @@ function renderRuntime() {
   const runtime = state.runtimeConfig;
   const lastProbe = state.probeResult || health?.recent?.probe || globalData.overview?.runtime?.lastProbe;
   const diagnosis = state.probeDiagnosis || runtimeOverview?.diagnosis || lastProbe?.diagnosis || null;
-  const doctorReport = state.probeDoctorReport || runtimeOverview?.doctorReport || null;
+  const doctorReport = state.probeDoctorReport || runtimeOverview?.verification || runtimeOverview?.doctorReport || null;
   const canOperateNow = canOperate(globalData);
   const canManageNow = canManageAdmin(globalData);
   const runtimeBusinessStatus = diagnosis?.businessStatus || runtimeOverview?.businessStatus || lastProbe?.businessStatus || "等待诊断";
@@ -1039,33 +1039,35 @@ function renderRuntime() {
       <div class="summary-band three-up">
         ${summaryCard({
           kicker: "运行摘要",
-          title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置",
+          title: doctorReport?.verificationLabel || (runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置"),
           note: diagnosis?.summary || runtimeOverview?.summary || health.checks.runtime?.summary || "系统运行状态会显示在这里。",
           pillHtml: pill(
-            health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
+            doctorReport ? toneFromVerificationStatus(doctorReport.verificationStatus) : health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
             runtimeBusinessStatus,
           ),
           meta: [
             `${health.environment}/${health.teamScope}`,
+            doctorReport?.provider?.label ? `Provider ${doctorReport.provider.label}` : null,
+            doctorReport?.lastVerifiedAt ? `最近验证 ${formatDateTime(doctorReport.lastVerifiedAt)}` : null,
             `已运行 ${humanizeSeconds(health.uptimeSeconds)}`,
             health.recent?.backup?.createdAt ? `最近备份 ${formatDateTime(health.recent.backup.createdAt)}` : "尚无备份",
-          ],
+          ].filter(Boolean),
         })}
         ${summaryCard({
           kicker: "目录读取",
           title: formatCatalogStatus(runtime, diagnosis || lastProbe),
-          note: diagnosis?.catalog?.summary || describeCatalogStatus(runtime, lastProbe),
-          pillHtml: pill(statusToneForBoolean(lastProbe?.listModelsOk), lastProbe?.listModelsOk ? "catalog_ready" : "catalog_pending"),
+          note: diagnosis?.catalog?.summary || doctorReport?.blockedReason || describeCatalogStatus(runtime, lastProbe),
+          pillHtml: pill(toneFromAccessStatus(doctorReport?.catalogAccess), formatAccessStatus(doctorReport?.catalogAccess, "catalog")),
           meta: [
-            runtime?.mode === "cloud" ? `协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
+            doctorReport?.currentFlavorLabel ? `协议 ${doctorReport.currentFlavorLabel}` : runtime?.mode === "cloud" ? `协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
             diagnosis?.catalog?.selectedEndpoint || lastProbe?.selectedCatalogEndpoint || "等待探针",
           ],
         })}
         ${calloutCard({
           kicker: "推理诊断",
           title: formatInferenceStatus(runtime, diagnosis || lastProbe),
-          note: diagnosis?.inference?.summary || describeInferenceStatus(runtime, lastProbe),
-          tone: lastProbe?.inferenceOk ? "good" : lastProbe?.errorKind === "unauthorized" ? "warning" : "info",
+          note: diagnosis?.inference?.summary || doctorReport?.blockedReason || describeInferenceStatus(runtime, lastProbe),
+          tone: toneFromAccessStatus(doctorReport?.inferenceAccess),
           meta: [
             `错误分类 ${formatErrorKind(lastProbe?.errorKind)}`,
             `鉴权状态 ${formatAuthStatus(lastProbe?.authStatus, runtime)}`,
@@ -1079,14 +1081,14 @@ function renderRuntime() {
     ${runtimeSummary}
     ${calloutCard({
       kicker: "下一步",
-      title: diagnosis?.nextActionTitle || buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
+      title: doctorReport?.recommendedAction || diagnosis?.nextActionTitle || buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
       note: canOperateNow
-        ? (diagnosis?.recommendedActions?.join(" ") || buildRuntimeActionNote(runtime, runtimeOverview, lastProbe))
+        ? (diagnosis?.recommendedActions?.join(" ") || doctorReport?.blockedReason || buildRuntimeActionNote(runtime, runtimeOverview, lastProbe))
         : "当前角色只能看摘要，探针动作需要 operator 或 admin。",
-      tone: lastProbe?.inferenceOk ? "good" : "warning",
+      tone: doctorReport ? calloutToneFromVerificationStatus(doctorReport.verificationStatus) : lastProbe?.inferenceOk ? "good" : "warning",
       meta: [
         health?.metricsAvailable ? "metrics 已启用" : "metrics 未启用",
-        lastProbe?.createdAt ? `最近探针 ${formatDateTime(lastProbe.createdAt)}` : "尚未探针",
+        doctorReport?.lastVerifiedAt ? `最近验证 ${formatDateTime(doctorReport.lastVerifiedAt)}` : lastProbe?.createdAt ? `最近探针 ${formatDateTime(lastProbe.createdAt)}` : "尚未探针",
       ],
     })}
     ${state.runtimeMessage ? `<p class="footer-note">${escapeHtml(state.runtimeMessage)}</p>` : ""}
@@ -1484,34 +1486,46 @@ function renderDoctorReport(report) {
       <h4>${escapeHtml(report.summary)}</h4>
       <div class="summary-band three-up top-gap">
         ${summaryCard({
-          kicker: "Provider 判断",
-          title: report.provider.label,
-          note: report.provider.reason,
+          kicker: "验证状态",
+          title: report.verificationLabel,
+          note: report.blockedReason || report.provider.reason,
           pillHtml: pill(
-            report.provider.confidence === "high" ? "good" : report.provider.confidence === "medium" ? "info" : "warn",
-            report.provider.confidence,
+            toneFromVerificationStatus(report.verificationStatus),
+            report.verificationStatus,
           ),
-          meta: [report.provider.id],
+          meta: [
+            report.provider.label,
+            report.lastVerifiedAt ? `最近验证 ${formatDateTime(report.lastVerifiedAt)}` : "尚未形成真实验证时间",
+          ],
         })}
         ${summaryCard({
-          kicker: "推荐协议",
-          title: report.recommendedFlavorLabel,
+          kicker: "Provider 与协议",
+          title: report.provider.label,
           note: report.validatedFlavorLabel
             ? `最近一次已命中 ${report.validatedFlavorLabel}。`
-            : "当前还没有稳定命中的协议，将按推荐顺序继续排查。",
-          pillHtml: pill(report.validatedFlavorLabel ? "good" : "info", report.recommendedFlavor),
-          meta: [report.validatedFlavorLabel ? `已验证 ${report.validatedFlavorLabel}` : "等待验证"],
+            : `当前配置协议为 ${report.currentFlavorLabel}，建议优先按 ${report.recommendedFlavorLabel} 排查。`,
+          pillHtml: pill(report.provider.confidence === "high" ? "good" : report.provider.confidence === "medium" ? "info" : "warn", report.provider.confidence),
+          meta: [
+            `当前 ${report.currentFlavorLabel}`,
+            report.validatedFlavorLabel ? `已验证 ${report.validatedFlavorLabel}` : `建议 ${report.recommendedFlavorLabel}`,
+          ],
         })}
         ${summaryCard({
-          kicker: "模型可见性",
-          title: modelTitle,
-          note: report.configuredModelVisible
-            ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
-            : report.visibleModelCount
-              ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
-              : "当前还没有拿到可用模型目录。",
-          pillHtml: pill(report.configuredModelVisible ? "good" : "warn", report.configuredModelVisible ? "visible" : "needs_update"),
-          meta: report.suggestedModels.length ? report.suggestedModels : ["等待更多目录信息"],
+          kicker: "目录 / 推理",
+          title: `${formatAccessStatus(report.catalogAccess, "catalog")} / ${formatAccessStatus(report.inferenceAccess, "inference")}`,
+          note: report.recommendedAction,
+          pillHtml: pill(
+            report.inferenceAccess === "ready"
+              ? "good"
+              : report.catalogAccess === "ready"
+                ? "warn"
+                : "info",
+            report.provider.id,
+          ),
+          meta: [
+            `目录 ${formatAccessStatus(report.catalogAccess, "catalog")}`,
+            `推理 ${formatAccessStatus(report.inferenceAccess, "inference")}`,
+          ],
         })}
       </div>
       <div class="page-grid two-up top-gap">
@@ -1519,6 +1533,17 @@ function renderDoctorReport(report) {
           <p class="section-kicker">操作清单</p>
           <h4>按这个顺序排障</h4>
           ${bulletList(report.operatorChecklist, "step-list")}
+          <div class="soft-divider"></div>
+          <p class="section-kicker">模型可见性</p>
+          <p class="summary-note">${escapeHtml(modelTitle)}</p>
+          <p class="summary-note">
+            ${report.configuredModelVisible
+              ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
+              : report.visibleModelCount
+                ? `当前目录里共看到 ${report.visibleModelCount} 个模型。`
+                : "当前还没有拿到可用模型目录。"}
+          </p>
+          ${report.suggestedModels.length ? bulletList(report.suggestedModels, "step-list") : ""}
           ${report.escalationTitle && report.escalationNote
             ? `
               <div class="soft-divider"></div>
@@ -1593,6 +1618,53 @@ function statusToneFromCheck(status) {
     return "bad";
   }
   return "neutral";
+}
+
+function toneFromVerificationStatus(status) {
+  if (status === "fully_usable" || status === "local_ready") {
+    return "good";
+  }
+  if (status === "catalog_only_entitlement_blocked" || status === "local_attention" || status === "model_visibility_gap") {
+    return "warn";
+  }
+  if (status === "cloud_unauthorized" || status === "protocol_mismatch" || status === "network_or_tls_failure") {
+    return "bad";
+  }
+  return "info";
+}
+
+function calloutToneFromVerificationStatus(status) {
+  const tone = toneFromVerificationStatus(status);
+  if (tone === "good") {
+    return "good";
+  }
+  if (tone === "bad") {
+    return "critical";
+  }
+  if (tone === "warn") {
+    return "warning";
+  }
+  return "info";
+}
+
+function toneFromAccessStatus(status) {
+  if (status === "ready") {
+    return "good";
+  }
+  if (status === "blocked") {
+    return "warn";
+  }
+  return "info";
+}
+
+function formatAccessStatus(status, scope) {
+  if (status === "ready") {
+    return scope === "catalog" ? "目录可用" : "推理可用";
+  }
+  if (status === "blocked") {
+    return scope === "catalog" ? "目录受阻" : "推理受阻";
+  }
+  return scope === "catalog" ? "目录待验证" : "推理待验证";
 }
 
 function escapeHtml(value) {

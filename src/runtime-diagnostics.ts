@@ -19,6 +19,7 @@ export interface RuntimeCheckDiagnosis {
 export interface RuntimeDiagnosis {
   businessStatusCode:
     | "local_ok"
+    | "local_attention"
     | "cloud_ok"
     | "catalog_only"
     | "unauthorized"
@@ -283,8 +284,29 @@ function buildLocalDiagnosis(config: RuntimeDiagnosticSnapshot, probe: BrainProb
     };
   }
 
+  const configuredModelVisible = probe.availableModels.some(
+    (item) => normalizeModelName(item) === normalizeModelName(config.model),
+  );
+  if (probe.listModelsOk && probe.availableModels.length > 0 && !configuredModelVisible) {
+    return {
+      businessStatusCode: "local_attention",
+      businessStatus: "本地模型未就绪",
+      summary: `本地目录可读，但当前模型 ${config.model} 不在可见模型目录里。`,
+      nextActionTitle: "先把本地模型名改成目录里真实存在的名称",
+      recommendedActions: [
+        "先读取本地模型目录，确认当前机器已经下载了哪些模型。",
+        "把运行时模型改成目录中实际存在的名称后，再重新执行本地探针。",
+      ],
+      protocolSummary: "本地模式固定走 Ollama Native。",
+      authStatus: "not_required",
+      errorKind: "model_not_found",
+      catalog: buildCatalogDiagnosis(probe, "本地模型目录可读"),
+      inference: buildInferenceDiagnosis(probe, "当前本地模型没有命中可用目录"),
+    };
+  }
+
   return {
-    businessStatusCode: "local_ok",
+    businessStatusCode: "local_attention",
     businessStatus: "本地模式需要复核",
     summary: probe.listModelsOk
       ? "本地目录可读，但本地推理失败。"
@@ -337,6 +359,10 @@ function summarizeCheckFailures(checks: BrainEndpointCheck[]): string {
       return `${translateCloudFlavor(item.flavor)} ${item.endpoint}${status}: ${reason}`;
     })
     .join("；");
+}
+
+function normalizeModelName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function buildProtocolSummary(config: RuntimeDiagnosticSnapshot, probe: BrainProbeResult): string {

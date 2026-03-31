@@ -13,6 +13,7 @@
   },
   "files": [
     ".env.example",
+    ".env.pilot.example",
     "src",
     "web",
     "data",
@@ -32,7 +33,9 @@
     "test": "node --test tests/*.test.ts",
     "verify": "npm test",
     "verify:server": "node scripts/verify-server.ts",
+    "verify:cloud-provider": "node scripts/smoke-cloud.ts",
     "verify:manifests": "node scripts/verify-manifests.ts",
+    "review:pilot": "node scripts/review-pilot.ts",
     "doctor:hosts": "node scripts/doctor-hosts.ts",
     "doctor:cloud": "node scripts/smoke-cloud.ts",
     "smoke:mcp": "node scripts/smoke-mcp.ts",

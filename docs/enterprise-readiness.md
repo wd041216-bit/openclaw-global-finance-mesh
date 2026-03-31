@@ -26,6 +26,7 @@
 - local or cloud LLM routing with protocol-aware cloud selection (`auto`, `ollama_native`, `openai_compatible`)
 - cloud runtime diagnostics that distinguish catalog access from inference access instead of collapsing everything into a single probe failure
 - operator-facing cloud doctor reports with provider guess, suggested model fallback, manual verification commands, and provider escalation notes
+- pilot-readiness assets for single-instance external trials, including `.env.pilot.example`, `npm run review:pilot`, and `npm run verify:cloud-provider`
 - legal library ingestion and grounding
 - Chinese-first multi-page browser console with separate home, workbench, governance, recovery, system, and Agent Hub surfaces
 - task-oriented business pages for decision, replay, and legal reading instead of a single overloaded operator screen

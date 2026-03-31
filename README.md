@@ -52,6 +52,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
 - Docker single-instance baseline plus raw Kubernetes manifests for one-replica deployment
 - GitHub Actions CI and semver release workflows for Node 22/25 compatibility checks, server verification, browser smoke, restore smoke, Docker image publish, and npm publish
+- pilot-readiness assets for single-instance external trials: `.env.pilot.example`, `npm run review:pilot`, `npm run verify:cloud-provider`, and a cloud/provider runbook
 
 ## Architecture
 
@@ -116,6 +117,7 @@ curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
 npm run smoke:cloud
 npm run doctor:cloud
+npm run verify:cloud-provider -- --out output/cloud-verification.json
 ```
 
 Expected outcomes:
@@ -134,8 +136,10 @@ The system page now also builds a cloud doctor report with:
 - model visibility and suggested replacement model names
 - copy-ready catalog and inference `curl` commands
 - an escalation note you can send to the provider when catalog works but inference is still blocked
+- a standardized verification status for pilot use: `fully_usable`, `catalog_only_entitlement_blocked`, `cloud_unauthorized`, `protocol_mismatch`, `model_visibility_gap`, or `network_or_tls_failure`
 
 See [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md) for the cloud runtime runbook.
+See [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md) for the single-instance external pilot path.
 
 ## Identity and access
 
@@ -176,6 +180,19 @@ The console is no longer a single overloaded screen.
 - `agents.html` gives non-technical and technical users a single place to understand how Zhouheng plugs into external hosts
 
 This keeps business work readable, while preserving advanced details for reviewers and administrators.
+
+## External pilot workflow
+
+For a small external pilot, use this order:
+
+1. Copy `.env.pilot.example` into your environment.
+2. Start a single-instance Docker deployment.
+3. Complete admin bootstrap and login from `系统设置`.
+4. Verify runtime with `npm run review:pilot`.
+5. Run at least one real cloud-provider verification with `npm run verify:cloud-provider`.
+6. Capture backup + restore success before inviting external users.
+
+Current pilot review status lives in [docs/pilot-functional-review-2026-03-31.md](./docs/pilot-functional-review-2026-03-31.md).
 
 ## Agent compatibility
 

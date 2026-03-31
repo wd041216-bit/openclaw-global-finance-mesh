@@ -23,6 +23,7 @@ function render() {
   const health = globalData.operationsHealth;
   const actor = globalData.access?.session?.actor;
   const preferred = globalData.prefs.preferredRoleEntry || "workbench";
+  const runtimeVerification = overview?.runtime?.verification || overview?.runtime?.doctorReport;
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -105,6 +106,23 @@ function render() {
               overview?.governance?.recovery?.lastDrillAt ? `最近演练：${formatDateTime(overview.governance.recovery.lastDrillAt)}` : "尚未演练",
             ],
           })}
+          ${summaryCard({
+            kicker: "试点启动",
+            title: buildPilotLaunchTitle(globalData, runtimeVerification),
+            note: buildPilotLaunchNote(globalData, runtimeVerification),
+            pillHtml: pill(
+              runtimeVerification?.verificationStatus === "fully_usable" || runtimeVerification?.verificationStatus === "local_ready"
+                ? "good"
+                : actor
+                  ? "warn"
+                  : "info",
+              actor ? "可继续" : "先登录",
+            ),
+            meta: [
+              runtimeVerification?.provider?.label ? `Provider ${runtimeVerification.provider.label}` : null,
+              runtimeVerification?.lastVerifiedAt ? `最近验证 ${formatDateTime(runtimeVerification.lastVerifiedAt)}` : null,
+            ].filter(Boolean),
+          })}
         </div>
       </article>
     </section>
@@ -134,6 +152,32 @@ function render() {
   `;
 }
 
+function buildPilotLaunchTitle(globalData, verification) {
+  if (globalData.access?.config?.bootstrapRequired) {
+    return "先创建首个管理员";
+  }
+  if (globalData.access?.config?.enabled && !globalData.access?.session?.authenticated) {
+    return "先登录控制台";
+  }
+  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
+    return verification.recommendedAction;
+  }
+  return "可以开始外部试点";
+}
+
+function buildPilotLaunchNote(globalData, verification) {
+  if (globalData.access?.config?.bootstrapRequired) {
+    return "完成首个管理员初始化后，再进入系统设置配置运行时、备份和恢复。";
+  }
+  if (globalData.access?.config?.enabled && !globalData.access?.session?.authenticated) {
+    return "未登录时仍可浏览摘要，但真实业务操作和治理动作会继续要求身份门禁。";
+  }
+  if (verification && verification.verificationStatus !== "fully_usable" && verification.verificationStatus !== "local_ready") {
+    return verification.blockedReason || "先把运行时链路和模型可见性打通，再把系统交给外部试点用户。";
+  }
+  return "建议从业务工作台的示例决策开始，再进入回放中心和依据库。";
+}
+
 function bindLinks() {
   shell.pageContent.addEventListener("click", (event) => {
     const target = event.target.closest("[data-preferred-entry]");
@@ -143,4 +187,3 @@ function bindLinks() {
     setPreferredRoleEntry(target.getAttribute("data-preferred-entry"));
   });
 }
-
