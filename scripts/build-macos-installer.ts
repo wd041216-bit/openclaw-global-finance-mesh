@@ -15,6 +15,8 @@ const PACKAGE_SLUG = "zhouheng-finance-mesh";
 const VERSION = packageJson.version || "0.0.0";
 const NODE_VERSION = "22.22.2";
 const NODE_PLATFORM = resolveNodePlatform(process.arch);
+const BUNDLE_IDENTIFIER = "com.zhouheng.finance-mesh.desktop";
+const MENUBAR_SOURCE = path.join(REPO_ROOT, "desktop", "macos", "MenuBarApp.swift");
 
 const DEFAULT_OUT_DIR = path.join(REPO_ROOT, "dist", "macos");
 const PROJECT_DIRS = ["src", "web", "examples", "integrations", "docs"] as const;
@@ -27,6 +29,12 @@ const PROJECT_FILES = [
   "CONTRIBUTING.md",
   "LICENSE",
 ] as const;
+
+interface CliOptions {
+  skipDmg: boolean;
+  skipPkg: boolean;
+  outDir?: string;
+}
 
 async function main(): Promise<void> {
   ensureDarwin();
@@ -43,18 +51,23 @@ async function main(): Promise<void> {
   const releaseRoot = path.join(outDir, releaseName);
   const zipPath = path.join(outDir, `${releaseName}.zip`);
   const dmgPath = path.join(outDir, `${releaseName}.dmg`);
+  const pkgPath = path.join(outDir, `${releaseName}.pkg`);
 
   try {
     await fs.mkdir(macosDir, { recursive: true });
-    await writeFileExecutable(path.join(macosDir, "zhouheng-finance-mesh"), renderLauncherScript());
+    await fs.mkdir(resourcesDir, { recursive: true });
     await fs.writeFile(path.join(contentsDir, "Info.plist"), renderInfoPlist(), "utf8");
 
     await bundleOfficialNodeRuntime(resourcesDir);
+    await writeFileExecutable(path.join(resourcesDir, "service-control.sh"), renderServiceControlScript());
+    await compileMenuBarApp(macosDir);
+
     await fs.mkdir(payloadRoot, { recursive: true });
     await copyProjectPayload(payloadRoot);
     await installRuntimeDependencies(payloadRoot);
     await writeSeedData(payloadRoot);
     await writeHelperFiles(buildReleaseRoot);
+    await removeFinderMetadata(buildReleaseRoot);
 
     signAppBundle(appBundle);
     verifyAppBundle(appBundle);
@@ -64,14 +77,18 @@ async function main(): Promise<void> {
     if (!options.skipDmg) {
       await createDmg(buildReleaseRoot, dmgPath);
     }
+    if (!options.skipPkg) {
+      await createPkg(buildReleaseRoot, pkgPath, tempRoot);
+    }
 
     console.log(
       JSON.stringify(
         {
           ok: true,
-          appBundle: releaseRoot ? path.join(releaseRoot, `${APP_NAME}.app`) : null,
+          appBundle: path.join(releaseRoot, `${APP_NAME}.app`),
           zipPath,
           dmgPath: options.skipDmg ? null : dmgPath,
+          pkgPath: options.skipPkg ? null : pkgPath,
           nodeVersion: NODE_VERSION,
           version: VERSION,
         },
@@ -86,17 +103,23 @@ async function main(): Promise<void> {
 
 function ensureDarwin(): void {
   if (process.platform !== "darwin") {
-    throw new Error("The macOS installer builder can only run on macOS.");
+    throw new Error("The macOS desktop packager can only run on macOS.");
   }
 }
 
-function parseArgs(args: string[]): { skipDmg: boolean; outDir?: string } {
+function parseArgs(args: string[]): CliOptions {
   let skipDmg = false;
+  let skipPkg = false;
   let outDir: string | undefined;
+
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--skip-dmg") {
       skipDmg = true;
+      continue;
+    }
+    if (arg === "--skip-pkg") {
+      skipPkg = true;
       continue;
     }
     if (arg === "--out-dir") {
@@ -106,7 +129,8 @@ function parseArgs(args: string[]): { skipDmg: boolean; outDir?: string } {
     }
     throw new Error(`Unknown argument: ${arg}`);
   }
-  return { skipDmg, outDir };
+
+  return { skipDmg, skipPkg, outDir };
 }
 
 function resolveNodePlatform(arch: NodeJS.Architecture): string {
@@ -175,6 +199,21 @@ async function downloadIfMissing(url: string, destinationPath: string): Promise<
   await fs.writeFile(destinationPath, bytes);
 }
 
+async function compileMenuBarApp(macosDir: string): Promise<void> {
+  if (!(await pathExists(MENUBAR_SOURCE))) {
+    throw new Error(`Missing macOS menu bar source: ${MENUBAR_SOURCE}`);
+  }
+
+  runCommand(
+    "swiftc",
+    ["-O", "-framework", "AppKit", MENUBAR_SOURCE, "-o", path.join(macosDir, "zhouheng-finance-mesh")],
+    {
+      cwd: REPO_ROOT,
+      stdio: "inherit",
+    },
+  );
+}
+
 async function copyProjectPayload(payloadRoot: string): Promise<void> {
   for (const directory of PROJECT_DIRS) {
     await fs.cp(path.join(REPO_ROOT, directory), path.join(payloadRoot, directory), {
@@ -235,12 +274,13 @@ async function publishReleaseFolder(sourceReleaseRoot: string, destinationReleas
     cwd: REPO_ROOT,
     stdio: "inherit",
   });
+  await removeFinderMetadata(destinationReleaseRoot);
 }
 
 async function createZip(releaseRoot: string, zipPath: string): Promise<void> {
   await fs.mkdir(path.dirname(zipPath), { recursive: true });
   await fs.rm(zipPath, { force: true });
-  runCommand("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", releaseRoot, zipPath], {
+  runCommand("zip", ["-q", "-r", "-X", zipPath, path.basename(releaseRoot)], {
     cwd: path.dirname(releaseRoot),
     stdio: "inherit",
   });
@@ -264,6 +304,50 @@ async function createDmg(releaseRoot: string, dmgPath: string): Promise<void> {
     ],
     {
       cwd: path.dirname(releaseRoot),
+      stdio: "inherit",
+    },
+  );
+}
+
+async function createPkg(releaseRoot: string, pkgPath: string, tempRoot: string): Promise<void> {
+  const pkgRoot = path.join(tempRoot, "pkg-root");
+  const targetAppDir = path.join(pkgRoot, "Applications", `${APP_NAME}.app`);
+  const toolsDir = path.join(pkgRoot, "Applications", `${APP_NAME} Tools`);
+
+  await fs.rm(pkgRoot, { recursive: true, force: true });
+  await fs.mkdir(path.join(pkgRoot, "Applications"), { recursive: true });
+
+  runCommand("ditto", ["--norsrc", "--noextattr", path.join(releaseRoot, `${APP_NAME}.app`), targetAppDir], {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+  });
+  await fs.mkdir(toolsDir, { recursive: true });
+  for (const helper of [
+    `Stop ${APP_NAME}.command`,
+    `Open ${APP_NAME} Data Folder.command`,
+    `Edit ${APP_NAME} Desktop Config.command`,
+  ]) {
+    await fs.copyFile(path.join(releaseRoot, helper), path.join(toolsDir, helper));
+    await fs.chmod(path.join(toolsDir, helper), 0o755);
+  }
+
+  await fs.mkdir(path.dirname(pkgPath), { recursive: true });
+  await fs.rm(pkgPath, { force: true });
+  runCommand(
+    "pkgbuild",
+    [
+      "--root",
+      pkgRoot,
+      "--identifier",
+      `${BUNDLE_IDENTIFIER}.pkg`,
+      "--version",
+      VERSION,
+      "--install-location",
+      "/",
+      pkgPath,
+    ],
+    {
+      cwd: REPO_ROOT,
       stdio: "inherit",
     },
   );
@@ -310,6 +394,20 @@ async function pathExists(targetPath: string): Promise<boolean> {
   }
 }
 
+async function removeFinderMetadata(targetRoot: string): Promise<void> {
+  const entries = await fs.readdir(targetRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(targetRoot, entry.name);
+    if (entry.isDirectory()) {
+      await removeFinderMetadata(entryPath);
+      continue;
+    }
+    if (entry.name === ".DS_Store" || entry.name.startsWith("._")) {
+      await fs.rm(entryPath, { force: true });
+    }
+  }
+}
+
 async function writeFileExecutable(filePath: string, content: string): Promise<void> {
   await fs.writeFile(filePath, content, "utf8");
   await fs.chmod(filePath, 0o755);
@@ -325,7 +423,7 @@ function renderInfoPlist(): string {
   <key>CFBundleDisplayName</key>
   <string>${APP_NAME}</string>
   <key>CFBundleIdentifier</key>
-  <string>com.zhouheng.finance-mesh.desktop</string>
+  <string>${BUNDLE_IDENTIFIER}</string>
   <key>CFBundleVersion</key>
   <string>${VERSION}</string>
   <key>CFBundleShortVersionString</key>
@@ -338,30 +436,37 @@ function renderInfoPlist(): string {
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>LSUIElement</key>
+  <true/>
 </dict>
 </plist>
 `;
 }
 
-function renderLauncherScript(): string {
+function renderServiceControlScript(): string {
   return `#!/bin/zsh
 set -euo pipefail
 
 APP_NAME="${APP_NAME}"
+COMMAND="\${1:-status}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONTENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-RESOURCES_DIR="$CONTENTS_DIR/Resources"
-APP_ROOT="$RESOURCES_DIR/app"
-RUNTIME_ROOT="$RESOURCES_DIR/node-runtime"
+APP_ROOT="$SCRIPT_DIR/app"
+RUNTIME_ROOT="$SCRIPT_DIR/node-runtime"
 BUNDLED_NODE_BIN="$RUNTIME_ROOT/bin/node"
 SUPPORT_ROOT="$HOME/Library/Application Support/$APP_NAME"
 DATA_ROOT="$SUPPORT_ROOT/data"
 BACKUP_ROOT="$SUPPORT_ROOT/backups"
 LOG_DIR="$SUPPORT_ROOT/logs"
 ENV_FILE="$SUPPORT_ROOT/desktop.env"
+STATE_FILE="$SUPPORT_ROOT/runtime-state.env"
 PID_FILE="$SUPPORT_ROOT/server.pid"
 LOG_FILE="$LOG_DIR/server.log"
 DEFAULT_PORT="3030"
+FIRST_LAUNCH="false"
+PORT="$DEFAULT_PORT"
+BASE_URL="http://127.0.0.1:$DEFAULT_PORT"
+PID=""
+MESSAGE=""
 
 mkdir -p "$SUPPORT_ROOT" "$DATA_ROOT" "$BACKUP_ROOT" "$LOG_DIR"
 
@@ -390,43 +495,53 @@ OLLAMA_API_KEY=
 EOF
 }
 
-if [ ! -f "$ENV_FILE" ]; then
-  create_default_env
-  FIRST_LAUNCH="true"
-else
-  FIRST_LAUNCH="false"
-fi
+ensure_profile() {
+  if [ ! -f "$ENV_FILE" ]; then
+    create_default_env
+    FIRST_LAUNCH="true"
+  fi
+}
 
-set -a
-source "$ENV_FILE"
-set +a
+load_profile() {
+  ensure_profile
+  set -a
+  source "$ENV_FILE"
+  if [ -f "$STATE_FILE" ]; then
+    source "$STATE_FILE"
+  fi
+  set +a
 
-PORT="\${FINANCE_MESH_PORT:-$DEFAULT_PORT}"
-BASE_URL="\${FINANCE_MESH_BASE_URL:-http://127.0.0.1:$DEFAULT_PORT}"
-export FINANCE_MESH_DATA_ROOT="\${FINANCE_MESH_DATA_ROOT:-$DATA_ROOT}"
-export FINANCE_MESH_BACKUP_LOCAL_DIR="\${FINANCE_MESH_BACKUP_LOCAL_DIR:-$BACKUP_ROOT}"
-export FINANCE_MESH_COOKIE_SECURE="\${FINANCE_MESH_COOKIE_SECURE:-false}"
-export FINANCE_MESH_BASE_URL="$BASE_URL"
+  PORT="\${FINANCE_MESH_PORT:-$DEFAULT_PORT}"
+  BASE_URL="\${FINANCE_MESH_BASE_URL:-http://127.0.0.1:$DEFAULT_PORT}"
+  export FINANCE_MESH_PORT="$PORT"
+  export FINANCE_MESH_BASE_URL="$BASE_URL"
+  export FINANCE_MESH_DATA_ROOT="\${FINANCE_MESH_DATA_ROOT:-$DATA_ROOT}"
+  export FINANCE_MESH_BACKUP_LOCAL_DIR="\${FINANCE_MESH_BACKUP_LOCAL_DIR:-$BACKUP_ROOT}"
+  export FINANCE_MESH_COOKIE_SECURE="\${FINANCE_MESH_COOKIE_SECURE:-false}"
+}
+
+write_state() {
+  cat > "$STATE_FILE" <<EOF
+FINANCE_MESH_PORT="$PORT"
+FINANCE_MESH_BASE_URL="$BASE_URL"
+EOF
+}
+
+clear_state() {
+  rm -f "$STATE_FILE"
+}
 
 pick_node_bin() {
   if [ -x "$BUNDLED_NODE_BIN" ]; then
     echo "$BUNDLED_NODE_BIN"
     return 0
   fi
-
   if command -v node >/dev/null 2>&1; then
     command -v node
     return 0
   fi
-
   return 1
 }
-
-NODE_BIN="$(pick_node_bin || true)"
-if [ -z "$NODE_BIN" ]; then
-  osascript -e 'display alert "Zhouheng Finance Mesh" message "没有找到可用的 Node 运行时。请重新安装桌面包，或手动安装 Node.js 22+。"' || true
-  exit 1
-fi
 
 port_is_free() {
   local port="$1"
@@ -439,10 +554,8 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     sock.bind(("127.0.0.1", port))
 except OSError:
-    print("busy")
     sys.exit(1)
 else:
-    print("free")
     sys.exit(0)
 finally:
     sock.close()
@@ -464,7 +577,7 @@ pick_port() {
 
 wait_for_health() {
   local url="$1"
-  local attempts=30
+  local attempts="\${2:-20}"
   while [ "$attempts" -gt 0 ]; do
     if curl -fsS "$url/api/health" >/dev/null 2>&1; then
       return 0
@@ -475,48 +588,175 @@ wait_for_health() {
   return 1
 }
 
-if [ -f "$PID_FILE" ]; then
-  EXISTING_PID="$(cat "$PID_FILE" 2>/dev/null || true)"
-  if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" >/dev/null 2>&1 && wait_for_health "$BASE_URL"; then
-    if [ "$FIRST_LAUNCH" = "true" ]; then
-      open "$BASE_URL/system.html"
-    else
-      open "$BASE_URL/workbench.html"
-    fi
-    exit 0
+service_is_running() {
+  if [ ! -f "$PID_FILE" ]; then
+    return 1
   fi
-  rm -f "$PID_FILE"
-fi
+  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -z "$PID" ]; then
+    return 1
+  fi
+  if ! kill -0 "$PID" >/dev/null 2>&1; then
+    return 1
+  fi
+  wait_for_health "$BASE_URL" 2
+}
 
-if ! port_is_free "$PORT" >/dev/null 2>&1; then
-  NEXT_PORT="$(pick_port "$PORT" || true)"
-  if [ -z "$NEXT_PORT" ]; then
-    osascript -e 'display alert "Zhouheng Finance Mesh" message "本地 3030-3040 端口都已被占用，请先释放一个端口后再启动。"' || true
+emit_json() {
+  ACTION="$COMMAND" OK="$OK" RUNNING="$RUNNING" MESSAGE="$MESSAGE" FIRST_LAUNCH="$FIRST_LAUNCH" BASE_URL="$BASE_URL" PORT="$PORT" PID="$PID" SUPPORT_ROOT="$SUPPORT_ROOT" DATA_ROOT="$DATA_ROOT" LOG_FILE="$LOG_FILE" ENV_FILE="$ENV_FILE" python3 - <<'PY'
+import json
+import os
+
+def maybe_bool(value):
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
+
+def maybe_int(value):
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+payload = {
+    "action": os.environ.get("ACTION"),
+    "ok": maybe_bool(os.environ.get("OK")),
+    "running": maybe_bool(os.environ.get("RUNNING")),
+    "message": os.environ.get("MESSAGE") or None,
+    "firstLaunch": maybe_bool(os.environ.get("FIRST_LAUNCH")),
+    "baseUrl": os.environ.get("BASE_URL") or None,
+    "port": maybe_int(os.environ.get("PORT")),
+    "pid": maybe_int(os.environ.get("PID")),
+    "supportRoot": os.environ.get("SUPPORT_ROOT") or None,
+    "dataRoot": os.environ.get("DATA_ROOT") or None,
+    "logFile": os.environ.get("LOG_FILE") or None,
+    "envFile": os.environ.get("ENV_FILE") or None,
+}
+print(json.dumps(payload, ensure_ascii=False))
+PY
+}
+
+ensure_node_bin() {
+  NODE_BIN="$(pick_node_bin || true)"
+  if [ -z "$NODE_BIN" ]; then
+    MESSAGE="没有找到可用的 Node 运行时。请重新安装桌面包。"
+    OK="false"
+    RUNNING="false"
+    emit_json
     exit 1
   fi
-  PORT="$NEXT_PORT"
-  BASE_URL="http://127.0.0.1:$PORT"
-  export FINANCE_MESH_PORT="$PORT"
-  export FINANCE_MESH_BASE_URL="$BASE_URL"
-fi
+}
 
-(
-  cd "$APP_ROOT"
-  nohup "$NODE_BIN" src/server.ts >> "$LOG_FILE" 2>&1 &
-  echo $! > "$PID_FILE"
-)
-
-if wait_for_health "$BASE_URL"; then
-  if [ "$FIRST_LAUNCH" = "true" ]; then
-    open "$BASE_URL/system.html"
-  else
-    open "$BASE_URL/workbench.html"
+start_service() {
+  load_profile
+  ensure_node_bin
+  if service_is_running; then
+    write_state
+    OK="true"
+    RUNNING="true"
+    MESSAGE="服务已经在运行。"
+    emit_json
+    return 0
   fi
-  exit 0
-fi
 
-osascript -e 'display alert "Zhouheng Finance Mesh" message "桌面版已启动失败，请查看 ~/Library/Application Support/Zhouheng Finance Mesh/logs/server.log。"' || true
-exit 1
+  rm -f "$PID_FILE"
+
+  if ! port_is_free "$PORT" >/dev/null 2>&1; then
+    NEXT_PORT="$(pick_port "$PORT" || true)"
+    if [ -z "$NEXT_PORT" ]; then
+      OK="false"
+      RUNNING="false"
+      MESSAGE="本地 3030-3040 端口都已被占用，请先释放一个端口。"
+      emit_json
+      return 1
+    fi
+    PORT="$NEXT_PORT"
+    BASE_URL="http://127.0.0.1:$PORT"
+    export FINANCE_MESH_PORT="$PORT"
+    export FINANCE_MESH_BASE_URL="$BASE_URL"
+  fi
+
+  write_state
+  (
+    cd "$APP_ROOT"
+    nohup "$NODE_BIN" src/server.ts >> "$LOG_FILE" 2>&1 &
+    echo $! > "$PID_FILE"
+  )
+
+  if wait_for_health "$BASE_URL" 30; then
+    PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+    OK="true"
+    RUNNING="true"
+    MESSAGE="服务已启动。"
+    emit_json
+    return 0
+  fi
+
+  PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+  OK="false"
+  RUNNING="false"
+  MESSAGE="服务启动失败，请查看日志。"
+  clear_state
+  emit_json
+  return 1
+}
+
+status_service() {
+  load_profile
+  ensure_node_bin
+  if service_is_running; then
+    write_state
+    OK="true"
+    RUNNING="true"
+    MESSAGE="服务运行中。"
+    emit_json
+    return 0
+  fi
+
+  PID=""
+  OK="true"
+  RUNNING="false"
+  MESSAGE="服务未运行。"
+  emit_json
+}
+
+stop_service() {
+  load_profile
+  if service_is_running; then
+    kill "$PID" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+  rm -f "$PID_FILE"
+  clear_state
+  PID=""
+  OK="true"
+  RUNNING="false"
+  MESSAGE="服务已停止。"
+  emit_json
+}
+
+case "$COMMAND" in
+  start)
+    start_service
+    ;;
+  status)
+    status_service
+    ;;
+  stop)
+    stop_service
+    ;;
+  *)
+    MESSAGE="未知命令: $COMMAND"
+    OK="false"
+    RUNNING="false"
+    emit_json
+    exit 1
+    ;;
+esac
 `;
 }
 
@@ -546,7 +786,7 @@ for helper in \\
 done
 
 open "$TARGET_APP"
-osascript -e 'display notification "已安装到 ~/Applications，并已尝试启动。" with title "Zhouheng Finance Mesh"' || true
+osascript -e 'display notification "已安装到 ~/Applications，并已在菜单栏模式下尝试启动。" with title "Zhouheng Finance Mesh"' || true
 `;
 }
 
@@ -554,7 +794,9 @@ function renderStopCommand(): string {
   return `#!/bin/zsh
 set -euo pipefail
 
-PID_FILE="$HOME/Library/Application Support/${APP_NAME}/server.pid"
+SUPPORT_ROOT="$HOME/Library/Application Support/${APP_NAME}"
+PID_FILE="$SUPPORT_ROOT/server.pid"
+STATE_FILE="$SUPPORT_ROOT/runtime-state.env"
 if [ ! -f "$PID_FILE" ]; then
   osascript -e 'display alert "Zhouheng Finance Mesh" message "当前没有找到运行中的本地服务。"' || true
   exit 0
@@ -564,7 +806,7 @@ PID="$(cat "$PID_FILE" 2>/dev/null || true)"
 if [ -n "$PID" ] && kill -0 "$PID" >/dev/null 2>&1; then
   kill "$PID"
 fi
-rm -f "$PID_FILE"
+rm -f "$PID_FILE" "$STATE_FILE"
 osascript -e 'display notification "本地服务已停止。" with title "Zhouheng Finance Mesh"' || true
 `;
 }
@@ -604,22 +846,21 @@ open -a TextEdit "$CONFIG_FILE"
 }
 
 function renderReleaseReadme(): string {
-  return `Zhouheng Finance Mesh macOS package (${VERSION})
+  return `Zhouheng Finance Mesh macOS desktop package (${VERSION})
 
-1. Double-click "Install ${APP_NAME}.command".
-2. The installer copies the app into ~/Applications and launches it.
-3. On first launch, the app opens the System page at http://127.0.0.1:3030/system.html.
-4. Complete bootstrap, then paste your Ollama Cloud key in the runtime section if needed.
+Included artifacts:
+- ${APP_NAME}.app
+- ${PACKAGE_SLUG}-${VERSION}-macos.zip
+- ${PACKAGE_SLUG}-${VERSION}-macos.dmg
+- ${PACKAGE_SLUG}-${VERSION}-macos.pkg
 
-Helper scripts:
-- Stop ${APP_NAME}.command
-- Open ${APP_NAME} Data Folder.command
-- Edit ${APP_NAME} Desktop Config.command
+What the desktop app does:
+- launches as a menu bar app
+- starts the bundled local finance control plane
+- opens the browser only for the work pages
+- keeps your data under ~/Library/Application Support/${APP_NAME}
 
-Local data location:
-~/Library/Application Support/${APP_NAME}
-
-This package bundles the official Node.js ${NODE_VERSION} macOS runtime, so users do not need to preinstall Node.
+The app bundles the official Node.js ${NODE_VERSION} macOS runtime, so users do not need to preinstall Node.
 The app is ad-hoc signed for local distribution but not notarized. If macOS blocks the app, right-click the installed app and choose Open once.
 `;
 }

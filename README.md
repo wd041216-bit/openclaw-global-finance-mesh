@@ -164,26 +164,46 @@ npm run build:macos-installer
 
 This produces:
 
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.pkg`
 - `dist/macos/zhouheng-finance-mesh-<version>-macos.dmg`
 - `dist/macos/zhouheng-finance-mesh-<version>-macos.zip`
 - a release folder containing `Zhouheng Finance Mesh.app` plus helper scripts
 
-Install by double-clicking:
+Recommended install path:
 
-```text
-Install Zhouheng Finance Mesh.command
-```
+- double-click `zhouheng-finance-mesh-<version>-macos.pkg`
+- install the app into `/Applications`
+- launch `Zhouheng Finance Mesh.app`
 
-The installer copies the app into `~/Applications`, keeps user state under `~/Library/Application Support/Zhouheng Finance Mesh`, opens `system.html` on first launch, and defaults to:
+The desktop app now runs as a menu bar controller, keeps user state under `~/Library/Application Support/Zhouheng Finance Mesh`, opens `system.html` on first launch, and defaults to:
 
 - `OLLAMA_MODE=cloud`
 - `OLLAMA_MODEL=kimi-k2.5`
 - `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
 
 The package now bundles the official Node.js 22.22.2 macOS runtime, so users do not need to preinstall Node.
-For sharing with other users, prefer the generated `.dmg` or `.zip`; if you build inside an iCloud-synced folder, the raw `.app` in `dist/` can pick up local Finder metadata after the build.
+For sharing with other users, prefer the generated `.pkg`, `.dmg`, or `.zip`; if you build inside an iCloud-synced folder, the raw `.app` in `dist/` can pick up local Finder metadata after the build.
 
 See [docs/macos-desktop-package.md](./docs/macos-desktop-package.md) for packaging, install, and first-launch details.
+
+## Windows desktop package
+
+The repo now also includes a Windows desktop packager.
+
+Build it with:
+
+```bash
+npm run build:windows-package
+```
+
+This produces:
+
+- `dist/windows/zhouheng-finance-mesh-<version>-windows.zip`
+- a release folder with installer / start / stop scripts
+
+The Windows package bundles the official Node.js 22.22.2 runtime, installs into `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`, stores user data under `%LOCALAPPDATA%\Zhouheng Finance Mesh`, and launches a tray controller with start / stop / open-console actions.
+
+See [docs/windows-desktop-package.md](./docs/windows-desktop-package.md) for packaging and install details.
 
 ## Identity and access
 

@@ -5,9 +5,10 @@ This repository can now be packaged as a local macOS desktop app for one-click i
 ## What the package does
 
 - builds `Zhouheng Finance Mesh.app`
+- builds `zhouheng-finance-mesh-<version>-macos.pkg`
 - bundles the official Node.js 22.22.2 macOS runtime inside the app
 - keeps user data outside `/Applications`
-- launches the local control plane and opens the browser automatically
+- runs as a menu bar app with desktop control actions
 - creates helper scripts for stop / config / data-folder access
 
 User data and local state live in:
@@ -44,9 +45,11 @@ Expected outputs:
 - `zhouheng-finance-mesh-<version>-macos/`
 - `zhouheng-finance-mesh-<version>-macos.zip`
 - `zhouheng-finance-mesh-<version>-macos.dmg`
+- `zhouheng-finance-mesh-<version>-macos.pkg`
 
 Recommended distribution artifacts:
 
+- `zhouheng-finance-mesh-<version>-macos.pkg`
 - `zhouheng-finance-mesh-<version>-macos.dmg`
 - `zhouheng-finance-mesh-<version>-macos.zip`
 
@@ -55,10 +58,18 @@ If your repo lives inside iCloud Drive or another file-provider-backed folder, t
 If you only want the app bundle and zip:
 
 ```bash
-node scripts/build-macos-installer.ts --skip-dmg
+node scripts/build-macos-installer.ts --skip-dmg --skip-pkg
 ```
 
 ## Install locally
+
+Recommended:
+
+1. double-click `zhouheng-finance-mesh-<version>-macos.pkg`
+2. install into `/Applications`
+3. launch `Zhouheng Finance Mesh.app`
+
+Alternative zip / dmg flow:
 
 Open the generated folder or DMG and run:
 
@@ -85,9 +96,16 @@ On first launch the app:
    - `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
    - `FINANCE_MESH_DATA_ROOT=~/Library/Application Support/Zhouheng Finance Mesh/data`
 3. starts the local service
-4. opens `system.html` for bootstrap and runtime setup
+4. appears in the macOS menu bar
+5. opens `system.html` for bootstrap and runtime setup
 
-After the first launch, double-clicking the app opens `workbench.html` if the local service is already healthy.
+After the first launch, the menu bar app lets you:
+
+- open `工作台`
+- open `系统设置`
+- open `恢复中心`
+- restart or stop the local service
+- open the desktop config, data folder, and server log
 
 ## Runtime configuration
 

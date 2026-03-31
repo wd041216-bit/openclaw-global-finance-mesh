@@ -14,6 +14,7 @@
   "files": [
     ".env.example",
     ".env.pilot.example",
+    "desktop",
     "src",
     "web",
     "data",
@@ -30,6 +31,8 @@
     "dev": "node src/server.ts",
     "start": "node src/server.ts",
     "build:macos-installer": "node scripts/build-macos-installer.ts",
+    "build:windows-package": "node scripts/build-windows-package.ts",
+    "build:desktop-packages": "npm run build:macos-installer && npm run build:windows-package",
     "mcp:serve": "node integrations/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
     "verify": "npm test",

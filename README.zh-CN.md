@@ -138,26 +138,46 @@ npm run build:macos-installer
 
 会生成：
 
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.pkg`
 - `dist/macos/zhouheng-finance-mesh-<version>-macos.dmg`
 - `dist/macos/zhouheng-finance-mesh-<version>-macos.zip`
 - 一个包含 `Zhouheng Finance Mesh.app` 和辅助脚本的发布目录
 
-安装时直接双击：
+推荐安装方式：
 
-```text
-Install Zhouheng Finance Mesh.command
-```
+- 直接双击 `zhouheng-finance-mesh-<version>-macos.pkg`
+- 安装到 `/Applications`
+- 启动 `Zhouheng Finance Mesh.app`
 
-安装器会把 App 复制到 `~/Applications`，把用户数据放到 `~/Library/Application Support/Zhouheng Finance Mesh`，首次启动自动打开 `system.html`，并默认使用：
+桌面版现在会以菜单栏 app 的形式运行，把用户数据放到 `~/Library/Application Support/Zhouheng Finance Mesh`，首次启动自动打开 `system.html`，并默认使用：
 
 - `OLLAMA_MODE=cloud`
 - `OLLAMA_MODEL=kimi-k2.5`
 - `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
 
 安装包现在会直接内置官方 Node.js 22.22.2 macOS runtime，所以用户不需要预先安装 Node。
-如果要分发给别人，优先使用生成出来的 `.dmg` 或 `.zip`；如果你在 iCloud 同步目录里本地构建，`dist/` 里的裸 `.app` 可能会被系统额外打上 Finder 元数据。
+如果要分发给别人，优先使用生成出来的 `.pkg`、`.dmg` 或 `.zip`；如果你在 iCloud 同步目录里本地构建，`dist/` 里的裸 `.app` 可能会被系统额外打上 Finder 元数据。
 
 详细说明见 [docs/macos-desktop-package.md](./docs/macos-desktop-package.md)。
+
+## Windows 桌面安装包
+
+仓库现在也带了 Windows 桌面打包脚本。
+
+构建命令：
+
+```bash
+npm run build:windows-package
+```
+
+会生成：
+
+- `dist/windows/zhouheng-finance-mesh-<version>-windows.zip`
+- 一个包含安装 / 启动 / 停止脚本的发布目录
+
+Windows 版本会直接内置官方 Node.js 22.22.2 runtime，安装到 `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`，把用户数据放到 `%LOCALAPPDATA%\Zhouheng Finance Mesh`，并通过托盘入口提供启动 / 停止 / 打开控制台等动作。
+
+详细说明见 [docs/windows-desktop-package.md](./docs/windows-desktop-package.md)。
 
 ## 身份与访问控制
 
