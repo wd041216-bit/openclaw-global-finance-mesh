@@ -49,6 +49,8 @@ renderFrame();
 await refreshHistory();
 
 function renderFrame() {
+  const runtimeVerification = shell.getGlobal().overview?.runtime?.verification || shell.getGlobal().overview?.runtime?.doctorReport;
+  const runtimeReady = Boolean(runtimeVerification?.goLiveReady);
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
       <article class="page-section">
@@ -59,6 +61,17 @@ function renderFrame() {
             <p class="section-copy">先选择事件来源，再选择基线与候选 Pack，最后集中看差异、风险变化和建议动作。</p>
           </div>
         </div>
+        ${runtimeReady
+          ? ""
+          : calloutCard({
+              kicker: "当前阻断",
+              title: "先完成运行时验证，再做真实规则回放",
+              note: runtimeVerification?.goLiveBlockers?.[0]
+                || runtimeVerification?.recommendedAction
+                || "系统运行时还没有通过正式试点验证。",
+              tone: "warning",
+              content: `<div class="action-row"><a class="button ghost" href="/system-runtime.html">去处理运行时</a></div>`,
+            })}
         <form id="replay-form" class="workflow-shell">
           ${stepCard({
             step: "01",
@@ -107,7 +120,9 @@ function renderFrame() {
             note: "结果区会先告诉你 changed events、高风险上升和低置信漂移，不要求你先读 diff JSON。",
             content: `
               <div class="inline-form-note">
-                如果只是想确认当前候选规则没有引入意外变化，先让基线和候选都指向示例 Pack 即可。
+                ${runtimeReady
+                  ? "如果只是想确认当前候选规则没有引入意外变化，先让基线和候选都指向示例 Pack 即可。"
+                  : "当前还没通过运行时放行验证。先到系统运行时子页处理 provider、协议或模型问题。"}
               </div>
               <div class="action-row">
                 <button type="submit">运行回放</button>

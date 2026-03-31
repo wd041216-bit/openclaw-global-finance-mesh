@@ -281,6 +281,15 @@ test("operations service returns a pilot-ready overview for ollama cloud kimi-k2
 
   assert.equal(overview.identity.authEnabled, false);
   assert.match(overview.identity.summary, /开放模式/);
+  assert.equal(overview.experience.preferredMode, "business");
+  assert.equal(overview.experience.recommendedLanding, "/getting-started.html?mode=business");
+  assert.ok(overview.experience.businessGuide.length >= 5);
+  assert.ok(overview.experience.adminGuide.length >= 5);
+  assert.match(overview.experience.businessStatusLabel, /可以直接开始业务判断|建议先去|先完成/);
+  assert.match(overview.experience.adminStatusLabel, /先处理|下一步/);
+  assert.deepEqual(overview.experience.globalBlockers, ["尚未配置异地备份目标。", "尚未执行恢复演练。"]);
+  assert.equal(overview.experience.businessGuide[0]?.href, "/system-identity.html");
+  assert.equal(overview.experience.adminGuide[1]?.href, "/system-runtime.html");
   assert.equal(overview.runtime.mode, "cloud");
   assert.equal(overview.runtime.hasApiKey, true);
   assert.equal(overview.runtime.cloudApiFlavor, "auto");

@@ -53,6 +53,8 @@ renderFrame();
 await refreshHistory();
 
 function renderFrame() {
+  const runtimeVerification = shell.getGlobal().overview?.runtime?.verification || shell.getGlobal().overview?.runtime?.doctorReport;
+  const runtimeReady = Boolean(runtimeVerification?.goLiveReady);
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
       <article class="page-section">
@@ -63,6 +65,17 @@ function renderFrame() {
             <p class="section-copy">先选事件来源，再选 Pack 与模式，最后查看结论、风险与建议动作。</p>
           </div>
         </div>
+        ${runtimeReady
+          ? ""
+          : calloutCard({
+              kicker: "当前阻断",
+              title: "先完成运行时验证，再让业务用户开始真实决策",
+              note: runtimeVerification?.goLiveBlockers?.[0]
+                || runtimeVerification?.recommendedAction
+                || "系统运行时还没有通过正式试点验证。",
+              tone: "warning",
+              content: `<div class="action-row"><a class="button ghost" href="/system-runtime.html">去处理运行时</a></div>`,
+            })}
         <form id="decision-form" class="workflow-shell">
           ${stepCard({
             step: "01",
@@ -114,7 +127,9 @@ function renderFrame() {
             note: "结果区会先显示结论、风险、建议动作和缺失证据，只有需要时再展开技术详情。",
             content: `
               <div class="inline-form-note">
-                当前建议：先用示例事件熟悉这条路径，再切换到你的真实事件文件或粘贴 JSON。
+                ${runtimeReady
+                  ? "当前建议：先用示例事件熟悉这条路径，再切换到你的真实事件文件或粘贴 JSON。"
+                  : "当前还没通过运行时放行验证。先到系统运行时子页处理 provider、协议或模型问题。"}
               </div>
               <div class="action-row">
                 <button type="submit">运行决策</button>

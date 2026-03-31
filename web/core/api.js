@@ -3,6 +3,7 @@ const STORAGE_KEYS = {
   advancedMode: "financeMesh.advancedMode",
   lastAction: "financeMesh.lastAction",
   preferredRoleEntry: "financeMesh.preferredRoleEntry",
+  preferredConsoleMode: "financeMesh.preferredConsoleMode",
 };
 
 const sessionState = {
@@ -17,6 +18,7 @@ export function getPrefs() {
     advancedMode: window.localStorage.getItem(STORAGE_KEYS.advancedMode) === "true",
     lastAction: window.localStorage.getItem(STORAGE_KEYS.lastAction) || "",
     preferredRoleEntry: window.localStorage.getItem(STORAGE_KEYS.preferredRoleEntry) || "workbench",
+    preferredConsoleMode: window.localStorage.getItem(STORAGE_KEYS.preferredConsoleMode) || "",
   };
 }
 
@@ -41,6 +43,18 @@ export function rememberAction(message) {
 
 export function setPreferredRoleEntry(entry) {
   window.localStorage.setItem(STORAGE_KEYS.preferredRoleEntry, entry);
+}
+
+export function setPreferredConsoleMode(mode) {
+  window.localStorage.setItem(STORAGE_KEYS.preferredConsoleMode, mode);
+}
+
+export function getPreferredConsoleMode(globalData) {
+  const local = getPrefs().preferredConsoleMode;
+  if (local === "business" || local === "admin") {
+    return local;
+  }
+  return globalData?.overview?.experience?.preferredMode || "business";
 }
 
 export function consumeAuthFlash() {
@@ -205,4 +219,3 @@ export function fillForm(form, values) {
     }
   }
 }
-

@@ -1,18 +1,8 @@
+import { canManageAdmin, canViewGovernance } from "../core/api.js";
 import {
-  api,
-  canManageAdmin,
-  canViewGovernance,
-  formToObject,
-  rememberAction,
-} from "../core/api.js";
-import {
-  bulletList,
-  calloutCard,
-  detailRows,
-  emptyState,
-  jsonDetails,
+  nextActionCard,
   pill,
-  recordButton,
+  sectionHubCard,
   summaryCard,
 } from "../core/components.js";
 import { formatDateTime } from "../core/format.js";
@@ -20,618 +10,209 @@ import { initShell } from "../core/shell.js";
 
 const shell = await initShell({
   pageId: "governance",
-  sectionLabel: "治理中心",
-  title: "先看链路状态、导出 readiness 和治理动作风险",
-  intro: "治理页首屏只讲结论、风险和下一步。创建导出、查看时间线和技术对象都收进下方次级区域。",
+  sectionLabel: "治理总览",
+  title: "治理页只先讲结论、风险和下一步动作",
+  intro: "审计链、导出和操作时间线已经继续拆到二级页面。治理总览只负责告诉你是否需要人工介入。",
   heroActions: `
-    <a class="button" href="/recovery.html">打开恢复中心</a>
-    <a class="button ghost" href="/workbench.html">返回工作台</a>
+    <a class="button" href="/governance-exports.html">查看审计与导出</a>
+    <a class="button ghost" href="/governance-activity.html">查看治理时间线</a>
   `,
 });
 
-const state = {
-  integrity: null,
-  exports: [],
-  selectedExportId: null,
-  selectedExportDetail: null,
-  activity: [],
-  selectedActivityId: null,
-  selectedActivityDetail: null,
-};
+render();
 
-renderFrame();
-await refreshAll();
+function render() {
+  const globalData = shell.getGlobal();
+  const overview = globalData.overview;
+  const integrity = overview?.governance?.integrity;
+  const recovery = overview?.governance?.recovery;
+  const sessions = overview?.governance?.sessions;
+  const drafts = overview?.governance?.legalLibrary?.draftCount ?? 0;
 
-function renderFrame() {
   shell.pageContent.innerHTML = `
-    <section class="page-grid three-up">
+    <section class="page-grid two-up">
       <article class="page-section">
         <div class="section-head compact">
           <div>
-            <p class="section-kicker">审计链</p>
-            <h3>当前完整性结论</h3>
-          </div>
-          <div class="section-actions">
-            <button id="refresh-integrity" type="button" class="ghost">刷新</button>
-            <button id="verify-integrity" type="button">执行完整校验</button>
+            <p class="section-kicker">治理结论</p>
+            <h3>先判断今天是否需要人工处理</h3>
+            <p class="section-copy">如果审计链异常、恢复演练失败或 draft 堆积过多，这里会先告诉管理员要看哪一块。</p>
           </div>
         </div>
-        <div id="integrity-summary" class="section-stack"></div>
+        <div class="summary-grid">
+          ${summaryCard({
+            kicker: "审计链",
+            title: integrity?.summary || "等待完整性摘要",
+            note: integrity?.lastVerifiedAt
+              ? `最近校验 ${formatDateTime(integrity.lastVerifiedAt)}`
+              : "还没有完整校验记录。",
+            pillHtml: pill(
+              integrity?.status === "mismatch"
+                ? "bad"
+                : integrity?.isStale
+                  ? "warn"
+                  : "good",
+              integrity?.status || "pending",
+            ),
+            meta: [
+              `mismatch ${integrity?.mismatchCount ?? 0}`,
+              integrity?.isStale ? "校验已过期" : "校验仍有效",
+            ],
+          })}
+          ${summaryCard({
+            kicker: "恢复与会话",
+            title: recovery?.summary || "等待恢复摘要",
+            note: recovery?.recommendedAction || "恢复中心会继续拆出备份与演练细节。",
+            pillHtml: pill(
+              recovery?.status === "failure"
+                ? "bad"
+                : recovery?.status === "degraded"
+                  ? "warn"
+                  : "info",
+              recovery?.status || "pending",
+            ),
+            meta: [
+              `活跃会话 ${sessions?.activeCount ?? 0}`,
+              recovery?.lastDrillAt ? `最近演练 ${formatDateTime(recovery.lastDrillAt)}` : "尚未演练",
+            ],
+          })}
+          ${nextActionCard({
+            kicker: "下一步",
+            title: pickGovernanceActionTitle(integrity, recovery, drafts),
+            note: pickGovernanceActionNote(integrity, recovery, drafts),
+            href: pickGovernanceActionHref(integrity, recovery, drafts),
+            buttonLabel: pickGovernanceActionButton(integrity, recovery, drafts),
+            tone: integrity?.status === "mismatch" || recovery?.status === "failure" ? "warning" : "info",
+            meta: [
+              drafts ? `待审资料 ${drafts}` : "资料库没有待审堆积",
+              canManageAdmin(globalData) ? "管理员可继续下钻处理" : "当前只读",
+            ],
+          })}
+        </div>
       </article>
       <article class="page-section">
         <div class="section-head compact">
           <div>
-            <p class="section-kicker">导出 readiness</p>
-            <h3>对外交付前先看导出状态</h3>
+            <p class="section-kicker">角色说明</p>
+            <h3>不是每个人都需要看完整治理细节</h3>
           </div>
         </div>
-        <div id="export-overview" class="section-stack"></div>
-      </article>
-      <article class="page-section">
-        <div class="section-head compact">
-          <div>
-            <p class="section-kicker">治理动作</p>
-            <h3>最近操作与处理建议</h3>
-          </div>
+        <div class="summary-grid">
+          ${summaryCard({
+            kicker: "Reviewer / Admin",
+            title: canViewGovernance(globalData) ? "当前角色可看治理摘要" : "当前角色无治理权限",
+            note: canManageAdmin(globalData)
+              ? "你还可以进入时间线、导出和完整校验动作。"
+              : "当前角色主要停留在摘要层，不会先看到复杂配置。",
+            pillHtml: pill(canViewGovernance(globalData) ? "good" : "neutral", canViewGovernance(globalData) ? "summary_access" : "summary_hidden"),
+            meta: [
+              canManageAdmin(globalData) ? "admin" : "reviewer / operator / viewer",
+            ],
+          })}
+          ${summaryCard({
+            kicker: "资料治理",
+            title: drafts ? `${drafts} 条待审资料` : "资料治理当前平稳",
+            note: drafts
+              ? "如果今天要清理资料质量，下一步应该进入资料治理子页。"
+              : "依据库主页继续保持搜索优先，治理动作单独放到资料治理页。",
+            pillHtml: pill(drafts ? "warn" : "good", drafts ? "needs_review" : "stable"),
+            meta: [
+              `approved ${overview?.governance?.legalLibrary?.approvedCount ?? 0}`,
+              `reviewed ${overview?.governance?.legalLibrary?.reviewedCount ?? 0}`,
+            ],
+          })}
         </div>
-        <div id="activity-overview" class="section-stack"></div>
       </article>
     </section>
 
     <section class="page-section">
       <div class="section-head compact">
         <div>
-          <p class="section-kicker">导出历史</p>
-          <h3>审计切片与 manifest</h3>
-          <p class="section-copy">对外提供审计证据前，先从这里确认范围、时间和条目数量。</p>
+          <p class="section-kicker">治理子页面</p>
+          <h3>继续往下钻，而不是把所有动作堆回总览</h3>
         </div>
       </div>
-      <div id="export-controls" class="section-stack"></div>
-      <div class="page-columns">
-        <div id="export-list" class="record-list"></div>
-        <div id="export-detail" class="detail-card detail-panel"></div>
+      <div class="hub-grid two-up">
+        ${sectionHubCard({
+          kicker: "审计与导出",
+          title: "完整性、导出 readiness、切片创建",
+          note: integrity?.summary || "如果今天要对外交付审计证据，先看这一页。",
+          href: "/governance-exports.html",
+          buttonLabel: "进入审计与导出",
+          pillHtml: pill(integrity?.status === "mismatch" ? "bad" : integrity?.isStale ? "warn" : "good", integrity?.status || "pending"),
+        })}
+        ${sectionHubCard({
+          kicker: "治理时间线",
+          title: "Operator Activity 与失败动作",
+          note: canManageAdmin(globalData)
+            ? "只有 admin 才需要完整时间线；其他角色只看摘要即可。"
+            : "如果需要深挖失败动作，请联系管理员打开治理时间线。",
+          href: "/governance-activity.html",
+          buttonLabel: "进入治理时间线",
+          pillHtml: pill(canManageAdmin(globalData) ? "info" : "neutral", canManageAdmin(globalData) ? "admin_only" : "summary_only"),
+        })}
       </div>
     </section>
-
-    <section class="page-section">
-      <div class="section-head compact">
-        <div>
-          <p class="section-kicker">Operator Activity</p>
-          <h3>治理动作时间线</h3>
-          <p class="section-copy">只有管理员能看到完整时间线，但其他角色仍能从首屏读懂当前是否需要人工介入。</p>
-        </div>
-        <button id="refresh-activity" type="button" class="ghost">刷新时间线</button>
-      </div>
-      <div class="page-columns">
-        <div id="activity-list" class="record-list"></div>
-        <div id="activity-detail" class="detail-card detail-panel"></div>
-      </div>
-    </section>
-  `;
-
-  shell.pageContent.querySelector("#refresh-integrity")?.addEventListener("click", () => void refreshIntegrity());
-  shell.pageContent.querySelector("#verify-integrity")?.addEventListener("click", () => void verifyIntegrity());
-  shell.pageContent.addEventListener("submit", (event) => {
-    const form = event.target.closest("form");
-    if (form?.id === "export-form") {
-      event.preventDefault();
-      void onCreateExport(event);
-    }
-  });
-  shell.pageContent.querySelector("#export-list")?.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-export-id]");
-    if (target) {
-      void openExport(target.getAttribute("data-export-id"));
-    }
-  });
-  shell.pageContent.querySelector("#refresh-activity")?.addEventListener("click", () => void refreshActivity());
-  shell.pageContent.querySelector("#activity-list")?.addEventListener("click", (event) => {
-    const target = event.target.closest("[data-activity-id]");
-    if (target) {
-      void openActivity(target.getAttribute("data-activity-id"));
-    }
-  });
-
-  renderIntegrity();
-  renderExportOverview();
-  renderExportControls();
-  renderExports();
-  renderActivityOverview();
-  renderActivity();
-}
-
-async function refreshAll() {
-  await Promise.all([refreshIntegrity(), refreshExports(), refreshActivity()]);
-}
-
-async function refreshIntegrity() {
-  const globalData = shell.getGlobal();
-  if (!canViewGovernance(globalData)) {
-    state.integrity = null;
-    renderIntegrity();
-    renderExportOverview();
-    renderActivityOverview();
-    return;
-  }
-  try {
-    const result = await api("/api/audit/integrity");
-    state.integrity = result.integrity;
-  } catch (error) {
-    state.integrity = { error: String(error.message || error) };
-  }
-  renderIntegrity();
-  renderExportOverview();
-  renderActivityOverview();
-}
-
-async function verifyIntegrity() {
-  const globalData = shell.getGlobal();
-  if (!canManageAdmin(globalData)) {
-    renderSectionMessage("#integrity-summary", "只有管理员可以执行完整审计校验。");
-    return;
-  }
-  renderSectionMessage("#integrity-summary", "正在执行完整校验…");
-  try {
-    const result = await api("/api/audit/integrity/verify", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    state.integrity = result.integrity;
-    rememberAction("已执行审计链完整校验");
-    await shell.refreshChrome();
-    await refreshExports();
-  } catch (error) {
-    state.integrity = { error: String(error.message || error) };
-  }
-  renderIntegrity();
-  renderExportOverview();
-  renderActivityOverview();
-}
-
-async function refreshExports(preferredId) {
-  const globalData = shell.getGlobal();
-  if (!canViewGovernance(globalData)) {
-    state.exports = [];
-    state.selectedExportId = null;
-    state.selectedExportDetail = null;
-    renderExportOverview();
-    renderExportControls();
-    renderExports();
-    return;
-  }
-  try {
-    const result = await api("/api/audit/exports?limit=12");
-    state.exports = result.exports || [];
-    state.selectedExportId = preferredId || state.selectedExportId || state.exports[0]?.id || null;
-    if (state.selectedExportId) {
-      await openExport(state.selectedExportId);
-      return;
-    }
-  } catch (error) {
-    state.exports = [];
-    state.selectedExportDetail = { error: String(error.message || error) };
-  }
-  renderExportOverview();
-  renderExportControls();
-  renderExports();
-}
-
-async function onCreateExport(event) {
-  const globalData = shell.getGlobal();
-  const form = event.target.closest("form");
-  if (!canManageAdmin(globalData)) {
-    renderSectionMessage("#export-detail", "只有管理员可以创建导出。");
-    return;
-  }
-  if (!form) {
-    return;
-  }
-  try {
-    const payload = formToObject(form);
-    const result = await api("/api/audit/exports", {
-      method: "POST",
-      body: JSON.stringify({
-        sequenceFrom: payload.sequenceFrom ? Number(payload.sequenceFrom) : undefined,
-        sequenceTo: payload.sequenceTo ? Number(payload.sequenceTo) : undefined,
-        createdFrom: payload.createdFrom ? new Date(payload.createdFrom).toISOString() : undefined,
-        createdTo: payload.createdTo ? new Date(payload.createdTo).toISOString() : undefined,
-      }),
-    });
-    form.reset();
-    rememberAction("已创建审计切片导出");
-    await shell.refreshChrome();
-    await refreshIntegrity();
-    await refreshExports(result.exportBatch?.id);
-  } catch (error) {
-    state.selectedExportDetail = { error: String(error.message || error) };
-    renderExports();
-  }
-}
-
-async function openExport(exportId) {
-  if (!exportId) {
-    return;
-  }
-  state.selectedExportId = exportId;
-  renderExports();
-  try {
-    const result = await api(`/api/audit/exports/${encodeURIComponent(exportId)}`);
-    state.selectedExportDetail = result.exportBatch;
-  } catch (error) {
-    state.selectedExportDetail = { error: String(error.message || error) };
-  }
-  renderExportOverview();
-  renderExports();
-}
-
-async function refreshActivity(preferredId) {
-  const globalData = shell.getGlobal();
-  if (!canManageAdmin(globalData)) {
-    state.activity = [];
-    state.selectedActivityId = null;
-    state.selectedActivityDetail = null;
-    renderActivityOverview();
-    renderActivity();
-    return;
-  }
-  try {
-    const result = await api("/api/access-control/activity?limit=20");
-    state.activity = result.events || [];
-    state.selectedActivityId = preferredId || state.selectedActivityId || state.activity[0]?.id || null;
-    if (state.selectedActivityId) {
-      await openActivity(state.selectedActivityId);
-      return;
-    }
-  } catch (error) {
-    state.activity = [];
-    state.selectedActivityDetail = { error: String(error.message || error) };
-  }
-  renderActivityOverview();
-  renderActivity();
-}
-
-async function openActivity(activityId) {
-  if (!activityId) {
-    return;
-  }
-  state.selectedActivityId = activityId;
-  renderActivity();
-  try {
-    const result = await api(`/api/access-control/activity/${encodeURIComponent(activityId)}`);
-    state.selectedActivityDetail = result.event;
-  } catch (error) {
-    state.selectedActivityDetail = { error: String(error.message || error) };
-  }
-  renderActivityOverview();
-  renderActivity();
-}
-
-function renderIntegrity() {
-  const container = shell.pageContent.querySelector("#integrity-summary");
-  if (!container) {
-    return;
-  }
-  const globalData = shell.getGlobal();
-  const verifyButton = shell.pageContent.querySelector("#verify-integrity");
-  if (verifyButton) {
-    verifyButton.style.display = canManageAdmin(globalData) ? "" : "none";
-  }
-
-  if (!canViewGovernance(globalData)) {
-    container.innerHTML = emptyState("当前角色不能查看治理摘要。");
-    return;
-  }
-  if (!state.integrity) {
-    container.innerHTML = emptyState("正在读取审计链状态。");
-    return;
-  }
-  if (state.integrity.error) {
-    container.innerHTML = emptyState(state.integrity.error);
-    return;
-  }
-
-  const tone = state.integrity.mismatchCount > 0 ? "bad" : state.integrity.isStale ? "warn" : "good";
-  const actionTitle = state.integrity.mismatchCount > 0
-    ? `先处理 ${state.integrity.mismatchCount} 处链路异常`
-    : state.integrity.isStale
-      ? "建议今天补一次完整校验"
-      : "当前不需要额外治理动作";
-  const actionNote = state.integrity.mismatchCount > 0
-    ? "在继续导出或对外提供审计证据前，先把 mismatch 清零。"
-    : state.integrity.isStale
-      ? "链路没有报错，但完整性结果已经变旧，建议重新验证。"
-      : "最近一次完整校验仍然有效，可以继续沿用当前审计链。";
-
-  container.innerHTML = `
-    ${summaryCard({
-      kicker: "完整性摘要",
-      title: state.integrity.mismatchCount > 0 ? `发现 ${state.integrity.mismatchCount} 处异常` : "审计链状态正常",
-      note: state.integrity.lastVerifiedAt
-        ? `最近完整校验时间：${formatDateTime(state.integrity.lastVerifiedAt)}`
-        : "还没有执行过完整校验。",
-      pillHtml: pill(tone, state.integrity.status),
-      meta: [
-        `最新序号 #${state.integrity.latestSequence}`,
-        `环境 ${state.integrity.environment}/${state.integrity.teamScope}`,
-      ],
-    })}
-    ${calloutCard({
-      kicker: "下一步",
-      title: actionTitle,
-      note: actionNote,
-      tone: state.integrity.mismatchCount > 0 ? "critical" : state.integrity.isStale ? "warning" : "good",
-      meta: [
-        `Verified through #${state.integrity.verifiedThroughSequence}`,
-        state.integrity.lastExport?.id ? `最近导出 ${state.integrity.lastExport.id}` : "还没有导出批次",
-      ],
-      content: bulletList([
-        state.integrity.mismatchCount > 0 ? "先执行完整校验并检查最近变更。" : "",
-        canManageAdmin(globalData) ? "管理员可以在本页下方创建新的导出切片。" : "Reviewer 可先查看导出历史和完整性摘要。",
-      ]),
-    })}
-    ${jsonDetails("查看技术详情", state.integrity)}
   `;
 }
 
-function renderExportOverview() {
-  const container = shell.pageContent.querySelector("#export-overview");
-  if (!container) {
-    return;
+function pickGovernanceActionTitle(integrity, recovery, drafts) {
+  if (integrity?.status === "mismatch") {
+    return "先处理审计链 mismatch";
   }
-  const globalData = shell.getGlobal();
-  if (!canViewGovernance(globalData)) {
-    container.innerHTML = emptyState("Reviewer / Admin 登录后可查看导出 readiness。");
-    return;
+  if (recovery?.status === "failure") {
+    return "先处理恢复失败风险";
   }
-
-  const latestExport = state.exports[0] || state.integrity?.lastExport || null;
-  const note = latestExport
-    ? `最近导出时间：${formatDateTime(latestExport.createdAt)}`
-    : canManageAdmin(globalData)
-      ? "当前还没有对外共享的审计切片。"
-      : "当前没有可浏览的导出批次。";
-
-  container.innerHTML = `
-    ${summaryCard({
-      kicker: "最近导出",
-      title: latestExport ? `最近导出 ${latestExport.entryCount || 0} 条` : "尚未生成导出切片",
-      note,
-      pillHtml: pill(latestExport ? "info" : "warn", latestExport ? "exported" : "pending"),
-      meta: latestExport
-        ? [
-            latestExport.sequenceFrom ? `范围 #${latestExport.sequenceFrom} → #${latestExport.sequenceTo}` : "未提供序号范围",
-            latestExport.manifestFileName || latestExport.dataFileName || "manifest",
-          ]
-        : ["建议先补一份导出作为对外交付基线"],
-    })}
-    ${calloutCard({
-      kicker: "建议动作",
-      title: latestExport ? "复核范围后再共享给外部审计方" : "先生成一份导出切片",
-      note: latestExport
-        ? "确认序号范围和时间窗口覆盖本次需要交付的审计证据。"
-        : canManageAdmin(globalData)
-          ? "管理员可以在下方折叠区直接生成新的 NDJSON + manifest。"
-          : "如果需要新的导出，请联系管理员执行导出动作。",
-      tone: latestExport ? "info" : "warning",
-      meta: [
-        canManageAdmin(globalData) ? "管理员可创建新导出" : "当前只读",
-      ],
-    })}
-  `;
+  if (drafts > 0) {
+    return "先清理待审资料";
+  }
+  if (integrity?.isStale) {
+    return "补一次完整校验";
+  }
+  return "当前治理链路相对平稳";
 }
 
-function renderExportControls() {
-  const container = shell.pageContent.querySelector("#export-controls");
-  if (!container) {
-    return;
+function pickGovernanceActionNote(integrity, recovery, drafts) {
+  if (integrity?.status === "mismatch") {
+    return "在继续导出或对外交付前，先把 mismatch 清零。";
   }
-  const globalData = shell.getGlobal();
-  if (!canViewGovernance(globalData)) {
-    container.innerHTML = "";
-    return;
+  if (recovery?.status === "failure") {
+    return recovery?.recommendedAction || "先确认恢复链路失败点。";
   }
-  if (!canManageAdmin(globalData)) {
-    container.innerHTML = `
-      ${calloutCard({
-        kicker: "权限说明",
-        title: "当前角色只能查看导出历史",
-        note: "创建新的导出切片仍然需要管理员权限。",
-        tone: "info",
-      })}
-    `;
-    return;
+  if (drafts > 0) {
+    return "依据库主页继续保持阅读优先，reviewer/admin 再去资料治理页处理状态更新。";
   }
-
-  container.innerHTML = `
-    <details class="management-panel">
-      <summary>展开导出创建面板</summary>
-      <div class="panel-body">
-        <p class="inline-note">建议只导出这次需要交付的序号范围或时间窗口，避免把整条账本一次性外发。</p>
-        <form id="export-form" class="stack">
-          <div class="form-grid">
-            <label>
-              Sequence From
-              <input name="sequenceFrom" type="number" min="1" />
-            </label>
-            <label>
-              Sequence To
-              <input name="sequenceTo" type="number" min="1" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label>
-              Created From
-              <input name="createdFrom" type="datetime-local" />
-            </label>
-            <label>
-              Created To
-              <input name="createdTo" type="datetime-local" />
-            </label>
-          </div>
-          <div class="action-row">
-            <button type="submit">创建导出</button>
-          </div>
-        </form>
-      </div>
-    </details>
-  `;
+  if (integrity?.isStale) {
+    return "链路没有报错，但最近一次完整性校验已经过期。";
+  }
+  return "如果今天没有对外交付需求，可以继续只读观察。";
 }
 
-function renderExports() {
-  const list = shell.pageContent.querySelector("#export-list");
-  const detail = shell.pageContent.querySelector("#export-detail");
-  const globalData = shell.getGlobal();
-  if (!list || !detail) {
-    return;
+function pickGovernanceActionHref(integrity, recovery, drafts) {
+  if (integrity?.status === "mismatch" || integrity?.isStale) {
+    return "/governance-exports.html";
   }
-  if (!canViewGovernance(globalData)) {
-    list.innerHTML = emptyState("当前角色不能查看导出历史。");
-    detail.innerHTML = emptyState("Reviewer / Admin 登录后可查看导出详情。");
-    return;
+  if (recovery?.status === "failure") {
+    return "/recovery-restores.html";
   }
-
-  list.innerHTML = state.exports.length
-    ? state.exports
-        .map((item) =>
-          recordButton({
-            id: item.id,
-            selected: item.id === state.selectedExportId,
-            attribute: "data-export-id",
-            title: `导出 ${item.entryCount || 0} 条`,
-            note: item.label || item.summary || "审计切片导出",
-            pillHtml: pill("info", item.sequenceFrom ? `#${item.sequenceFrom} → #${item.sequenceTo}` : "export"),
-            meta: [formatDateTime(item.createdAt), item.dataFileName || item.manifestFileName || "manifest"],
-          }),
-        )
-        .join("")
-    : emptyState("还没有导出记录。");
-
-  if (!state.selectedExportDetail) {
-    detail.innerHTML = emptyState("从左侧选择一条导出批次。");
-    return;
+  if (drafts > 0) {
+    return "/library-review.html";
   }
-  if (state.selectedExportDetail.error) {
-    detail.innerHTML = emptyState(state.selectedExportDetail.error);
-    return;
-  }
-  detail.innerHTML = `
-    <div class="section-stack">
-      ${summaryCard({
-        kicker: "导出详情",
-        title: state.selectedExportDetail.label || "审计导出",
-        note: state.selectedExportDetail.manifestFileName || state.selectedExportDetail.dataFileName || "包含 NDJSON 与 manifest。",
-        pillHtml: pill("info", state.selectedExportDetail.entryCount ? `${state.selectedExportDetail.entryCount} entries` : "export"),
-        meta: [formatDateTime(state.selectedExportDetail.createdAt)],
-      })}
-      ${detailRows([
-        { label: "Sequence Range", value: state.selectedExportDetail.sequenceFrom ? `#${state.selectedExportDetail.sequenceFrom} → #${state.selectedExportDetail.sequenceTo}` : "" },
-        { label: "Manifest", value: state.selectedExportDetail.manifestFileName || "" },
-        { label: "Data File", value: state.selectedExportDetail.dataFileName || "" },
-      ])}
-      ${jsonDetails("查看导出原始对象", state.selectedExportDetail)}
-    </div>
-  `;
+  return "/governance-exports.html";
 }
 
-function renderActivityOverview() {
-  const container = shell.pageContent.querySelector("#activity-overview");
-  if (!container) {
-    return;
+function pickGovernanceActionButton(integrity, recovery, drafts) {
+  if (integrity?.status === "mismatch") {
+    return "去看审计链";
   }
-  const globalData = shell.getGlobal();
-  const latest = state.activity[0] || state.selectedActivityDetail || null;
-
-  if (!canViewGovernance(globalData)) {
-    container.innerHTML = emptyState("当前角色不能查看治理动作摘要。");
-    return;
+  if (recovery?.status === "failure") {
+    return "去看恢复演练";
   }
-
-  if (!canManageAdmin(globalData)) {
-    container.innerHTML = `
-      ${summaryCard({
-        kicker: "时间线访问",
-        title: "当前角色只看摘要，不看完整时间线",
-        note: "如果完整性异常或恢复建议转为红色，再请管理员进入 Operator Activity 深挖。",
-        pillHtml: pill("info", "summary-only"),
-      })}
-    `;
-    return;
+  if (drafts > 0) {
+    return "去处理资料治理";
   }
-
-  container.innerHTML = `
-    ${summaryCard({
-      kicker: "最近动作",
-      title: latest?.message || latest?.action || "等待新的治理动作",
-      note: latest?.subject || "还没有新的 admin/operator 操作记录。",
-      pillHtml: pill(latest?.outcome === "failure" ? "bad" : "info", latest?.action || "activity"),
-      meta: latest?.createdAt ? [formatDateTime(latest.createdAt), latest.actorName || "anonymous"] : ["时间线为空"],
-    })}
-    ${calloutCard({
-      kicker: "处理建议",
-      title: latest?.outcome === "failure" ? "建议回看失败动作详情" : "目前没有新的治理阻塞",
-      note: latest?.outcome === "failure"
-        ? "先确认失败动作是否影响导出、完整性校验或恢复演练。"
-        : "如果最近没有失败动作，通常只需要继续关注完整性和恢复建议。",
-      tone: latest?.outcome === "failure" ? "warning" : "good",
-    })}
-  `;
-}
-
-function renderActivity() {
-  const list = shell.pageContent.querySelector("#activity-list");
-  const detail = shell.pageContent.querySelector("#activity-detail");
-  const globalData = shell.getGlobal();
-  if (!list || !detail) {
-    return;
+  if (integrity?.isStale) {
+    return "去补完整校验";
   }
-  if (!canManageAdmin(globalData)) {
-    list.innerHTML = emptyState("只有 admin 可以查看 Operator Activity。");
-    detail.innerHTML = emptyState("登录为 admin 后可查看操作时间线详情。");
-    return;
-  }
-
-  list.innerHTML = state.activity.length
-    ? state.activity
-        .map((item) =>
-          recordButton({
-            id: item.id,
-            selected: item.id === state.selectedActivityId,
-            attribute: "data-activity-id",
-            title: item.message || item.action,
-            note: item.subject || "system",
-            pillHtml: pill(item.outcome === "failure" ? "bad" : "info", item.action),
-            meta: [formatDateTime(item.createdAt), item.actorName || "anonymous"],
-          }),
-        )
-        .join("")
-    : emptyState("还没有可展示的操作时间线。");
-
-  if (!state.selectedActivityDetail) {
-    detail.innerHTML = emptyState("从左侧选择一条操作事件。");
-    return;
-  }
-  if (state.selectedActivityDetail.error) {
-    detail.innerHTML = emptyState(state.selectedActivityDetail.error);
-    return;
-  }
-
-  detail.innerHTML = `
-    <div class="section-stack">
-      ${summaryCard({
-        kicker: "操作详情",
-        title: state.selectedActivityDetail.message || state.selectedActivityDetail.action,
-        note: state.selectedActivityDetail.subject || "system",
-        pillHtml: pill(state.selectedActivityDetail.outcome === "failure" ? "bad" : "info", state.selectedActivityDetail.action),
-        meta: [formatDateTime(state.selectedActivityDetail.createdAt), state.selectedActivityDetail.actorName || "anonymous"],
-      })}
-      ${jsonDetails("查看原始对象", state.selectedActivityDetail)}
-    </div>
-  `;
-}
-
-function renderSectionMessage(selector, message) {
-  const node = shell.pageContent.querySelector(selector);
-  if (node) {
-    node.innerHTML = emptyState(message);
-  }
+  return "查看审计与导出";
 }

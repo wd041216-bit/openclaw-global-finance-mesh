@@ -33,27 +33,27 @@ const ACTION_LINKS = {
     buttonLabel: "打开依据库",
   },
   open_system_health: {
-    href: "/system.html#health",
+    href: "/system-health.html",
     buttonLabel: "查看系统状态",
   },
   verify_audit_chain: {
-    href: "/governance.html#integrity",
+    href: "/governance-exports.html",
     buttonLabel: "打开治理中心",
   },
   run_restore_drill: {
-    href: "/recovery.html#restore",
+    href: "/recovery-restores.html",
     buttonLabel: "进入恢复中心",
   },
   configure_backups: {
-    href: "/system.html#backups",
+    href: "/recovery-backups.html",
     buttonLabel: "前往系统设置",
   },
   review_draft_documents: {
-    href: "/library.html#review",
+    href: "/library-review.html",
     buttonLabel: "处理待审资料",
   },
   open_login: {
-    href: "/system.html#login",
+    href: "/system-identity.html",
     buttonLabel: "登录控制台",
   },
 };

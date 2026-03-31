@@ -11,9 +11,31 @@ import { buildRuntimeDoctorReport, type RuntimeDoctorReport } from "./runtime-do
 
 export type DashboardWorkspace = "workbench" | "library" | "governance" | "system";
 export type OperationsCheckStatus = "healthy" | "degraded" | "down" | "not_configured";
+export type ConsoleMode = "business" | "admin";
+
+export interface GuideStep {
+  id: string;
+  title: string;
+  description: string;
+  status: "verified" | "healthy" | "ready" | "pending" | "degraded" | "down" | "not_configured";
+  href: string;
+  ctaLabel: string;
+  blockingReason?: string;
+}
+
+export interface ExperienceOverview {
+  preferredMode: ConsoleMode;
+  recommendedLanding: string;
+  businessGuide: GuideStep[];
+  adminGuide: GuideStep[];
+  businessStatusLabel: string;
+  adminStatusLabel: string;
+  globalBlockers: string[];
+}
 
 export interface DashboardOverview {
   generatedAt: string;
+  experience: ExperienceOverview;
   identity: {
     authenticated: boolean;
     actor: AuthenticatedActor | null;
@@ -246,9 +268,23 @@ export class OperationsService {
       ]);
     const recovery = summarizeRecovery(latestRestore, lastSuccessfulRestore, this.restores.getWarnHours());
     const runtimeSummary = summarizeRuntimeState(runtimeConfig, latestProbe);
+    const backupConfig = this.backups.getConfigurationStatus();
+    const experience = buildExperienceOverview({
+      session,
+      accessConfig,
+      runtimeConfig,
+      runtimeSummary,
+      integrity,
+      recovery,
+      backupConfigured: backupConfig.anyConfigured,
+      draftCount: legalStats.byStatus.draft,
+      latestDecision,
+      latestReplay,
+    });
 
     const overview: DashboardOverview = {
       generatedAt,
+      experience,
       identity: {
         authenticated: session.authenticated,
         actor: session.actor,
@@ -309,8 +345,8 @@ export class OperationsService {
           latestDrill: recovery.latestDrill,
         },
         backups: {
-          configuredTargetCount: this.backups.getConfigurationStatus().configuredTargetCount,
-          summary: summarizeBackupStatus(this.backups.getConfigurationStatus(), lastBackup),
+          configuredTargetCount: backupConfig.configuredTargetCount,
+          summary: summarizeBackupStatus(backupConfig, lastBackup),
           lastBackup: lastBackup ? summarizeBackup(lastBackup) : null,
         },
       },
@@ -409,6 +445,281 @@ function summarizeIdentity(
     return "尚未登录，请使用本地应急令牌进入控制台。";
   }
   return `${session.actor?.name || "当前用户"} 已通过 ${translateAuthMethod(session.authMethod)} 登录。`;
+}
+
+function buildExperienceOverview(input: {
+  session: AccessSessionState;
+  accessConfig: Awaited<ReturnType<AccessControlStore["getPublicConfig"]>>;
+  runtimeConfig: Awaited<ReturnType<RuntimeConfigStore["getPublic"]>>;
+  runtimeSummary: {
+    businessStatus: string;
+    summary: string;
+    diagnosis: RuntimeDiagnosis;
+    doctorReport: RuntimeDoctorReport;
+    lastProbe: RunHealthSummary | null;
+  };
+  integrity: AuditIntegrityStatus;
+  recovery: {
+    status: RestoreDrillStatusCard["status"];
+    lastDrillAt?: string;
+    lastSuccessAt?: string;
+    isStale: boolean;
+    summary: string;
+    recommendedAction: string;
+    latestDrill: RestoreDrillStatusCard | null;
+  };
+  backupConfigured: boolean;
+  draftCount: number;
+  latestDecision: AuditRunSummary | null;
+  latestReplay: AuditRunSummary | null;
+}): ExperienceOverview {
+  const {
+    session,
+    accessConfig,
+    runtimeSummary,
+    integrity,
+    recovery,
+    backupConfigured,
+    draftCount,
+    latestDecision,
+    latestReplay,
+  } = input;
+  const runtimeReady = runtimeSummary.doctorReport.goLiveReady;
+  const preferredMode: ConsoleMode = session.actor && ["admin", "reviewer"].includes(session.actor.role)
+    ? "admin"
+    : "business";
+  const globalBlockers = buildGlobalBlockers({
+    session,
+    accessConfig,
+    runtimeSummary,
+    integrity,
+    recovery,
+    backupConfigured,
+  });
+
+  const businessGuide: GuideStep[] = [
+    {
+      id: "business-login",
+      title: accessConfig.bootstrapRequired ? "先创建首个管理员" : "登录并确认权限",
+      description: accessConfig.bootstrapRequired
+        ? "先完成 bootstrap，业务用户才能进入受保护控制台。"
+        : session.authenticated
+          ? "当前浏览器会话已就绪，可以继续进入业务链路。"
+          : accessConfig.enabled
+            ? "先登录控制台，再运行真实业务决策与回放。"
+            : "当前控制台处于开放模式，可直接进入业务页面。",
+      status: accessConfig.bootstrapRequired ? "down" : session.authenticated || !accessConfig.enabled ? "verified" : "pending",
+      href: "/system-identity.html",
+      ctaLabel: accessConfig.bootstrapRequired ? "初始化管理员" : session.authenticated || !accessConfig.enabled ? "查看身份状态" : "去登录",
+      blockingReason: accessConfig.bootstrapRequired
+        ? "还没有首位管理员。"
+        : accessConfig.enabled && !session.authenticated
+          ? "未登录时无法执行受保护操作。"
+          : undefined,
+    },
+    {
+      id: "business-runtime",
+      title: "验证运行时",
+      description: runtimeReady
+        ? "Ollama Cloud 已完成真实验证，可以直接跑业务示例。"
+        : runtimeSummary.doctorReport.goLiveBlockers?.[0] || runtimeSummary.summary,
+      status: runtimeReady ? "verified" : runtimeSummary.doctorReport.requiresProviderAction ? "down" : "degraded",
+      href: "/system-runtime.html",
+      ctaLabel: runtimeReady ? "查看运行时状态" : "去验证运行时",
+      blockingReason: runtimeReady ? undefined : runtimeSummary.doctorReport.blockedReason || runtimeSummary.doctorReport.goLiveBlockers?.[0],
+    },
+    {
+      id: "business-decision",
+      title: "运行示例决策",
+      description: latestDecision
+        ? "最近已经有可参考的决策记录，可以继续换成真实业务事件。"
+        : "先用示例事件熟悉结论、风险和建议动作的阅读方式。",
+      status: latestDecision ? "verified" : runtimeReady ? "pending" : "not_configured",
+      href: "/decisions.html#example",
+      ctaLabel: latestDecision ? "继续运行决策" : "开始决策",
+      blockingReason: runtimeReady ? undefined : "运行时还没有通过正式试点验证。",
+    },
+    {
+      id: "business-replay",
+      title: "运行示例回放",
+      description: latestReplay
+        ? "最近已经有回放记录，可以继续比较真实基线与候选规则。"
+        : "先体验 changed events 和风险漂移摘要，再上真实规则变更。",
+      status: latestReplay ? "verified" : runtimeReady ? "pending" : "not_configured",
+      href: "/replays.html#example",
+      ctaLabel: latestReplay ? "继续运行回放" : "开始回放",
+      blockingReason: runtimeReady ? undefined : "运行时还没有通过正式试点验证。",
+    },
+    {
+      id: "business-library",
+      title: "查询法规依据",
+      description: draftCount > 0
+        ? `依据库当前有 ${draftCount} 条待审资料，默认阅读 reviewed / approved 内容。`
+        : "从依据库搜索法规、政策和治理文档，再按需要展开高级详情。",
+      status: "healthy",
+      href: "/library.html",
+      ctaLabel: "打开依据库",
+    },
+    {
+      id: "business-governance",
+      title: "查看治理摘要",
+      description: integrity.status === "mismatch"
+        ? "审计链存在异常，建议先通知管理员处理。"
+        : recovery.summary,
+      status: integrity.status === "mismatch" ? "degraded" : "healthy",
+      href: "/governance.html",
+      ctaLabel: "查看治理摘要",
+      blockingReason: integrity.status === "mismatch" ? "审计链存在 mismatch。" : undefined,
+    },
+  ];
+
+  const adminGuide: GuideStep[] = [
+    {
+      id: "admin-bootstrap",
+      title: accessConfig.bootstrapRequired ? "创建首个管理员" : "登录管理员控制台",
+      description: accessConfig.bootstrapRequired
+        ? "先完成 bootstrap，之后浏览器会自动签发管理员 session。"
+        : session.authenticated
+          ? "当前管理员会话已经就绪。"
+          : "先登录管理员控制台，再配置 runtime、备份和恢复。",
+      status: accessConfig.bootstrapRequired ? "down" : session.authenticated ? "verified" : "pending",
+      href: "/system-identity.html",
+      ctaLabel: accessConfig.bootstrapRequired ? "初始化管理员" : session.authenticated ? "查看管理员状态" : "去登录",
+      blockingReason: accessConfig.bootstrapRequired
+        ? "还没有首位管理员。"
+        : session.authenticated
+          ? undefined
+          : "管理员还没有登录。",
+    },
+    {
+      id: "admin-runtime",
+      title: "验证 Ollama Cloud 运行时",
+      description: runtimeReady
+        ? `当前已验证模型为 ${runtimeSummary.doctorReport.verifiedModel || "目标模型"}。`
+        : runtimeSummary.doctorReport.goLiveBlockers?.[0] || runtimeSummary.summary,
+      status: runtimeReady ? "verified" : runtimeSummary.doctorReport.requiresProviderAction ? "down" : "degraded",
+      href: "/system-runtime.html",
+      ctaLabel: runtimeReady ? "查看运行时" : "执行验证",
+      blockingReason: runtimeReady ? undefined : runtimeSummary.doctorReport.blockedReason || runtimeSummary.doctorReport.goLiveBlockers?.[0],
+    },
+    {
+      id: "admin-backups",
+      title: "配置备份目标",
+      description: backupConfigured
+        ? "异地备份目标已经就绪，可以进入恢复演练。"
+        : "正式试点前必须至少配置一个备份目标。",
+      status: backupConfigured ? "verified" : "not_configured",
+      href: "/recovery-backups.html",
+      ctaLabel: backupConfigured ? "查看备份" : "配置备份",
+      blockingReason: backupConfigured ? undefined : "还没有异地备份目标。",
+    },
+    {
+      id: "admin-restore",
+      title: "执行恢复演练",
+      description: recovery.latestDrill
+        ? recovery.summary
+        : "正式试点前至少跑一次非破坏性恢复演练。",
+      status: recovery.latestDrill
+        ? recovery.latestDrill.status === "failure"
+          ? "down"
+          : recovery.latestDrill.status === "degraded"
+            ? "degraded"
+            : "verified"
+        : "not_configured",
+      href: "/recovery-restores.html",
+      ctaLabel: recovery.latestDrill ? "查看恢复演练" : "执行演练",
+      blockingReason: recovery.latestDrill
+        ? recovery.latestDrill.status === "failure"
+          ? recovery.summary
+          : undefined
+        : "还没有恢复演练记录。",
+    },
+    {
+      id: "admin-integrity",
+      title: "检查审计链",
+      description: summarizeIntegrity(integrity),
+      status: integrity.status === "mismatch" ? "down" : integrity.isStale ? "degraded" : integrity.lastVerifiedAt ? "verified" : "pending",
+      href: "/governance-exports.html",
+      ctaLabel: integrity.lastVerifiedAt ? "查看审计链" : "执行完整校验",
+      blockingReason: integrity.status === "mismatch" ? "审计链存在 mismatch。" : undefined,
+    },
+    {
+      id: "admin-golive",
+      title: "准备对外试点",
+      description: runtimeReady && backupConfigured && integrity.status !== "mismatch"
+        ? "基础放行条件已经接近齐备，最后再确认恢复与审计摘要。"
+        : "先处理运行时、备份、恢复和审计的阻断项，再对外开放试点。",
+      status: runtimeReady && backupConfigured && integrity.status !== "mismatch" && recovery.latestDrill?.status === "success"
+        ? "verified"
+        : globalBlockers.length
+          ? "down"
+          : "pending",
+      href: "/system.html",
+      ctaLabel: runtimeReady && backupConfigured ? "查看放行状态" : "返回管理总览",
+      blockingReason: globalBlockers[0],
+    },
+  ];
+
+  return {
+    preferredMode,
+    recommendedLanding: preferredMode === "admin" ? "/getting-started.html?mode=admin" : "/getting-started.html?mode=business",
+    businessGuide,
+    adminGuide,
+    businessStatusLabel: buildModeStatusLabel("business", businessGuide),
+    adminStatusLabel: buildModeStatusLabel("admin", adminGuide),
+    globalBlockers,
+  };
+}
+
+function buildGlobalBlockers(input: {
+  session: AccessSessionState;
+  accessConfig: Awaited<ReturnType<AccessControlStore["getPublicConfig"]>>;
+  runtimeSummary: {
+    doctorReport: RuntimeDoctorReport;
+  };
+  integrity: AuditIntegrityStatus;
+  recovery: {
+    latestDrill: RestoreDrillStatusCard | null;
+  };
+  backupConfigured: boolean;
+}): string[] {
+  const blockers = [];
+  if (input.accessConfig.bootstrapRequired) {
+    blockers.push("还没有首位管理员。");
+  } else if (input.accessConfig.enabled && !input.session.authenticated) {
+    blockers.push("管理员还没有登录。");
+  }
+  if (!input.runtimeSummary.doctorReport.goLiveReady) {
+    blockers.push(input.runtimeSummary.doctorReport.goLiveBlockers?.[0] || input.runtimeSummary.doctorReport.blockedReason || "运行时还没有通过正式试点验证。");
+  }
+  if (!input.backupConfigured) {
+    blockers.push("尚未配置异地备份目标。");
+  }
+  if (!input.recovery.latestDrill) {
+    blockers.push("尚未执行恢复演练。");
+  } else if (input.recovery.latestDrill.status === "failure") {
+    blockers.push("最近一次恢复演练失败。");
+  }
+  if (input.integrity.status === "mismatch") {
+    blockers.push("审计链存在 mismatch。");
+  }
+  return dedupeStrings(blockers);
+}
+
+function buildModeStatusLabel(mode: ConsoleMode, steps: GuideStep[]): string {
+  const firstBlocking = steps.find((step) => step.status === "down" || step.status === "not_configured");
+  if (firstBlocking) {
+    return mode === "admin"
+      ? `先处理：${firstBlocking.title}`
+      : `先完成：${firstBlocking.title}`;
+  }
+  const firstWarning = steps.find((step) => step.status === "degraded" || step.status === "pending");
+  if (firstWarning) {
+    return mode === "admin"
+      ? `下一步：${firstWarning.title}`
+      : `建议先去：${firstWarning.title}`;
+  }
+  return mode === "admin" ? "管理链路已就绪" : "可以直接开始业务判断";
 }
 
 function summarizeIntegrity(integrity: AuditIntegrityStatus): string {
@@ -1087,6 +1398,10 @@ function hasRole(actor: AuthenticatedActor | null, requiredRole: "reviewer" | "a
     admin: 4,
   };
   return rank[actor.role] >= rank[requiredRole];
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
 }
 
 function hoursAgo(hours: number): string {

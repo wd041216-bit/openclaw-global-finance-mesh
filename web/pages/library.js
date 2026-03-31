@@ -32,7 +32,7 @@ const shell = await initShell({
   intro: "依据库现在是搜索优先的阅读页。默认先给你最相关的资料和摘要，治理动作只在 reviewer/admin 场景下展开。",
   heroActions: `
     <a class="button" href="/workbench.html">返回工作台</a>
-    <a class="button ghost" href="/governance.html">查看治理中心</a>
+    <a class="button ghost" href="/library-review.html">进入资料治理</a>
   `,
 });
 
@@ -48,7 +48,6 @@ renderFrame();
 await refreshDocuments();
 
 function renderFrame() {
-  const canGovern = canReview(shell.getGlobal());
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
       <article class="page-section">
@@ -98,124 +97,6 @@ function renderFrame() {
       </div>
       <div id="library-results" class="record-list"></div>
     </section>
-    ${canGovern ? `
-      <section class="page-section" id="library-governance">
-        <div class="section-head compact">
-          <div>
-            <p class="section-kicker">治理动作</p>
-            <h3>只有 reviewer/admin 才会看到这些表单</h3>
-            <p class="section-copy">先阅读资料，再决定是否更新状态、录入新材料或从外部来源补录。</p>
-          </div>
-        </div>
-        <div class="section-stack">
-          <details class="technical-details" open>
-            <summary>更新资料状态</summary>
-            <form id="review-form" class="stack">
-              <label>
-                Document ID
-                <input name="documentId" placeholder="legal-library document id" value="${escapeValue(state.selectedId || "")}" />
-              </label>
-              <label>
-                目标状态
-                <select name="status">
-                  <option value="draft">draft</option>
-                  <option value="reviewed">reviewed</option>
-                  <option value="approved">approved</option>
-                  <option value="retired">retired</option>
-                </select>
-              </label>
-              <div class="action-row">
-                <button type="submit">更新状态</button>
-              </div>
-            </form>
-          </details>
-          <details class="technical-details">
-            <summary>录入新资料</summary>
-            <form id="create-document-form" class="stack">
-              <label>
-                标题
-                <input name="title" placeholder="例如：欧盟 VAT 处理备忘" />
-              </label>
-              <div class="form-grid">
-                <label>
-                  Jurisdiction
-                  <input name="jurisdiction" placeholder="GLOBAL / EU / CN" />
-                </label>
-                <label>
-                  Domain
-                  <input name="domain" placeholder="tax / accounting / control" />
-                </label>
-              </div>
-              <div class="form-grid">
-                <label>
-                  Source Type
-                  <input name="sourceType" placeholder="manual / official_url" />
-                </label>
-                <label>
-                  Source Ref
-                  <input name="sourceRef" placeholder="https://official-source.example" />
-                </label>
-              </div>
-              <label>
-                Tags
-                <input name="tags" placeholder="comma,separated,tags" />
-              </label>
-              <label>
-                Summary
-                <textarea name="summary" rows="3"></textarea>
-              </label>
-              <label>
-                Body
-                <textarea name="body" rows="6"></textarea>
-              </label>
-              <div class="action-row">
-                <button type="submit">新建资料</button>
-              </div>
-            </form>
-          </details>
-          <details class="technical-details">
-            <summary>从 URL 或本地文件补录</summary>
-            <form id="ingest-form" class="stack">
-              <div class="form-grid three">
-                <label>
-                  标题
-                  <input name="title" />
-                </label>
-                <label>
-                  Jurisdiction
-                  <input name="jurisdiction" />
-                </label>
-                <label>
-                  Domain
-                  <input name="domain" />
-                </label>
-              </div>
-              <div class="form-grid">
-                <label>
-                  Source URL
-                  <input name="url" />
-                </label>
-                <label>
-                  Local File Path
-                  <input name="filePath" />
-                </label>
-              </div>
-              <label>
-                Tags
-                <input name="tags" />
-              </label>
-              <label>
-                Raw Text
-                <textarea name="body" rows="6"></textarea>
-              </label>
-              <div class="action-row">
-                <button type="submit">采集到依据库</button>
-              </div>
-            </form>
-          </details>
-        </div>
-      </section>
-    ` : ""}
   `;
 
   shell.pageContent.querySelector("#search-form")?.addEventListener("submit", onSearch);
@@ -241,10 +122,6 @@ function renderFrame() {
       void runSearch();
     });
   });
-  shell.pageContent.querySelector("#review-form")?.addEventListener("submit", onUpdateStatus);
-  shell.pageContent.querySelector("#create-document-form")?.addEventListener("submit", onCreateDocument);
-  shell.pageContent.querySelector("#ingest-form")?.addEventListener("submit", onIngest);
-
   renderSummary();
   renderResults();
   renderDetail();
@@ -434,7 +311,7 @@ function renderSummary() {
       title: state.query ? "先读前三条最相关结果" : "先从最近已治理资料开始",
       note: state.query
         ? "如果搜索结果里已经有 reviewed / approved 资料，优先阅读这些内容，不要先跳去治理表单。"
-        : "当还没有明确关键词时，先从最近更新的 approved / reviewed 资料熟悉控制台的依据表达方式。",
+        : "当还没有明确关键词时，先从最近更新的 approved / reviewed 资料熟悉控制台的依据表达方式。治理动作已经移到资料治理页。",
       tone: "info",
     })}
   `;

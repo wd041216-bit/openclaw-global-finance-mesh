@@ -43,20 +43,46 @@ async function main() {
       await page.goto(`http://127.0.0.1:${appPort}/index.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("像 Apple 一样克制的财务控制台"));
+      await page.waitForFunction(() => document.body.textContent?.includes("我今天要做业务，还是要管理系统？"));
+      await page.keyboard.press("Tab");
+      const firstFocusText = await page.evaluate(() => (document.activeElement?.textContent || "").trim());
+      assert.ok(firstFocusText.length > 0);
       await maybeCapture(page, captureDir, "home-apple-ui.png");
-      await page.getByRole("link", { name: "打开业务工作台" }).click();
-      await page.waitForURL(`http://127.0.0.1:${appPort}/workbench.html`);
-      await page.waitForFunction(() => document.body.textContent?.includes("今天先做这几件事"));
-      await maybeCapture(page, captureDir, "workbench-apple-ui.png");
+      await page.getByRole("link", { name: "从业务引导开始" }).click();
+      await page.waitForURL((url) => url.pathname === "/getting-started.html" && url.searchParams.get("mode") === "business");
+      await page.waitForFunction(() => document.body.textContent?.includes("分步清单"));
+      await page.locator('[data-guide-mode="admin"]').click();
+      await page.waitForFunction(() => window.location.search.includes("mode=admin"));
+      await page.waitForFunction(() => document.body.textContent?.includes("管理链路"));
 
-      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+      await page.goto(`http://127.0.0.1:${appPort}/system-identity.html`, {
         waitUntil: "networkidle",
       });
       await page.locator('#token-login-form input[name="token"]').fill("admin-secret");
       await page.getByRole("button", { name: "用本地令牌登录" }).click();
       await page.waitForFunction(() => document.body.textContent?.includes("Alice Admin"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("管理状态"));
       await maybeCapture(page, captureDir, "system-apple-ui.png");
+
+      await page.goto(`http://127.0.0.1:${appPort}/system-runtime.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("Cloud Doctor"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/system-health.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("Prometheus 文本预览"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/workbench.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("今天先做这几件事"));
+      await maybeCapture(page, captureDir, "workbench-apple-ui.png");
 
       await page.goto(`http://127.0.0.1:${appPort}/decisions.html`, {
         waitUntil: "networkidle",
@@ -66,14 +92,25 @@ async function main() {
       await page.waitForFunction(() => document.querySelector("#decision-result")?.textContent?.includes("当前结论"));
       await maybeCapture(page, captureDir, "decisions-apple-ui.png");
 
+      await page.goto(`http://127.0.0.1:${appPort}/replays.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("按三步看清规则漂移"));
+      await page.getByRole("button", { name: "运行回放" }).click();
+      await page.waitForFunction(() => document.querySelector("#replay-result")?.textContent?.includes("共有"));
+
       await page.goto(`http://127.0.0.1:${appPort}/library.html`, {
         waitUntil: "networkidle",
       });
       await page.locator('#search-form input[name="query"]').fill("VAT");
       await page.getByRole("button", { name: "搜索依据库" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#library-results [data-document-id]").length > 0);
+      await page.goto(`http://127.0.0.1:${appPort}/library-review.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("资料治理"));
 
-      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+      await page.goto(`http://127.0.0.1:${appPort}/system-identity.html`, {
         waitUntil: "networkidle",
       });
       await page.getByText("展开身份绑定与角色映射").click();
@@ -82,31 +119,48 @@ async function main() {
       await page.locator('#binding-form select[name="role"]').selectOption("admin");
       await page.locator('#binding-form input[name="email"]').fill("admin@example.com");
       await page.getByRole("button", { name: "创建身份绑定" }).click();
-      await page.waitForFunction(() => document.querySelector("#binding-list")?.textContent?.includes("admin@example.com"));
+      await page.waitForFunction(() => document.body.textContent?.includes("admin@example.com"));
 
       await page.getByRole("button", { name: "退出当前会话" }).click();
-      await page.waitForFunction(() => document.body.textContent?.includes("等待登录"));
+      await page.waitForSelector("#token-login-form");
 
       await page.getByRole("button", { name: "使用企业身份登录" }).click();
-      await page.waitForURL((url) => url.toString().startsWith(`http://127.0.0.1:${appPort}/system.html`));
+      await page.waitForURL((url) => url.toString().startsWith(`http://127.0.0.1:${appPort}/system-identity.html`));
       await page.waitForFunction(() => document.body.textContent?.includes("Jamie Admin"));
 
       await page.goto(`http://127.0.0.1:${appPort}/governance.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("当前完整性结论"));
+      await page.waitForFunction(() => document.body.textContent?.includes("治理结论"));
       await maybeCapture(page, captureDir, "governance-apple-ui.png");
 
+      await page.goto(`http://127.0.0.1:${appPort}/governance-exports.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("审计链完整性"));
+
+      await page.goto(`http://127.0.0.1:${appPort}/governance-activity.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("治理时间线"));
+
       await page.goto(`http://127.0.0.1:${appPort}/recovery.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("恢复就绪度"));
+      await maybeCapture(page, captureDir, "recovery-apple-ui.png");
+
+      await page.goto(`http://127.0.0.1:${appPort}/recovery-backups.html`, {
         waitUntil: "networkidle",
       });
       await page.getByRole("button", { name: "立即执行备份" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#backup-list [data-backup-id]").length > 0);
 
+      await page.goto(`http://127.0.0.1:${appPort}/recovery-restores.html`, {
+        waitUntil: "networkidle",
+      });
       await page.getByRole("button", { name: "立即执行演练" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#restore-list [data-restore-id]").length > 0);
-      await page.waitForFunction(() => document.querySelector("#recovery-summary")?.textContent?.includes("恢复"));
-      await maybeCapture(page, captureDir, "recovery-apple-ui.png");
 
       await page.goto(`http://127.0.0.1:${appPort}/agents.html`, {
         waitUntil: "networkidle",
@@ -120,24 +174,22 @@ async function main() {
         width: 390,
         height: 844,
       });
-      await page.goto(`http://127.0.0.1:${appPort}/workbench.html`, {
+      await page.goto(`http://127.0.0.1:${appPort}/index.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("今天先做这几件事"));
-      await page.goto(`http://127.0.0.1:${appPort}/decisions.html`, {
+      await page.waitForFunction(() => document.body.textContent?.includes("角色入口"));
+      await page.goto(`http://127.0.0.1:${appPort}/getting-started.html?mode=business`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("按三步完成一次决策"));
-      await page.getByRole("button", { name: "运行决策" }).click();
-      await page.waitForFunction(() => document.querySelector("#decision-result")?.textContent?.includes("当前结论"));
+      await page.waitForFunction(() => document.body.textContent?.includes("分步清单"));
       await page.goto(`http://127.0.0.1:${appPort}/agents.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("最小闭环"));
+      await page.waitForFunction(() => document.body.textContent?.includes("本地如何启动"));
       await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("身份与入口"));
+      await page.waitForFunction(() => document.body.textContent?.includes("管理状态"));
       await maybeCapture(page, captureDir, "system-mobile-apple-ui.png");
 
       await page.setViewportSize({
@@ -145,13 +197,13 @@ async function main() {
         height: 1100,
       });
 
-      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+      await page.goto(`http://127.0.0.1:${appPort}/system-identity.html`, {
         waitUntil: "networkidle",
       });
       await page.waitForFunction(() => document.querySelector("#active-session-list")?.textContent?.includes("Jamie Admin"));
       await page.locator("#active-session-list [data-session-id]").first().click();
       await page.getByRole("button", { name: /撤销/ }).click();
-      await page.waitForFunction(() => document.body.textContent?.includes("等待登录"));
+      await page.waitForSelector("#token-login-form");
 
       const restoreStatus = await page.evaluate(async () => {
         const response = await fetch("/api/operations/restores", {
