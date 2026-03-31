@@ -152,6 +152,39 @@ The system page now also builds a cloud doctor report with:
 See [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md) for the cloud runtime runbook.
 See [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md) for the single-instance external pilot path.
 
+## macOS one-click package
+
+If you want to try the product like a local app instead of running `npm run dev`, the repo now includes a macOS desktop packager.
+
+Build it with:
+
+```bash
+npm run build:macos-installer
+```
+
+This produces:
+
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.dmg`
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.zip`
+- a release folder containing `Zhouheng Finance Mesh.app` plus helper scripts
+
+Install by double-clicking:
+
+```text
+Install Zhouheng Finance Mesh.command
+```
+
+The installer copies the app into `~/Applications`, keeps user state under `~/Library/Application Support/Zhouheng Finance Mesh`, opens `system.html` on first launch, and defaults to:
+
+- `OLLAMA_MODE=cloud`
+- `OLLAMA_MODEL=kimi-k2.5`
+- `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
+
+The package now bundles the official Node.js 22.22.2 macOS runtime, so users do not need to preinstall Node.
+For sharing with other users, prefer the generated `.dmg` or `.zip`; if you build inside an iCloud-synced folder, the raw `.app` in `dist/` can pick up local Finder metadata after the build.
+
+See [docs/macos-desktop-package.md](./docs/macos-desktop-package.md) for packaging, install, and first-launch details.
+
 ## Identity and access
 
 The product now ships with an enterprise beta identity baseline.

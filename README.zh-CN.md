@@ -126,6 +126,39 @@ npm run verify:cloud-provider -- --out output/cloud-verification.json
 完整排障路径见 [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)。
 外部试点落地顺序见 [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md)。
 
+## macOS 一键安装包
+
+如果你想像普通本地软件一样直接安装试用，而不是手动 `npm run dev`，仓库现在已经带了 macOS 桌面打包脚本。
+
+构建命令：
+
+```bash
+npm run build:macos-installer
+```
+
+会生成：
+
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.dmg`
+- `dist/macos/zhouheng-finance-mesh-<version>-macos.zip`
+- 一个包含 `Zhouheng Finance Mesh.app` 和辅助脚本的发布目录
+
+安装时直接双击：
+
+```text
+Install Zhouheng Finance Mesh.command
+```
+
+安装器会把 App 复制到 `~/Applications`，把用户数据放到 `~/Library/Application Support/Zhouheng Finance Mesh`，首次启动自动打开 `system.html`，并默认使用：
+
+- `OLLAMA_MODE=cloud`
+- `OLLAMA_MODEL=kimi-k2.5`
+- `FINANCE_MESH_CLOUD_API_FLAVOR=auto`
+
+安装包现在会直接内置官方 Node.js 22.22.2 macOS runtime，所以用户不需要预先安装 Node。
+如果要分发给别人，优先使用生成出来的 `.dmg` 或 `.zip`；如果你在 iCloud 同步目录里本地构建，`dist/` 里的裸 `.app` 可能会被系统额外打上 Finder 元数据。
+
+详细说明见 [docs/macos-desktop-package.md](./docs/macos-desktop-package.md)。
+
 ## 身份与访问控制
 
 当前版本已经具备企业 beta 的身份与会话基线。

@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 
 export interface LegalDocument {
   id: string;
@@ -32,9 +33,7 @@ export interface LegalLibraryStats {
   latestUpdatedAt?: string;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const LIBRARY_PATH = path.join(REPO_ROOT, "data", "legal-library", "library.json");
+const { legalLibraryPath: LIBRARY_PATH } = resolveFinanceMeshPaths(import.meta.url);
 
 export class LegalLibraryStore {
   private readonly libraryPath: string;

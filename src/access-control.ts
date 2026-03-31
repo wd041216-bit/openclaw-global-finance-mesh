@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { IncomingHttpHeaders } from "node:http";
 
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 import { AuthSessionStore, type AuthenticatedSession, type SessionAuthMethod } from "./auth-session-store.ts";
 
 export type AccessRole = "viewer" | "operator" | "reviewer" | "admin";
@@ -104,9 +104,7 @@ interface OidcClaims {
   preferred_username?: string;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const RUNTIME_DIR = path.join(REPO_ROOT, "data", "runtime");
+const { runtimeDir: RUNTIME_DIR } = resolveFinanceMeshPaths(import.meta.url);
 const CONFIG_PATH = path.join(RUNTIME_DIR, "access-control.json");
 const SECRET_PATH = path.join(RUNTIME_DIR, "access-control.secrets.json");
 

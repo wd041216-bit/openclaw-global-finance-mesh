@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 
 export type BrainMode = "local" | "cloud";
 export type CloudApiFlavor = "auto" | "ollama_native" | "openai_compatible";
@@ -20,9 +21,7 @@ type PublicBrainRuntimeConfig = Omit<BrainRuntimeConfig, "apiKey"> & {
   hasApiKey: boolean;
 };
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const RUNTIME_DIR = path.join(REPO_ROOT, "data", "runtime");
+const { runtimeDir: RUNTIME_DIR } = resolveFinanceMeshPaths(import.meta.url);
 const CONFIG_PATH = path.join(RUNTIME_DIR, "config.json");
 const SECRET_PATH = path.join(RUNTIME_DIR, "local.secrets.json");
 

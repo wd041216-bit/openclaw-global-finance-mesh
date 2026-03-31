@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { IncomingHttpHeaders } from "node:http";
-import { fileURLToPath } from "node:url";
 
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 import type { AccessRole, AuthenticatedActor } from "./access-control.ts";
 import { enableSqliteDefensiveMode } from "./sqlite-compat.ts";
 
@@ -91,9 +91,7 @@ interface OidcStateRow {
   expires_at: string;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const RUNTIME_DIR = path.join(REPO_ROOT, "data", "runtime");
+const { runtimeDir: RUNTIME_DIR } = resolveFinanceMeshPaths(import.meta.url);
 const SESSION_DB_PATH = path.join(RUNTIME_DIR, "auth-sessions.sqlite");
 
 export class AuthSessionStore {

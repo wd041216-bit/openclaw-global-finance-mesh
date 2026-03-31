@@ -29,6 +29,7 @@
   "scripts": {
     "dev": "node src/server.ts",
     "start": "node src/server.ts",
+    "build:macos-installer": "node scripts/build-macos-installer.ts",
     "mcp:serve": "node integrations/mcp/server.ts",
     "test": "node --test tests/*.test.ts",
     "verify": "npm test",

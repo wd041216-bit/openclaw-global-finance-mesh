@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 import type { AuthenticatedActor } from "./access-control.ts";
 import { enableSqliteDefensiveMode } from "./sqlite-compat.ts";
 
@@ -170,9 +170,7 @@ interface AuditLedgerOptions {
   verifyWarnHours?: number;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const AUDIT_DIR = path.join(REPO_ROOT, "data", "audit");
+const { auditDir: AUDIT_DIR } = resolveFinanceMeshPaths(import.meta.url);
 const LEDGER_PATH = path.join(AUDIT_DIR, "ledger.sqlite");
 const LEGACY_RUNS_PATH = path.join(AUDIT_DIR, "runs.json");
 const LEGACY_ACTIVITY_PATH = path.join(AUDIT_DIR, "activity.json");

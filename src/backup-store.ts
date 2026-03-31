@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 
 import type { AuthenticatedActor } from "./access-control.ts";
@@ -104,6 +104,7 @@ export interface S3ReplicationUploader {
 interface BackupStoreOptions {
   ledger?: AuditLedgerStore;
   sourceRoot?: string;
+  dataRoot?: string;
   backupRoot?: string;
   localDir?: string;
   environment?: string;
@@ -112,9 +113,9 @@ interface BackupStoreOptions {
   s3Uploader?: S3ReplicationUploader;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const BACKUP_ROOT = path.join(REPO_ROOT, "data", "backups");
+const DEFAULT_PATHS = resolveFinanceMeshPaths(import.meta.url);
+const REPO_ROOT = DEFAULT_PATHS.repoRoot;
+const BACKUP_ROOT = DEFAULT_PATHS.backupRoot;
 
 const SNAPSHOT_FILE_PATHS = [
   path.join("data", "audit", "ledger.sqlite"),
@@ -126,6 +127,7 @@ const SNAPSHOT_FILE_PATHS = [
 export class BackupReplicationStore {
   private readonly ledger: AuditLedgerStore;
   private readonly sourceRoot: string;
+  private readonly dataRoot: string;
   private readonly backupRoot: string;
   private readonly localDir?: string;
   private readonly environment: string;
@@ -136,7 +138,8 @@ export class BackupReplicationStore {
   constructor(options?: BackupStoreOptions) {
     this.ledger = options?.ledger ?? new AuditLedgerStore();
     this.sourceRoot = options?.sourceRoot ?? REPO_ROOT;
-    this.backupRoot = options?.backupRoot ?? path.join(this.sourceRoot, "data", "backups");
+    this.dataRoot = options?.dataRoot ?? path.join(this.sourceRoot, "data");
+    this.backupRoot = options?.backupRoot ?? path.join(this.dataRoot, "backups");
     this.localDir = normalizeOptionalString(options?.localDir ?? process.env.FINANCE_MESH_BACKUP_LOCAL_DIR) ?? undefined;
     this.environment = options?.environment ?? (process.env.FINANCE_MESH_ENVIRONMENT?.trim() || "local");
     this.teamScope = options?.teamScope ?? (process.env.FINANCE_MESH_TEAM_SCOPE?.trim() || "default");
@@ -312,7 +315,7 @@ export class BackupReplicationStore {
     const sourceFiles = [
       ...SNAPSHOT_FILE_PATHS.map((filePath) => ({
         relativePath: filePath,
-        absolutePath: path.join(this.sourceRoot, filePath),
+        absolutePath: resolveSnapshotSourcePath(this.dataRoot, filePath),
       })),
       ...(await this.collectExportFiles()),
     ];
@@ -342,7 +345,7 @@ export class BackupReplicationStore {
   }
 
   private async collectExportFiles(): Promise<Array<{ relativePath: string; absolutePath: string }>> {
-    const exportRoot = path.join(this.sourceRoot, "data", "audit", "exports");
+    const exportRoot = path.join(this.dataRoot, "audit", "exports");
     if (!(await fileExists(exportRoot))) {
       return [];
     }
@@ -350,7 +353,7 @@ export class BackupReplicationStore {
     const files = await walkFiles(exportRoot);
     return files.map((absolutePath) => ({
       absolutePath,
-      relativePath: path.relative(this.sourceRoot, absolutePath),
+      relativePath: path.join("data", path.relative(this.dataRoot, absolutePath)),
     }));
   }
 
@@ -460,6 +463,11 @@ export class BackupReplicationStore {
       chainVerifiedAt: metadata.chainVerifiedAt,
     };
   }
+}
+
+function resolveSnapshotSourcePath(dataRoot: string, relativePath: string): string {
+  const normalized = relativePath.replace(/^data[\\/]/, "");
+  return path.join(dataRoot, normalized);
 }
 
 class AwsS3ReplicationUploader implements S3ReplicationUploader {

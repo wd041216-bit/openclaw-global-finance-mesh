@@ -2,8 +2,8 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath } from "node:url";
 
+import { resolveFinanceMeshPaths } from "./app-paths.ts";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 import { BackupReplicationStore } from "./backup-store.ts";
 
@@ -61,9 +61,7 @@ interface ResolvedRestoreSource {
   sourceLocation: string;
 }
 
-const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(MODULE_DIR, "..");
-const RESTORE_ROOT = path.join(REPO_ROOT, "data", "restore-drills");
+const { restoreDrillRoot: RESTORE_ROOT } = resolveFinanceMeshPaths(import.meta.url);
 
 export class RestoreDrillStore {
   private readonly ledger: AuditLedgerStore;
