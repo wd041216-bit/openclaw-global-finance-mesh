@@ -27,8 +27,10 @@
 - legal library ingestion and grounding
 - Chinese-first multi-page browser console with separate home, workbench, governance, recovery, system, and Agent Hub surfaces
 - task-oriented business pages for decision, replay, and legal reading instead of a single overloaded operator screen
+- summary-first governance, recovery, and system pages so administrators see status, risk, and next action before any management forms
 - unified local-first adapter registry for OpenClaw plugin mode plus Claude/Manus MCP connector mode
 - stable MCP contracts with summary text, `structuredContent`, and `outputSchema` for five shared finance tools
+- unified host doctor plus local OpenClaw fixture smoke for adapter drift detection
 
 ## What still needs work before an honest enterprise-ready claim
 
@@ -41,7 +43,7 @@
 - human signoff workflow integration
 - load and failover testing
 - full connector hardening for ERP, invoicing, and approval systems
-- real host-by-host certification beyond local MCP and registry smoke coverage
+- vendor-grade host-by-host certification beyond local-first OpenClaw fixture smoke and shared MCP smoke coverage
 
 ## Standard to hold
 

@@ -71,6 +71,12 @@ async function render() {
                 title: "最后跑一次真实调用",
                 note: "建议至少调用一次决策工具和一次依据库搜索工具，确认 structuredContent 可被宿主读取。",
               })}
+              ${stepCard({
+                step: "04",
+                title: "统一跑一遍宿主诊断",
+                note: "当你不确定问题在配置、入口还是工具契约时，直接执行 npm run doctor:hosts。",
+                footer: "这条命令会串起 MCP smoke、OpenClaw fixture smoke，以及三家接入文档/配置模板检查。",
+              })}
             </div>
           </article>
         </section>
@@ -132,6 +138,10 @@ function renderAdapterCard(adapter) {
         ${verifyArtifact ? codeBlock(verifyArtifact.value) : ""}
         ${bulletList(adapter.installGuide.verification, "verify-list")}
       </div>
+      <div>
+        <p class="section-kicker">常见失败</p>
+        ${bulletList(adapter.troubleshooting || adapter.installGuide.troubleshooting, "verify-list")}
+      </div>
       <details class="technical-details">
         <summary>查看安装详情</summary>
         <div class="section-stack">
@@ -145,7 +155,7 @@ function renderAdapterCard(adapter) {
           </div>
           <div>
             <p class="section-kicker">常见失败</p>
-            ${bulletList(adapter.installGuide.troubleshooting, "verify-list")}
+            ${bulletList(adapter.troubleshooting || adapter.installGuide.troubleshooting, "verify-list")}
           </div>
           <div class="detail-table">
             ${adapter.artifacts.map((artifact) => `

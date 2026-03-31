@@ -43,6 +43,7 @@ export interface AgentAdapterDescriptor {
   artifacts: AgentAdapterArtifact[];
   capabilities: AgentAdapterCapability[];
   installGuide: AgentAdapterInstallGuide;
+  troubleshooting: string[];
 }
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -178,15 +179,15 @@ const ADAPTERS: AgentAdapterDescriptor[] = [
     supportLevel: "native_ready",
     installMode: "local-first",
     entrypoint: "integrations/openclaw/index.ts",
-    docsPath: "integrations/openclaw/SKILL.md",
+    docsPath: "integrations/openclaw/README.md",
     configTemplatePath: "integrations/openclaw/openclaw-config.example.json",
-    smokeCommand: "node --test tests/agent-adapters.test.ts",
-    testedHosts: ["OpenClaw local plugin host"],
+    smokeCommand: "npm run smoke:openclaw",
+    testedHosts: ["OpenClaw local plugin host", "OpenClaw fixture smoke"],
     artifacts: buildArtifacts({
       configTemplatePath: "integrations/openclaw/openclaw-config.example.json",
-      docsPath: "integrations/openclaw/SKILL.md",
+      docsPath: "integrations/openclaw/README.md",
       startCommand: "由 OpenClaw 宿主直接加载 integrations/openclaw",
-      verifyCommand: "node --test tests/agent-adapters.test.ts",
+      verifyCommand: "npm run smoke:openclaw",
     }),
     capabilities: SHARED_CAPABILITIES.slice(0, 3),
     installGuide: {
@@ -207,8 +208,14 @@ const ADAPTERS: AgentAdapterDescriptor[] = [
       troubleshooting: [
         "如果 OpenClaw 没有识别插件路径，先确认 paths 指向的是 integrations/openclaw 而不是仓库根目录。",
         "如果工具列表为空，检查宿主是否加载了 zhouheng-global-finance-mesh 这个 entry。",
+        "如果插件加载成功但没有 prepend guidance，检查 prependSystemGuidance 是否仍为 true。",
       ],
     },
+    troubleshooting: [
+      "如果 OpenClaw 没有识别插件路径，先确认 paths 指向的是 integrations/openclaw 而不是仓库根目录。",
+      "如果工具列表为空，检查宿主是否加载了 zhouheng-global-finance-mesh 这个 entry。",
+      "如果插件加载成功但没有 prepend guidance，检查 prependSystemGuidance 是否仍为 true。",
+    ],
   },
   {
     id: "claude",
@@ -249,8 +256,14 @@ const ADAPTERS: AgentAdapterDescriptor[] = [
       troubleshooting: [
         "如果 Claude 无法启动 connector，先在终端单独执行 npm run mcp:serve 看看是否能正常驻留。",
         "如果看不到工具，确认 FINANCE_MESH_REPO_ROOT 指向的是仓库根目录，而不是 integrations/mcp。",
+        "如果 tools/list 正常但调用失败，检查 FINANCE_MESH_MCP_PACK_ROOTS 是否仍指向 examples/packs 或你的真实 pack 目录。",
       ],
     },
+    troubleshooting: [
+      "如果 Claude 无法启动 connector，先在终端单独执行 npm run mcp:serve 看看是否能正常驻留。",
+      "如果看不到工具，确认 FINANCE_MESH_REPO_ROOT 指向的是仓库根目录，而不是 integrations/mcp。",
+      "如果 tools/list 正常但调用失败，检查 FINANCE_MESH_MCP_PACK_ROOTS 是否仍指向 examples/packs 或你的真实 pack 目录。",
+    ],
   },
   {
     id: "manus",
@@ -291,8 +304,14 @@ const ADAPTERS: AgentAdapterDescriptor[] = [
       troubleshooting: [
         "如果 Manus 侧报 stdio 启动失败，先在终端执行同一条 node 命令排查路径或环境变量问题。",
         "如果工具输出只有文本没有结构化对象，更新到当前仓库版本并确认 shared MCP server 已重启。",
+        "如果决策调用报找不到 Pack，确认 Manus 配置里的 FINANCE_MESH_REPO_ROOT 指向仓库根目录。",
       ],
     },
+    troubleshooting: [
+      "如果 Manus 侧报 stdio 启动失败，先在终端执行同一条 node 命令排查路径或环境变量问题。",
+      "如果工具输出只有文本没有结构化对象，更新到当前仓库版本并确认 shared MCP server 已重启。",
+      "如果决策调用报找不到 Pack，确认 Manus 配置里的 FINANCE_MESH_REPO_ROOT 指向仓库根目录。",
+    ],
   },
 ];
 

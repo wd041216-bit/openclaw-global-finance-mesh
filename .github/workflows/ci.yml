@@ -48,6 +48,9 @@ jobs:
       - name: Verify server syntax
         run: npm run verify:server
 
+      - name: Diagnose host adapters
+        run: npm run doctor:hosts
+
       - name: Verify Kubernetes manifests
         run: npm run verify:manifests
 

@@ -18,6 +18,8 @@ test("agent adapter registry exposes unified metadata and artifacts", async () =
     assert.ok(adapter.smokeCommand);
     assert.ok(Array.isArray(adapter.testedHosts));
     assert.ok(adapter.testedHosts.length >= 1);
+    assert.ok(Array.isArray(adapter.troubleshooting));
+    assert.ok(adapter.troubleshooting.length >= 2);
     assert.ok(Array.isArray(adapter.artifacts));
     assert.equal(adapter.artifacts.some((artifact) => artifact.kind === "config"), true);
     assert.equal(adapter.artifacts.some((artifact) => artifact.kind === "docs"), true);
@@ -43,10 +45,12 @@ test("openclaw config example stays aligned with the registry contract", async (
   const plugin = JSON.parse(await fs.readFile(pluginPath, "utf8"));
   const skill = JSON.parse(await fs.readFile(skillPath, "utf8"));
 
+  assert.equal(openclaw.docsPath, "integrations/openclaw/README.md");
+  assert.equal(openclaw.smokeCommand, "npm run smoke:openclaw");
   assert.deepEqual(config.plugins.entries, ["zhouheng-global-finance-mesh"]);
   assert.match(config.plugins.load.paths[0], /integrations\/openclaw$/);
   assert.equal(plugin.id, "zhouheng-global-finance-mesh");
   assert.equal(skill.name, "zhouheng-global-finance-mesh");
-  assert.match(plugin.description, /unified agent adapter registry/i);
-  assert.match(skill.description, /unified agent-registry metadata/i);
+  assert.match(plugin.description, /unified finance pack validation/i);
+  assert.match(skill.description, /unified finance pack validation/i);
 });

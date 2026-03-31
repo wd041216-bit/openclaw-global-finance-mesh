@@ -1,16 +1,18 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a business-first Apple-style multi-page console, local-first agent connectors with structured MCP outputs, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a business-first Apple-style multi-page console, summary-first admin dashboards, local-first agent connectors with structured MCP outputs, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
 ## Console snapshots
 
 <p align="center">
-  <img src="./docs/assets/workbench-apple-ui.png" alt="Business workbench with next actions and summary cards" width="23%" />
-  <img src="./docs/assets/decisions-apple-ui.png" alt="Decision center with a three-step workflow" width="23%" />
-  <img src="./docs/assets/recovery-apple-ui.png" alt="Recovery center with backup and restore readiness" width="23%" />
-  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw, Claude, and Manus setup cards" width="23%" />
+  <img src="./docs/assets/workbench-apple-ui.png" alt="Business workbench with next actions and summary cards" width="15%" />
+  <img src="./docs/assets/decisions-apple-ui.png" alt="Decision center with a three-step workflow" width="15%" />
+  <img src="./docs/assets/governance-apple-ui.png" alt="Governance center with summary-first integrity and export status" width="15%" />
+  <img src="./docs/assets/system-apple-ui.png" alt="System page with identity and runtime summaries" width="15%" />
+  <img src="./docs/assets/recovery-apple-ui.png" alt="Recovery center with backup and restore readiness" width="15%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw, Claude, and Manus setup cards" width="15%" />
 </p>
 
 ## What ships in the current baseline
@@ -134,8 +136,8 @@ The console is no longer a single overloaded screen.
 - `workbench.html` is the business-first starting point with recommended actions sourced from `/api/dashboard/overview`
 - `decisions.html` and `replays.html` now use explicit three-step flows instead of raw operator forms
 - `library.html` is search-first, with governance actions moved behind reviewer/admin-only secondary panels
-- `governance.html`, `recovery.html`, and `system.html` keep audit governance, recovery operations, and admin/runtime controls separate
-- `system.html` isolates identity, session, runtime, and observability controls
+  - `governance.html`, `recovery.html`, and `system.html` keep audit governance, recovery operations, and admin/runtime controls separate, with summary-first dashboards before any forms
+  - `system.html` isolates identity, session, runtime, and observability controls behind lighter first-screen summaries
 - `agents.html` gives non-technical and technical users a single place to understand how Zhouheng plugs into external hosts
 
 This keeps business work readable, while preserving advanced details for reviewers and administrators.
@@ -150,6 +152,8 @@ Zhouheng now has a unified adapter registry instead of a one-off OpenClaw-only i
 - `integrations/manus/` contains Manus connector docs and example MCP config
 - `npm run mcp:serve` starts the shared MCP connector directly
 - `npm run smoke:mcp` validates that the MCP server lists all five tools and can execute structured decision/legal-library calls locally
+- `npm run smoke:openclaw` loads the native OpenClaw adapter in a fixture host and verifies three tools plus prompt guidance
+- `npm run doctor:hosts` runs the shared host doctor: config-template checks, docs checks, MCP smoke, and OpenClaw fixture smoke
 
 Supported tool surfaces today:
 
@@ -165,7 +169,7 @@ All five shared MCP tools now return:
 - stable `structuredContent`
 - an explicit `outputSchema`
 
-This keeps Claude and Manus on the same contract, while OpenClaw continues to use its native plugin surface sourced from the same registry metadata.
+This keeps Claude and Manus on the same contract, while OpenClaw continues to use its native plugin surface with artifact drift checked against the same contract.
 
 ## Legal library governance
 

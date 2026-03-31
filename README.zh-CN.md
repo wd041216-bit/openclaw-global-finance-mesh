@@ -1,14 +1,16 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、面向非技术人员的白色多页面业务控制台、面向 Claude / Manus / OpenClaw 的统一兼容层、带结构化输出的 MCP 工具契约、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、面向非技术人员的白色多页面业务控制台、摘要看板优先的后台页、面向 Claude / Manus / OpenClaw 的统一兼容层、带结构化输出的 MCP 工具契约、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
 
 ## 控制台截图
 
 <p align="center">
-  <img src="./docs/assets/workbench-apple-ui.png" alt="工作台：推荐动作与最近摘要" width="23%" />
-  <img src="./docs/assets/decisions-apple-ui.png" alt="决策中心：三段式任务流" width="23%" />
-  <img src="./docs/assets/recovery-apple-ui.png" alt="恢复中心：备份与恢复就绪度" width="23%" />
-  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub：OpenClaw、Claude、Manus 接入卡片" width="23%" />
+  <img src="./docs/assets/workbench-apple-ui.png" alt="工作台：推荐动作与最近摘要" width="15%" />
+  <img src="./docs/assets/decisions-apple-ui.png" alt="决策中心：三段式任务流" width="15%" />
+  <img src="./docs/assets/governance-apple-ui.png" alt="治理中心：摘要优先的完整性与导出状态" width="15%" />
+  <img src="./docs/assets/system-apple-ui.png" alt="系统设置：身份与运行时摘要" width="15%" />
+  <img src="./docs/assets/recovery-apple-ui.png" alt="恢复中心：备份与恢复就绪度" width="15%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub：OpenClaw、Claude、Manus 接入卡片" width="15%" />
 </p>
 
 ## 已落地内容
@@ -19,9 +21,9 @@
   - `决策中心`：按“事件来源 -> 决策模式 / Pack -> 结果摘要”三步运行决策
   - `回放中心`：按“事件来源 -> 基线 / 候选 Pack -> 差异摘要”三步查看规则漂移
   - `依据库`：搜索优先，治理与采集退到 reviewer/admin 的次级面板
-  - `治理中心`：审计链、导出、Operator Activity
-  - `恢复中心`：备份、恢复演练、恢复建议
-  - `系统设置`：身份、会话、运行时、部署健康
+  - `治理中心`：审计链、导出、Operator Activity，首屏先给结论和下一步
+  - `恢复中心`：备份、恢复演练、恢复建议，失败点与推荐动作优先展示
+  - `系统设置`：身份、会话、运行时、部署健康，管理表单退到次级折叠区
   - `Agent Hub`：OpenClaw / Claude / Manus 接入说明，按“能做什么 -> 如何启动 -> 如何验证 -> 技术详情”展开
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
@@ -126,6 +128,8 @@ npm run dev
 - `integrations/manus/`：Manus 本地接入说明与示例配置
 - `npm run mcp:serve`：直接启动共享 MCP connector
 - `npm run smoke:mcp`：本地验证五个工具可见，并真实调用决策与法规搜索
+- `npm run smoke:openclaw`：在 fixture host 里加载 OpenClaw 原生插件并验证三类工具与 prompt guidance
+- `npm run doctor:hosts`：统一检查三家配置模板、接入文档、共享 MCP smoke 和 OpenClaw fixture smoke
 
 当前统一暴露的工具面包括：
 
@@ -141,7 +145,7 @@ npm run dev
 - 稳定的 `structuredContent`
 - 明确的 `outputSchema`
 
-这样 Claude 与 Manus 共用同一套本地契约，OpenClaw 则继续走原生插件面，但描述元数据仍然来自同一个 registry。
+这样 Claude 与 Manus 共用同一套本地契约，OpenClaw 则继续走原生插件面，但静态清单和 smoke 也会被同一套契约持续校验。
 
 ## 审计历史
 

@@ -1,4 +1,4 @@
 version: 1
 display_name: Zhouheng Global Finance Mesh
-short_description: Validate packs, generate finance decision packets, and replay rule changes with audit traces through the optional OpenClaw adapter.
+short_description: Validate packs, generate finance decision packets, and replay rule changes through the local OpenClaw adapter.
 default_prompt: Use this skill when finance work should be rule-driven, auditable, replayable, and Pack-based instead of free-form.

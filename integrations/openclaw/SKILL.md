@@ -2,9 +2,9 @@
 name: zhouheng-global-finance-mesh
 homepage: https://github.com/wd041216-bit/zhouheng-global-finance-mesh
 description: >
-  Use the optional OpenClaw adapter to run finance events through a pack-based
-  rule mesh that produces auditable decision packets, replayable rule changes,
-  and evidence graph snapshots.
+  Use the optional OpenClaw adapter to validate finance packs, generate
+  decision packets, and replay rule changes through the same Zhouheng control
+  plane used by the standalone console.
 ---
 
 # Zhouheng Global Finance Mesh

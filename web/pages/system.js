@@ -7,6 +7,7 @@ import {
   rememberAction,
 } from "../core/api.js";
 import {
+  calloutCard,
   detailRows,
   emptyState,
   jsonDetails,
@@ -575,27 +576,67 @@ function renderAccess() {
         : "当前控制台处于开放模式，业务摘要不需要登录。";
   const identityTone = session?.authenticated ? "good" : config.bootstrapRequired ? "warn" : config.enabled ? "info" : "neutral";
   const identityLabel = session?.authenticated ? "已登录" : config.bootstrapRequired ? "待初始化" : config.enabled ? "未登录" : "开放模式";
+  const entryTitle = config.bootstrapRequired
+    ? "先初始化首位管理员"
+    : session?.authenticated
+      ? "当前会话已经就绪"
+      : config.oidcConfigured
+        ? "优先使用企业身份登录"
+        : config.allowLocalTokens
+          ? "可用本地令牌进入"
+          : "等待身份入口配置";
+  const entryNote = config.bootstrapRequired
+    ? "初始化完成后，浏览器会立刻切到受保护 session。"
+    : session?.authenticated
+      ? "你已经进入受保护的浏览器 session，可以继续管理绑定、会话和运行时。"
+      : config.oidcConfigured
+        ? `企业身份入口已准备好，默认显示为 ${config.oidcDisplayName || config.issuer || "OIDC Provider"}。`
+        : config.allowLocalTokens
+          ? "当前保留 break-glass 本地令牌入口，适合应急或本地调试。"
+          : "当前还没有可用的浏览器登录入口。";
+  const riskTitle = session?.authenticated
+    ? "会话已经受 CSRF 保护"
+    : config.enabled
+      ? "当前还没有建立受保护 session"
+      : "开放模式下不要求浏览器会话";
+  const riskNote = session?.authenticated
+    ? `当前会话预计在 ${session.currentSession?.expiresAt ? formatDateTime(session.currentSession.expiresAt) : "未提供时间"} 到期。`
+    : config.enabled
+      ? "未登录时仍可浏览首页摘要，但管理动作会继续要求身份和角色门禁。"
+      : "如果后续要交给团队使用，建议切回受保护模式并配置管理员入口。";
 
   container.innerHTML = `
-    ${summaryCard({
-      kicker: "当前身份",
-      title: identityTitle,
-      note: identityNote,
-      pillHtml: pill(identityTone, identityLabel),
-      meta: [
-        `身份模式 ${config.identityMode}`,
-        config.oidcConfigured ? `OIDC ${config.oidcDisplayName || "configured"}` : "OIDC 未配置",
-        config.allowLocalTokens ? "本地令牌已启用" : "本地令牌已关闭",
-      ],
-    })}
-    ${detailRows([
-      { label: "身份模式", value: config.identityMode },
-      { label: "认证开关", value: config.enabled ? "已启用" : "未启用" },
-      { label: "本地令牌", value: config.allowLocalTokens ? "允许作为 break-glass" : "已禁用" },
-      { label: "OIDC", value: config.oidcConfigured ? (config.oidcDisplayName || config.issuer || "已配置") : "未配置" },
-      { label: "当前会话方式", value: session?.authMethod ? formatAuthMethod(session.authMethod) : null },
-      { label: "当前会话到期", value: session?.currentSession?.expiresAt ? formatDateTime(session.currentSession.expiresAt) : null },
-    ])}
+    <div class="summary-band three-up">
+      ${summaryCard({
+        kicker: "当前身份",
+        title: identityTitle,
+        note: identityNote,
+        pillHtml: pill(identityTone, identityLabel),
+        meta: [
+          `身份模式 ${config.identityMode}`,
+          config.oidcConfigured ? `OIDC ${config.oidcDisplayName || "configured"}` : "OIDC 未配置",
+        ],
+      })}
+      ${calloutCard({
+        kicker: "入口状态",
+        title: entryTitle,
+        note: entryNote,
+        tone: config.bootstrapRequired ? "warning" : session?.authenticated ? "good" : "info",
+        meta: [
+          config.allowLocalTokens ? "本地令牌已启用" : "本地令牌已关闭",
+        ],
+      })}
+      ${summaryCard({
+        kicker: "会话保护",
+        title: riskTitle,
+        note: riskNote,
+        pillHtml: pill(session?.authenticated ? "good" : config.enabled ? "warn" : "neutral", session?.authenticated ? "session_ready" : config.enabled ? "pending" : "open"),
+        meta: [
+          session?.authMethod ? `当前方式 ${formatAuthMethod(session.authMethod)}` : "尚未建立浏览器 session",
+          session?.currentSession?.expiresAt ? `到期 ${formatDateTime(session.currentSession.expiresAt)}` : "等待建立会话",
+        ],
+      })}
+    </div>
     ${state.accessMessage ? `<p class="footer-note">${state.accessMessage}</p>` : ""}
     ${renderAccessActions(globalData)}
     ${jsonDetails("查看身份技术详情", {
@@ -716,133 +757,168 @@ function renderIdentityAdmin() {
   const operators = Array.isArray(config.operators) ? config.operators : [];
 
   container.innerHTML = `
-    <article class="detail-card">
-      <p class="section-kicker">认证开关</p>
-      <h4>决定控制台是否强制登录</h4>
-      <form id="access-config-form" class="stack">
-        <label class="inline-toggle">
-          <input name="enabled" type="checkbox" ${config.enabled ? "checked" : ""} />
-          启用认证与角色门禁
-        </label>
-        <div class="action-row">
-          <button type="submit">保存认证配置</button>
-        </div>
-      </form>
-    </article>
+    <div class="summary-band three-up">
+      ${summaryCard({
+        kicker: "认证模式",
+        title: config.enabled ? "控制台已启用认证" : "控制台当前处于开放模式",
+        note: config.bootstrapRequired ? "还需要完成首位管理员初始化。" : "是否强制登录由下方折叠区统一管理。",
+        pillHtml: pill(config.enabled ? "good" : "warn", config.enabled ? "enabled" : "open"),
+      })}
+      ${summaryCard({
+        kicker: "本地账户",
+        title: operators.length ? `${operators.length} 个本地账户` : "还没有本地账户",
+        note: operators.length
+          ? `${operators.filter((operator) => operator.active).length} 个当前可用，保留给 break-glass 或服务账户。`
+          : "建议只保留少量 break-glass 账户，避免日常把本地令牌当主登录方式。",
+        pillHtml: pill(operators.some((operator) => operator.active) ? "info" : "warn", "operators"),
+      })}
+      ${calloutCard({
+        kicker: "身份绑定",
+        title: bindings.length ? `${bindings.filter((binding) => binding.active).length} 条有效企业绑定` : "还没有企业身份绑定",
+        note: bindings.length
+          ? "企业身份登录能否落到正确角色，取决于这里的 subject / email 绑定。"
+          : "如果要把 OIDC 登录交给团队使用，下一步优先补一条 admin 或 reviewer 绑定。",
+        tone: bindings.length ? "info" : "warning",
+      })}
+    </div>
 
-    <article class="detail-card">
-      <p class="section-kicker">本地账户</p>
-      <h4>新增 break-glass 或服务账户</h4>
-      ${operators.length
-        ? `<div class="record-list">${operators
-            .map((operator) =>
-              recordButton({
-                id: operator.id,
-                title: operator.name,
-                note: `${formatRole(operator.role)} · ${operator.active ? "已启用" : "未启用"}`,
-                pillHtml: pill(operator.active ? "good" : "neutral", operator.credentialType),
-                meta: [formatDateTime(operator.createdAt)],
-              }),
-            )
-            .join("")}</div>`
-        : emptyState("还没有本地账户。") }
-      <form id="operator-form" class="stack top-gap">
-        <div class="form-grid three">
-          <label>
-            姓名
-            <input name="name" placeholder="Olivia Operator" required />
-          </label>
-          <label>
-            角色
-            <select name="role">
-              <option value="viewer">viewer</option>
-              <option value="operator">operator</option>
-              <option value="reviewer">reviewer</option>
-              <option value="admin">admin</option>
-            </select>
-          </label>
-          <label>
-            令牌
-            <input name="token" placeholder="operator-secret" required />
-          </label>
-        </div>
-        <label class="inline-toggle">
-          <input name="active" type="checkbox" checked />
-          创建后立即可用
-        </label>
-        <div class="action-row">
-          <button type="submit">创建本地账户</button>
-        </div>
-      </form>
-    </article>
+    <details class="management-panel" ${config.bootstrapRequired ? "open" : ""}>
+      <summary>展开认证开关与本地账户管理</summary>
+      <div class="panel-body">
+        <article class="detail-card">
+          <p class="section-kicker">认证开关</p>
+          <h4>决定控制台是否强制登录</h4>
+          <form id="access-config-form" class="stack">
+            <label class="inline-toggle">
+              <input name="enabled" type="checkbox" ${config.enabled ? "checked" : ""} />
+              启用认证与角色门禁
+            </label>
+            <div class="action-row">
+              <button type="submit">保存认证配置</button>
+            </div>
+          </form>
+        </article>
 
-    <article class="detail-card">
-      <p class="section-kicker">企业身份绑定</p>
-      <h4>把 OIDC subject / email 绑定到角色</h4>
-      ${bindings.length
-        ? `<div id="binding-list" class="record-list">${bindings
-            .map((binding) =>
-              `
-                <div class="record-card">
-                  <div class="record-head">
-                    <strong>${escapeHtml(binding.label)}</strong>
-                    ${pill(binding.active ? "good" : "neutral", binding.matchType)}
-                  </div>
-                  <p class="record-copy">${escapeHtml(formatRole(binding.role))} · ${escapeHtml(binding.active ? "active" : "inactive")}</p>
-                  <div class="record-meta">
-                    ${binding.issuer ? `<span>${escapeHtml(binding.issuer)}</span>` : ""}
-                    ${binding.subject ? `<span>${escapeHtml(binding.subject)}</span>` : ""}
-                    ${binding.email ? `<span>${escapeHtml(binding.email)}</span>` : ""}
-                  </div>
-                  ${binding.active ? `<div class="action-row top-gap"><button type="button" class="ghost" data-action="deactivate-binding" data-binding-id="${escapeHtml(binding.id)}">停用绑定</button></div>` : ""}
-                </div>
-              `,
-            )
-            .join("")}</div>`
-        : emptyState("还没有企业身份绑定。") }
-      <form id="binding-form" class="stack top-gap">
-        <div class="form-grid three">
-          <label>
-            标签
-            <input name="label" placeholder="Finance Admin Binding" />
-          </label>
-          <label>
-            匹配方式
-            <select name="matchType">
-              <option value="email">email</option>
-              <option value="subject">subject</option>
-            </select>
-          </label>
-          <label>
-            角色
-            <select name="role">
-              <option value="viewer">viewer</option>
-              <option value="operator">operator</option>
-              <option value="reviewer">reviewer</option>
-              <option value="admin">admin</option>
-            </select>
-          </label>
-        </div>
-        <div class="form-grid">
-          <label>
-            Issuer
-            <input name="issuer" placeholder="https://accounts.example.com" />
-          </label>
-          <label>
-            Subject
-            <input name="subject" placeholder="subject-123" />
-          </label>
-        </div>
-        <label>
-          Email
-          <input name="email" type="email" placeholder="admin@example.com" />
-        </label>
-        <div class="action-row">
-          <button type="submit">创建身份绑定</button>
-        </div>
-      </form>
-      ${state.accessMessage ? `<p class="footer-note">${escapeHtml(state.accessMessage)}</p>` : ""}
-    </article>
+        <article class="detail-card">
+          <p class="section-kicker">本地账户</p>
+          <h4>新增 break-glass 或服务账户</h4>
+          ${operators.length
+            ? `<div class="record-list">${operators
+                .map((operator) =>
+                  recordButton({
+                    id: operator.id,
+                    title: operator.name,
+                    note: `${formatRole(operator.role)} · ${operator.active ? "已启用" : "未启用"}`,
+                    pillHtml: pill(operator.active ? "good" : "neutral", operator.credentialType),
+                    meta: [formatDateTime(operator.createdAt)],
+                  }),
+                )
+                .join("")}</div>`
+            : emptyState("还没有本地账户。") }
+          <form id="operator-form" class="stack top-gap">
+            <div class="form-grid three">
+              <label>
+                姓名
+                <input name="name" placeholder="Olivia Operator" required />
+              </label>
+              <label>
+                角色
+                <select name="role">
+                  <option value="viewer">viewer</option>
+                  <option value="operator">operator</option>
+                  <option value="reviewer">reviewer</option>
+                  <option value="admin">admin</option>
+                </select>
+              </label>
+              <label>
+                令牌
+                <input name="token" placeholder="operator-secret" required />
+              </label>
+            </div>
+            <label class="inline-toggle">
+              <input name="active" type="checkbox" checked />
+              创建后立即可用
+            </label>
+            <div class="action-row">
+              <button type="submit">创建本地账户</button>
+            </div>
+          </form>
+        </article>
+      </div>
+    </details>
+
+    <details class="management-panel" id="binding-panel">
+      <summary>展开身份绑定与角色映射</summary>
+      <div class="panel-body">
+        <article class="detail-card">
+          <p class="section-kicker">企业身份绑定</p>
+          <h4>把 OIDC subject / email 绑定到角色</h4>
+          ${bindings.length
+            ? `<div id="binding-list" class="record-list">${bindings
+                .map((binding) =>
+                  `
+                    <div class="record-card">
+                      <div class="record-head">
+                        <strong>${escapeHtml(binding.label)}</strong>
+                        ${pill(binding.active ? "good" : "neutral", binding.matchType)}
+                      </div>
+                      <p class="record-copy">${escapeHtml(formatRole(binding.role))} · ${escapeHtml(binding.active ? "active" : "inactive")}</p>
+                      <div class="record-meta">
+                        ${binding.issuer ? `<span>${escapeHtml(binding.issuer)}</span>` : ""}
+                        ${binding.subject ? `<span>${escapeHtml(binding.subject)}</span>` : ""}
+                        ${binding.email ? `<span>${escapeHtml(binding.email)}</span>` : ""}
+                      </div>
+                      ${binding.active ? `<div class="action-row top-gap"><button type="button" class="ghost" data-action="deactivate-binding" data-binding-id="${escapeHtml(binding.id)}">停用绑定</button></div>` : ""}
+                    </div>
+                  `,
+                )
+                .join("")}</div>`
+            : emptyState("还没有企业身份绑定。") }
+          <form id="binding-form" class="stack top-gap">
+            <div class="form-grid three">
+              <label>
+                标签
+                <input name="label" placeholder="Finance Admin Binding" />
+              </label>
+              <label>
+                匹配方式
+                <select name="matchType">
+                  <option value="email">email</option>
+                  <option value="subject">subject</option>
+                </select>
+              </label>
+              <label>
+                角色
+                <select name="role">
+                  <option value="viewer">viewer</option>
+                  <option value="operator">operator</option>
+                  <option value="reviewer">reviewer</option>
+                  <option value="admin">admin</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-grid">
+              <label>
+                Issuer
+                <input name="issuer" placeholder="https://accounts.example.com" />
+              </label>
+              <label>
+                Subject
+                <input name="subject" placeholder="subject-123" />
+              </label>
+            </div>
+            <label>
+              Email
+              <input name="email" type="email" placeholder="admin@example.com" />
+            </label>
+            <div class="action-row">
+              <button type="submit">创建身份绑定</button>
+            </div>
+          </form>
+          ${state.accessMessage ? `<p class="footer-note">${escapeHtml(state.accessMessage)}</p>` : ""}
+        </article>
+      </div>
+    </details>
   `;
 }
 
@@ -860,6 +936,22 @@ function renderSessions() {
 
   const selected = state.selectedSession;
   container.innerHTML = `
+    <div class="summary-band">
+      ${summaryCard({
+        kicker: "会话总览",
+        title: state.sessions.length ? `当前有 ${state.sessions.length} 个活跃会话` : "当前没有活跃会话",
+        note: state.currentSessionId ? "当前浏览器 session 也在下方列表中，可以单独撤销。" : "建立会话后，这里会显示当前浏览器和 OIDC 登录记录。",
+        pillHtml: pill(state.sessions.length ? "info" : "neutral", "sessions"),
+      })}
+      ${calloutCard({
+        kicker: "处理建议",
+        title: selected ? `正在查看 ${selected.actor?.name || "当前会话"}` : "先从下方列表选择一个会话",
+        note: selected
+          ? `${formatRole(selected.actor?.role)} · ${formatAuthMethod(selected.authMethod)}`
+          : "如果发现异常登录或过期策略不对，再进入详情执行撤销。",
+        tone: selected ? "info" : "neutral",
+      })}
+    </div>
     <article class="detail-card">
       <div class="section-head compact">
         <div>
@@ -947,15 +1039,20 @@ function renderRuntime() {
 
   runtimeContainer.innerHTML = `
     ${runtimeSummary}
-    ${health
-      ? detailRows([
-          { label: "Ledger", value: health.checks.ledger?.summary },
-          { label: "Legal Library", value: health.checks.legalLibrary?.summary },
-          { label: "Backup Targets", value: health.checks.backupTargets?.summary },
-          { label: "Recovery Drill", value: health.checks.recoveryDrill?.summary },
-          { label: "最近探针", value: lastProbe?.createdAt ? formatDateTime(lastProbe.createdAt) : "尚未探针" },
-        ])
-      : ""}
+    ${calloutCard({
+      kicker: "下一步",
+      title: health?.checks.recoveryDrill?.status === "healthy"
+        ? "系统健康摘要已经足够支撑日常管理"
+        : health?.checks.recoveryDrill?.summary || "先补一次探针或恢复演练",
+      note: canOperateNow
+        ? "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。"
+        : "当前角色只能看摘要，探针动作需要 operator 或 admin。",
+      tone: health?.checks.runtime?.status === "healthy" && health?.checks.recoveryDrill?.status === "healthy" ? "good" : "warning",
+      meta: [
+        health?.metricsAvailable ? "metrics 已启用" : "metrics 未启用",
+        lastProbe?.createdAt ? `最近探针 ${formatDateTime(lastProbe.createdAt)}` : "尚未探针",
+      ],
+    })}
     ${state.runtimeMessage ? `<p class="footer-note">${escapeHtml(state.runtimeMessage)}</p>` : ""}
     ${lastProbe ? jsonDetails("查看探针技术详情", lastProbe) : ""}
   `;
@@ -964,55 +1061,68 @@ function renderRuntime() {
 
   configContainer.innerHTML = canManageNow
     ? `
-      <article class="detail-card">
-        <p class="section-kicker">运行时配置</p>
-        <h4>修改模型、模式和系统提示词</h4>
-        ${state.runtimeError ? `<p class="empty-state">${escapeHtml(state.runtimeError)}</p>` : ""}
-        <form id="runtime-config-form" class="stack">
-          <div class="form-grid three">
-            <label>
-              Mode
-              <select name="mode">
-                <option value="local" ${runtime?.mode === "local" ? "selected" : ""}>local</option>
-                <option value="cloud" ${runtime?.mode === "cloud" ? "selected" : ""}>cloud</option>
-              </select>
-            </label>
-            <label>
-              Model
-              <input name="model" value="${escapeHtml(runtime?.model || "")}" placeholder="qwen3:8b" />
-            </label>
-            <label>
-              Temperature
-              <input name="temperature" type="number" step="0.1" min="0" max="2" value="${escapeHtml(runtime?.temperature ?? 0.2)}" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label>
-              Local Base URL
-              <input name="localBaseUrl" value="${escapeHtml(runtime?.localBaseUrl || "")}" placeholder="http://127.0.0.1:11434" />
-            </label>
-            <label>
-              Cloud Base URL
-              <input name="cloudBaseUrl" value="${escapeHtml(runtime?.cloudBaseUrl || "")}" placeholder="https://ollama.com" />
-            </label>
-          </div>
-          <label>
-            API Key
-            <input name="apiKey" type="password" placeholder="${runtime?.hasApiKey ? "当前已配置 API Key，如需变更可重新输入" : "仅 cloud mode 需要"}" />
-          </label>
-          <label class="inline-toggle">
-            <input name="persistSecret" type="checkbox" />
-            把本次输入的 API Key 持久化到本地 secrets 文件
-          </label>
-          <label>
-            System Prompt
-            <textarea name="systemPrompt" placeholder="System prompt">${escapeHtml(runtime?.systemPrompt || "")}</textarea>
-          </label>
-          <div class="action-row">
-            <button type="submit">保存运行时配置</button>
-          </div>
-        </form>
-      </article>
+      <div class="summary-band">
+        ${summaryCard({
+          kicker: "运行时配置",
+          title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待读取运行时配置",
+          note: runtime?.systemPrompt ? "系统提示词已配置，可在下方折叠区修改。" : "当前还没有系统提示词配置。",
+          pillHtml: pill("info", "editable"),
+        })}
+      </div>
+      <details class="management-panel">
+        <summary>展开模型、密钥与系统提示词配置</summary>
+        <div class="panel-body">
+          <article class="detail-card">
+            <p class="section-kicker">运行时配置</p>
+            <h4>修改模型、模式和系统提示词</h4>
+            ${state.runtimeError ? `<p class="empty-state">${escapeHtml(state.runtimeError)}</p>` : ""}
+            <form id="runtime-config-form" class="stack">
+              <div class="form-grid three">
+                <label>
+                  Mode
+                  <select name="mode">
+                    <option value="local" ${runtime?.mode === "local" ? "selected" : ""}>local</option>
+                    <option value="cloud" ${runtime?.mode === "cloud" ? "selected" : ""}>cloud</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input name="model" value="${escapeHtml(runtime?.model || "")}" placeholder="qwen3:8b" />
+                </label>
+                <label>
+                  Temperature
+                  <input name="temperature" type="number" step="0.1" min="0" max="2" value="${escapeHtml(runtime?.temperature ?? 0.2)}" />
+                </label>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Local Base URL
+                  <input name="localBaseUrl" value="${escapeHtml(runtime?.localBaseUrl || "")}" placeholder="http://127.0.0.1:11434" />
+                </label>
+                <label>
+                  Cloud Base URL
+                  <input name="cloudBaseUrl" value="${escapeHtml(runtime?.cloudBaseUrl || "")}" placeholder="https://ollama.com" />
+                </label>
+              </div>
+              <label>
+                API Key
+                <input name="apiKey" type="password" placeholder="${runtime?.hasApiKey ? "当前已配置 API Key，如需变更可重新输入" : "仅 cloud mode 需要"}" />
+              </label>
+              <label class="inline-toggle">
+                <input name="persistSecret" type="checkbox" />
+                把本次输入的 API Key 持久化到本地 secrets 文件
+              </label>
+              <label>
+                System Prompt
+                <textarea name="systemPrompt" placeholder="System prompt">${escapeHtml(runtime?.systemPrompt || "")}</textarea>
+              </label>
+              <div class="action-row">
+                <button type="submit">保存运行时配置</button>
+              </div>
+            </form>
+          </article>
+        </div>
+      </details>
     `
     : `
       <article class="detail-card">

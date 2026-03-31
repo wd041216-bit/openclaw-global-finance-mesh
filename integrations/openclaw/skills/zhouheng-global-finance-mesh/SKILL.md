@@ -1,7 +1,7 @@
 ---
 name: zhouheng-global-finance-mesh
 homepage: https://github.com/wd041216-bit/zhouheng-global-finance-mesh
-description: Zhouheng finance mesh runtime skill for the optional OpenClaw adapter.
+description: Zhouheng finance mesh runtime skill for the optional OpenClaw adapter with unified finance pack validation, decision packets, and replay analysis.
 ---
 
 # Zhouheng Global Finance Mesh

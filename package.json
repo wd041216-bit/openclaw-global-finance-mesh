@@ -33,7 +33,9 @@
     "verify": "npm test",
     "verify:server": "node scripts/verify-server.ts",
     "verify:manifests": "node scripts/verify-manifests.ts",
+    "doctor:hosts": "node scripts/doctor-hosts.ts",
     "smoke:mcp": "node scripts/smoke-mcp.ts",
+    "smoke:openclaw": "node scripts/smoke-openclaw.ts",
     "smoke:restore": "node scripts/smoke-restore.ts",
     "smoke:ui": "node scripts/smoke-ui.ts",
     "release:check": "node scripts/release-check.ts"

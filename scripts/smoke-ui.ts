@@ -76,6 +76,7 @@ async function main() {
       await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
         waitUntil: "networkidle",
       });
+      await page.getByText("展开身份绑定与角色映射").click();
       await page.locator('#binding-form input[name="label"]').fill("Smoke Admin Binding");
       await page.locator('#binding-form select[name="matchType"]').selectOption("email");
       await page.locator('#binding-form select[name="role"]').selectOption("admin");
@@ -93,7 +94,8 @@ async function main() {
       await page.goto(`http://127.0.0.1:${appPort}/governance.html`, {
         waitUntil: "networkidle",
       });
-      await page.waitForFunction(() => document.body.textContent?.includes("完整性状态"));
+      await page.waitForFunction(() => document.body.textContent?.includes("当前完整性结论"));
+      await maybeCapture(page, captureDir, "governance-apple-ui.png");
 
       await page.goto(`http://127.0.0.1:${appPort}/recovery.html`, {
         waitUntil: "networkidle",
@@ -132,6 +134,11 @@ async function main() {
         waitUntil: "networkidle",
       });
       await page.waitForFunction(() => document.body.textContent?.includes("最小闭环"));
+      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("身份与入口"));
+      await maybeCapture(page, captureDir, "system-mobile-apple-ui.png");
 
       await page.setViewportSize({
         width: 1440,

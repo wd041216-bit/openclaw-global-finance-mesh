@@ -1,12 +1,13 @@
 import { normalizeFinanceMeshConfig } from "../../src/config.ts";
 import { getAgentAdapterOrThrow } from "../../src/agent-adapters.ts";
+import { OPENCLAW_PLUGIN_ID } from "../../src/openclaw-adapter-contract.ts";
 import { FINANCE_MESH_PROMPT_GUIDANCE } from "../../src/prompt-guidance.ts";
 import { createDecisionRunTool, createPackValidationTool, createReplayTool } from "../../src/tool.ts";
 
 const adapter = getAgentAdapterOrThrow("openclaw");
 
 const plugin = {
-  id: "zhouheng-global-finance-mesh",
+  id: OPENCLAW_PLUGIN_ID,
   name: adapter.displayName,
   description: adapter.description,
   register(api: {
