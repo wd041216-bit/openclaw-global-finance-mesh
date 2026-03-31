@@ -10,7 +10,35 @@ permissions:
   contents: read
 
 jobs:
+  node-compatibility:
+    name: Node compatibility (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "25"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run node tests
+        run: npm test
+
+      - name: Verify server syntax
+        run: npm run verify:server
+
   validate:
+    needs: node-compatibility
     runs-on: ubuntu-latest
 
     steps:

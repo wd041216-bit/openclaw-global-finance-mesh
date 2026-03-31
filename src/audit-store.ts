@@ -5,7 +5,8 @@ import { AuditLedgerStore } from "./audit-ledger.ts";
 import type { AuthenticatedActor } from "./access-control.ts";
 import type { BrainProbeResult } from "./brain.ts";
 import type { LedgerMetadata } from "./audit-ledger.ts";
-import type { BrainMode, BrainRuntimeConfig } from "./runtime-config.ts";
+import type { BrainAuthStatus, BrainErrorKind } from "./brain.ts";
+import type { BrainMode, BrainRuntimeConfig, CloudApiFlavor } from "./runtime-config.ts";
 import type { DecisionRunResult, EventPayload, Mode, ReplayRunResult, RiskLevel } from "./types.ts";
 
 export type AuditRunType = "decision" | "replay" | "probe";
@@ -33,6 +34,11 @@ export interface AuditRunSummary extends LedgerMetadata {
   inferenceOk?: boolean;
   availableModelCount?: number;
   model?: string;
+  cloudApiFlavor?: CloudApiFlavor;
+  probeErrorKind?: BrainErrorKind;
+  probeAuthStatus?: BrainAuthStatus;
+  selectedCatalogEndpoint?: string;
+  selectedInferenceEndpoint?: string;
 }
 
 export interface AuditRunRecord extends AuditRunSummary {
@@ -195,7 +201,7 @@ export class AuditRunStore {
   }
 
   async recordProbe(input: {
-    config: Pick<BrainRuntimeConfig, "mode" | "model" | "localBaseUrl" | "cloudBaseUrl"> & { hasApiKey: boolean };
+    config: Pick<BrainRuntimeConfig, "mode" | "model" | "localBaseUrl" | "cloudBaseUrl" | "cloudApiFlavor"> & { hasApiKey: boolean };
     probe: BrainProbeResult;
     actor: AuthenticatedActor | null;
   }): Promise<AuditRunSummary> {
@@ -216,6 +222,11 @@ export class AuditRunStore {
       inferenceOk: input.probe.inferenceOk,
       availableModelCount: input.probe.availableModels.length,
       model: input.config.model,
+      cloudApiFlavor: input.probe.cloudApiFlavor,
+      probeErrorKind: input.probe.errorKind,
+      probeAuthStatus: input.probe.authStatus,
+      selectedCatalogEndpoint: input.probe.selectedCatalogEndpoint,
+      selectedInferenceEndpoint: input.probe.selectedInferenceEndpoint,
       sequence: 0,
       entryHash: "",
       prevHash: "",
@@ -295,8 +306,13 @@ function buildReplayLabel(replay: ReplayRunResult): string {
 }
 
 function buildProbeLabel(probe: BrainProbeResult, model: string): string {
-  const health = probe.ok ? "healthy" : "degraded";
-  return `${probe.mode} ${model} probe ${health}`;
+  if (probe.ok) {
+    return `${probe.mode} ${model} probe healthy`;
+  }
+  if (probe.listModelsOk && !probe.inferenceOk) {
+    return `${probe.mode} ${model} probe catalog_only`;
+  }
+  return `${probe.mode} ${model} probe degraded`;
 }
 
 function uniqueStrings(values: string[]): string[] {

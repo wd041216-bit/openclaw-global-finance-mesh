@@ -28,7 +28,7 @@
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
 - `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
-- 可插拔 Ollama 大脑，支持本地与云端模式
+- 可插拔 Ollama 大脑，支持本地与云端模式，并能按 `auto` / `ollama_native` / `openai_compatible` 三种云端协议策略做探测与切换
 - Pack 校验、决策生成、回放对比、审计追溯快照
 - 法律资料库采集、检索、治理状态流转、引用注入链路
 - 基于 SQLite 的 append-only 审计账本，统一记录 decision / replay / runtime probe / integrity verify / export batch / operator activity
@@ -43,7 +43,7 @@
 - SaaS 年付预收场景示例
 - 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
 - Docker 单实例基线与 Kubernetes 原生单副本清单
-- GitHub Actions CI 与 semver 发布流程，覆盖语法校验、restore smoke、浏览器 smoke、镜像发布和 npm 发布
+- GitHub Actions CI 与 semver 发布流程，覆盖 Node 22 / 25 兼容性校验、语法校验、restore smoke、浏览器 smoke、镜像发布和 npm 发布
 
 ## 当前定位
 
@@ -71,10 +71,33 @@ npm run dev
 export OLLAMA_MODE=cloud
 export OLLAMA_API_KEY=你的本地环境变量
 export OLLAMA_MODEL=qwen3:8b
+export FINANCE_MESH_CLOUD_API_FLAVOR=auto
 npm run dev
 ```
 
 默认不会持久化 API key，除非你在 UI 里主动勾选保存到本地忽略文件。
+
+当前云端模式支持三种协议策略：
+
+- `auto`：同时探测 Ollama Native 与 OpenAI Compatible 两套目录/推理接口，再优先复用探测成功的那条链路
+- `ollama_native`：固定走 `/api/tags` 和 `/api/chat`
+- `openai_compatible`：固定走 `/v1/models` 和 `/v1/chat/completions`
+
+最小云端验证命令：
+
+```bash
+curl -s http://127.0.0.1:3030/api/runtime/config
+curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
+```
+
+结果判断原则：
+
+- `listModelsOk=true` 且 `inferenceOk=true`：云端推理可用
+- `listModelsOk=true` 且 `inferenceOk=false`：当前账号只能读模型目录，还没有推理权限
+- `errorKind=unauthorized`：优先检查 key / 账号权限
+- `errorKind=endpoint_not_supported`：优先切换 `FINANCE_MESH_CLOUD_API_FLAVOR` 或确认服务端兼容面
+
+要特别注意：能读模型目录，不代表能做云端推理。
 
 ## 身份与访问控制
 
@@ -258,6 +281,7 @@ npm run mcp:serve
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
+- [docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md](./docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 - [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)

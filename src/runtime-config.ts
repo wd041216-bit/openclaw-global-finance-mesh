@@ -3,12 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type BrainMode = "local" | "cloud";
+export type CloudApiFlavor = "auto" | "ollama_native" | "openai_compatible";
 
 export interface BrainRuntimeConfig {
   mode: BrainMode;
   model: string;
   localBaseUrl: string;
   cloudBaseUrl: string;
+  cloudApiFlavor: CloudApiFlavor;
   apiKey?: string;
   temperature: number;
   systemPrompt: string;
@@ -60,6 +62,7 @@ export class RuntimeConfigStore {
       model: config.model,
       localBaseUrl: config.localBaseUrl,
       cloudBaseUrl: config.cloudBaseUrl,
+      cloudApiFlavor: config.cloudApiFlavor,
       temperature: config.temperature,
       systemPrompt: config.systemPrompt,
       hasApiKey: Boolean(config.apiKey),
@@ -91,6 +94,7 @@ export class RuntimeConfigStore {
           model: next.model,
           localBaseUrl: next.localBaseUrl,
           cloudBaseUrl: next.cloudBaseUrl,
+          cloudApiFlavor: next.cloudApiFlavor,
           temperature: next.temperature,
           systemPrompt: next.systemPrompt,
         },
@@ -115,6 +119,7 @@ function defaultConfig(): BrainRuntimeConfig {
     model: process.env.OLLAMA_MODEL,
     localBaseUrl: process.env.OLLAMA_BASE_URL,
     cloudBaseUrl: process.env.OLLAMA_CLOUD_BASE_URL,
+    cloudApiFlavor: process.env.FINANCE_MESH_CLOUD_API_FLAVOR || process.env.OLLAMA_CLOUD_API_FLAVOR,
     apiKey: process.env.OLLAMA_API_KEY,
     temperature: process.env.OLLAMA_TEMPERATURE,
     systemPrompt:
@@ -134,6 +139,7 @@ function normalizeConfig(raw: Partial<BrainRuntimeConfig> & Record<string, unkno
       typeof raw.cloudBaseUrl === "string" && raw.cloudBaseUrl.trim()
         ? stripTrailingSlash(raw.cloudBaseUrl.trim())
         : "https://ollama.com",
+    cloudApiFlavor: normalizeCloudApiFlavor(raw.cloudApiFlavor),
     apiKey: typeof raw.apiKey === "string" && raw.apiKey.trim() ? raw.apiKey.trim() : undefined,
     temperature: normalizeTemperature(raw.temperature),
     systemPrompt:
@@ -165,4 +171,11 @@ function normalizeTemperature(value: unknown): number {
     return Math.max(0, Math.min(2, numeric));
   }
   return 0.2;
+}
+
+function normalizeCloudApiFlavor(value: unknown): CloudApiFlavor {
+  if (value === "ollama_native" || value === "openai_compatible") {
+    return value;
+  }
+  return "auto";
 }

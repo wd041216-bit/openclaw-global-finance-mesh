@@ -635,6 +635,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       model: body.model,
       localBaseUrl: body.localBaseUrl,
       cloudBaseUrl: body.cloudBaseUrl,
+      cloudApiFlavor: body.cloudApiFlavor,
       apiKey: body.apiKey,
       temperature: body.temperature,
       systemPrompt: body.systemPrompt,
@@ -662,7 +663,12 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     }
     const config = await runtimeStore.get();
     const models = await brain.listModels(config);
-    sendJson(res, 200, { ok: true, models });
+    sendJson(res, 200, {
+      ok: true,
+      models,
+      mode: config.mode,
+      cloudApiFlavor: config.cloudApiFlavor,
+    });
     return;
   }
 
@@ -1463,6 +1469,7 @@ function toRuntimeConfigSnapshot(config: Awaited<ReturnType<RuntimeConfigStore["
     model: config.model,
     localBaseUrl: config.localBaseUrl,
     cloudBaseUrl: config.cloudBaseUrl,
+    cloudApiFlavor: config.cloudApiFlavor,
     hasApiKey: Boolean(config.apiKey),
   };
 }
@@ -1472,10 +1479,20 @@ function buildProbeActivityMessage(
   model: string,
 ): string {
   if (probe.ok) {
-    return `Probe succeeded for ${probe.mode} runtime using ${model}.`;
+    const protocol = probe.mode === "cloud" ? ` via ${probe.selectedInferenceEndpoint || probe.selectedCatalogEndpoint || "auto"}` : "";
+    return `Probe succeeded for ${probe.mode} runtime using ${model}${protocol}.`;
+  }
+  if (probe.listModelsOk && !probe.inferenceOk && probe.errorKind === "unauthorized") {
+    return `Probe reached the ${probe.mode} catalog for ${model}, but inference is unauthorized.`;
   }
   if (probe.listModelsOk && !probe.inferenceOk) {
-    return `Probe reached ${probe.mode} runtime for ${model}, but inference failed.`;
+    return `Probe reached the ${probe.mode} catalog for ${model}, but inference failed.`;
+  }
+  if (probe.errorKind === "endpoint_not_supported") {
+    return `Probe could not match a supported ${probe.mode} protocol for ${model}.`;
+  }
+  if (probe.errorKind === "missing_api_key") {
+    return `Probe cannot reach cloud inference for ${model} because the API key is missing.`;
   }
   return `Probe failed to reach ${probe.mode} runtime for ${model}.`;
 }

@@ -25,6 +25,7 @@ The intended operating mode is:
 - standalone finance control plane
 - Pack validation, deterministic Decision Packet generation, replay analysis, evidence graph snapshotting
 - pluggable Ollama brain runtime with `local` and `cloud` modes
+- cloud runtime now supports `auto`, `ollama_native`, and `openai_compatible` protocol strategies
 - browser-based operator console
 - hybrid identity and session control with break-glass local tokens, OIDC login, active-session revoke, and `viewer`/`operator`/`reviewer`/`admin` roles
 - legal library ingestion, storage, lifecycle governance, search, and citation injection
@@ -56,6 +57,7 @@ The intended operating mode is:
 - cloud runtime probe can distinguish:
   - model listing works
   - inference is unauthorized
+  - protocol mismatch vs. real authorization failure
 
 ## Known current truth
 
@@ -74,8 +76,16 @@ This means:
 
 - cloud catalog access exists
 - cloud inference access is not yet available for that key or account state
+- the product can now prove whether the failure is auth-related or protocol-related
 
 Do not describe cloud inference as operational until the runtime probe shows both list and inference success.
+
+Operator note:
+
+1. inspect `cloudApiFlavor`
+2. inspect `catalogChecks` and `inferenceChecks` separately
+3. if catalog succeeds but inference returns `401`, treat it as an account/entitlement problem, not an endpoint bug
+4. if both endpoints return `endpoint_not_supported`, switch the protocol strategy before changing code
 
 ## First 10 minutes for the new operator thread
 

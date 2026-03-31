@@ -6,6 +6,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { fileURLToPath } from "node:url";
 
 import type { AccessRole, AuthenticatedActor } from "./access-control.ts";
+import { enableSqliteDefensiveMode } from "./sqlite-compat.ts";
 
 export const SESSION_COOKIE_NAME = "finance_mesh_session";
 export const CSRF_COOKIE_NAME = "finance_mesh_csrf";
@@ -357,7 +358,7 @@ export class AuthSessionStore {
   private async initialize(): Promise<void> {
     await fs.mkdir(path.dirname(this.dbPath), { recursive: true });
     this.db = new DatabaseSync(this.dbPath);
-    this.db.enableDefensive(true);
+    enableSqliteDefensiveMode(this.db);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = FULL;

@@ -68,6 +68,7 @@ function render() {
   const actions = Array.isArray(overview?.actions) && overview.actions.length > 0
     ? overview.actions
     : buildFallbackActions(overview);
+  const runtime = overview?.runtime;
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -86,11 +87,12 @@ function render() {
         ${calloutCard({
           kicker: "业务提示",
           title: overview?.identity?.summary || "先从最接近业务问题的页面开始",
-          note: overview?.governance?.recovery?.recommendedAction || "如果今天更关心规则发布影响，就从回放中心开始。",
+          note: runtime?.summary || overview?.governance?.recovery?.recommendedAction || "如果今天更关心规则发布影响，就从回放中心开始。",
           tone: actions.some((item) => item.tone === "warning") ? "warning" : "info",
           meta: [
             `24h 决策 ${overview?.decisioning?.counts24h?.decision ?? 0}`,
             `24h 回放 ${overview?.decisioning?.counts24h?.replay ?? 0}`,
+            `Runtime ${runtime?.businessStatus || "待检查"}`,
           ],
         })}
       </article>
@@ -119,6 +121,16 @@ function render() {
             note: replay?.summary || "回放中心会把高风险变化和 changed events 拆开讲清楚。",
             pillHtml: pill("info", replay?.changedEvents != null ? `变更事件 ${replay.changedEvents}` : "等待执行"),
             meta: [replay?.createdAt ? formatDateTime(replay.createdAt) : "暂无记录"],
+          })}
+          ${summaryCard({
+            kicker: "运行时状态",
+            title: runtime?.businessStatus || "等待运行时摘要",
+            note: runtime?.summary || "系统设置页会把目录读取、推理协议和权限问题拆开讲清楚。",
+            pillHtml: pill(runtime?.lastProbe?.inferenceOk ? "good" : runtime?.mode === "cloud" ? "warn" : "info", runtime?.cloudApiFlavor || "local"),
+            meta: [
+              runtime?.model ? `模型 ${runtime.model}` : null,
+              runtime?.lastProbe?.createdAt ? formatDateTime(runtime.lastProbe.createdAt) : "尚未探针",
+            ].filter(Boolean),
           })}
           ${summaryCard({
             kicker: "治理提醒",

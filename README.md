@@ -30,7 +30,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
-- pluggable Ollama brain runtime for local and cloud deployments
+- pluggable Ollama brain runtime for local and cloud deployments, with protocol-aware cloud probing for `auto`, `ollama_native`, and `openai_compatible`
 - TypeScript rule engine for Pack validation, decision generation, and replay analysis
 - legal library store with ingestion, tagging, governed status workflow, search, and citation grounding
 - append-only SQLite audit ledger for decision, replay, runtime probe, integrity verification, export batches, and operator activity
@@ -51,7 +51,7 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - example SaaS annual prepayment event
 - node:test coverage for validation, decisioning, replay, legal library, audit storage, OIDC binding, and cookie-session flows
 - Docker single-instance baseline plus raw Kubernetes manifests for one-replica deployment
-- GitHub Actions CI and semver release workflows for server verification, browser smoke, restore smoke, Docker image publish, and npm publish
+- GitHub Actions CI and semver release workflows for Node 22/25 compatibility checks, server verification, browser smoke, restore smoke, Docker image publish, and npm publish
 
 ## Architecture
 
@@ -97,10 +97,33 @@ To wire a cloud brain without committing secrets, set environment variables loca
 export OLLAMA_MODE=cloud
 export OLLAMA_API_KEY=your_key_here
 export OLLAMA_MODEL=qwen3:8b
+export FINANCE_MESH_CLOUD_API_FLAVOR=auto
 npm run dev
 ```
 
 The UI also lets you enter the API key at runtime; it is not persisted unless you explicitly opt in.
+
+Cloud mode now supports three protocol strategies:
+
+- `auto`: probe both Ollama-native and OpenAI-compatible catalog/inference paths, then prefer the first working pair
+- `ollama_native`: force `/api/tags` and `/api/chat`
+- `openai_compatible`: force `/v1/models` and `/v1/chat/completions`
+
+Minimal cloud verification flow:
+
+```bash
+curl -s http://127.0.0.1:3030/api/runtime/config
+curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
+```
+
+Expected outcomes:
+
+- `listModelsOk=true` and `inferenceOk=true`: cloud inference is operational
+- `listModelsOk=true` and `inferenceOk=false`: catalog access exists, but inference is still blocked
+- `errorKind=unauthorized`: the key or account lacks the required permission
+- `errorKind=endpoint_not_supported`: switch `FINANCE_MESH_CLOUD_API_FLAVOR` or confirm the provider surface
+
+Catalog access is not the same as inference access. Do not treat a successful model listing as proof that cloud reasoning is enabled.
 
 ## Identity and access
 
@@ -291,6 +314,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 - [docs/long-term-evolution-plan.md](./docs/long-term-evolution-plan.md)
 - [docs/audit-operations.md](./docs/audit-operations.md)
 - [docs/checkpoint-2026-03-31-enterprise-beta-identity.md](./docs/checkpoint-2026-03-31-enterprise-beta-identity.md)
+- [docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md](./docs/checkpoint-2026-03-31-runtime-ci-cloud-diagnostics.md)
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 - [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)

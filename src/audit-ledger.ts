@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
 import type { AuthenticatedActor } from "./access-control.ts";
+import { enableSqliteDefensiveMode } from "./sqlite-compat.ts";
 
 export type LedgerKind =
   | "decision_run"
@@ -379,7 +380,7 @@ export class AuditLedgerStore {
   private async initialize(): Promise<void> {
     await fs.mkdir(path.dirname(this.ledgerPath), { recursive: true });
     this.db = new DatabaseSync(this.ledgerPath);
-    this.db.enableDefensive(true);
+    enableSqliteDefensiveMode(this.db);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = FULL;

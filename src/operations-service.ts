@@ -2,6 +2,7 @@ import { BackupReplicationStore, type BackupConfigurationStatus, type BackupJobS
 import { AuditLedgerStore, type AuditIntegrityStatus } from "./audit-ledger.ts";
 import { AuditRunStore, type AuditRunSummary } from "./audit-store.ts";
 import { AccessControlStore, type AccessSessionState, type AuthenticatedActor } from "./access-control.ts";
+import type { BrainAuthStatus, BrainErrorKind } from "./brain.ts";
 import { LegalLibraryStore } from "./legal-library.ts";
 import { RestoreDrillStore, type RestoreDrillSummary } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
@@ -27,6 +28,9 @@ export interface DashboardOverview {
     mode: string;
     model: string;
     hasApiKey: boolean;
+    cloudApiFlavor: string;
+    businessStatus: string;
+    summary: string;
     lastProbe: RunHealthSummary | null;
   };
   decisioning: {
@@ -123,9 +127,17 @@ interface RunHealthSummary {
   id: string;
   createdAt: string;
   status: OperationsCheckStatus;
+  businessStatus: string;
   summary: string;
   mode: string;
   model?: string;
+  listModelsOk?: boolean;
+  inferenceOk?: boolean;
+  cloudApiFlavor?: string;
+  errorKind?: BrainErrorKind;
+  authStatus?: BrainAuthStatus;
+  selectedCatalogEndpoint?: string;
+  selectedInferenceEndpoint?: string;
 }
 
 interface RunSummaryCard {
@@ -214,6 +226,7 @@ export class OperationsService {
         this.auditRuns.countSince(hoursAgo(24), { types: ["replay"] }),
       ]);
     const recovery = summarizeRecovery(latestRestore, lastSuccessfulRestore, this.restores.getWarnHours());
+    const runtimeSummary = summarizeRuntimeState(runtimeConfig, latestProbe);
 
     const overview: DashboardOverview = {
       generatedAt,
@@ -233,7 +246,10 @@ export class OperationsService {
         mode: runtimeConfig.mode,
         model: runtimeConfig.model,
         hasApiKey: runtimeConfig.hasApiKey,
-        lastProbe: latestProbe ? summarizeProbe(latestProbe) : null,
+        cloudApiFlavor: runtimeConfig.cloudApiFlavor,
+        businessStatus: runtimeSummary.businessStatus,
+        summary: runtimeSummary.summary,
+        lastProbe: runtimeSummary.lastProbe,
       },
       decisioning: {
         counts24h: {
@@ -311,7 +327,7 @@ export class OperationsService {
       environment: integrity.environment,
       teamScope: integrity.teamScope,
       checks: {
-        runtime: buildRuntimeCheck(checkedAt, runtimeConfig.model, latestProbe),
+        runtime: buildRuntimeCheck(checkedAt, runtimeConfig, latestProbe),
         ledger: buildLedgerCheck(checkedAt, integrity),
         legalLibrary: buildLegalLibraryCheck(checkedAt, legalStats),
         backupTargets: buildBackupCheck(checkedAt, backupConfig, latestBackup),
@@ -379,14 +395,44 @@ function summarizeBackupStatus(
 }
 
 function summarizeProbe(run: AuditRunSummary): RunHealthSummary {
+  const businessStatus = deriveRuntimeBusinessStatus(run);
   if (run.probeOk) {
     return {
       id: run.id,
       createdAt: run.createdAt,
       status: "healthy",
-      summary: `${run.mode} 模式的 ${run.model || "runtime"} 最近一次探测正常。`,
+      businessStatus,
+      summary:
+        run.mode === "cloud"
+          ? `云端已通过 ${translateCloudFlavor(run.cloudApiFlavor)} 协议完成目录读取与推理。`
+          : `${run.mode} 模式的 ${run.model || "runtime"} 最近一次探测正常。`,
       mode: run.mode,
       model: run.model,
+      listModelsOk: run.listModelsOk,
+      inferenceOk: run.inferenceOk,
+      cloudApiFlavor: run.cloudApiFlavor,
+      errorKind: run.probeErrorKind,
+      authStatus: run.probeAuthStatus,
+      selectedCatalogEndpoint: run.selectedCatalogEndpoint,
+      selectedInferenceEndpoint: run.selectedInferenceEndpoint,
+    };
+  }
+  if (run.mode === "cloud" && run.listModelsOk && !run.inferenceOk && run.probeErrorKind === "unauthorized") {
+    return {
+      id: run.id,
+      createdAt: run.createdAt,
+      status: "degraded",
+      businessStatus,
+      summary: "当前账号可读模型目录，但还没有推理权限。",
+      mode: run.mode,
+      model: run.model,
+      listModelsOk: run.listModelsOk,
+      inferenceOk: run.inferenceOk,
+      cloudApiFlavor: run.cloudApiFlavor,
+      errorKind: run.probeErrorKind,
+      authStatus: run.probeAuthStatus,
+      selectedCatalogEndpoint: run.selectedCatalogEndpoint,
+      selectedInferenceEndpoint: run.selectedInferenceEndpoint,
     };
   }
   if (run.listModelsOk && !run.inferenceOk) {
@@ -394,18 +440,78 @@ function summarizeProbe(run: AuditRunSummary): RunHealthSummary {
       id: run.id,
       createdAt: run.createdAt,
       status: "degraded",
-      summary: `${run.mode} 模式可以读取模型列表，但推理失败。`,
+      businessStatus,
+      summary:
+        run.probeErrorKind === "endpoint_not_supported"
+          ? "模型目录可读，但当前推理协议没有匹配成功。"
+          : `${run.mode} 模式可以读取模型列表，但推理失败。`,
       mode: run.mode,
       model: run.model,
+      listModelsOk: run.listModelsOk,
+      inferenceOk: run.inferenceOk,
+      cloudApiFlavor: run.cloudApiFlavor,
+      errorKind: run.probeErrorKind,
+      authStatus: run.probeAuthStatus,
+      selectedCatalogEndpoint: run.selectedCatalogEndpoint,
+      selectedInferenceEndpoint: run.selectedInferenceEndpoint,
     };
   }
   return {
     id: run.id,
     createdAt: run.createdAt,
     status: "down",
-    summary: `${run.mode} 模式最近一次探测失败。`,
+    businessStatus,
+    summary:
+      run.mode === "cloud"
+        ? summarizeCloudFailure(run)
+        : `${run.mode} 模式最近一次探测失败。`,
     mode: run.mode,
     model: run.model,
+    listModelsOk: run.listModelsOk,
+    inferenceOk: run.inferenceOk,
+    cloudApiFlavor: run.cloudApiFlavor,
+    errorKind: run.probeErrorKind,
+    authStatus: run.probeAuthStatus,
+    selectedCatalogEndpoint: run.selectedCatalogEndpoint,
+    selectedInferenceEndpoint: run.selectedInferenceEndpoint,
+  };
+}
+
+function summarizeRuntimeState(
+  runtimeConfig: Awaited<ReturnType<RuntimeConfigStore["getPublic"]>>,
+  latestProbe: AuditRunSummary | null,
+): {
+  businessStatus: string;
+  summary: string;
+  lastProbe: RunHealthSummary | null;
+} {
+  if (!latestProbe) {
+    if (runtimeConfig.mode === "local") {
+      return {
+        businessStatus: "本地模式正常",
+        summary: `当前默认走本地模式，尚未对 ${runtimeConfig.model} 执行探针。`,
+        lastProbe: null,
+      };
+    }
+    if (!runtimeConfig.hasApiKey) {
+      return {
+        businessStatus: "云端未授权",
+        summary: "当前已切到云端模式，但还没有配置 API Key。",
+        lastProbe: null,
+      };
+    }
+    return {
+      businessStatus: "云端协议未匹配",
+      summary: "云端模式尚未执行探针，暂时无法判断目录读取和推理是否都可用。",
+      lastProbe: null,
+    };
+  }
+
+  const summary = summarizeProbe(latestProbe);
+  return {
+    businessStatus: summary.businessStatus,
+    summary: summary.summary,
+    lastProbe: summary,
   };
 }
 
@@ -647,26 +753,40 @@ function buildActions(input: {
 
 function buildRuntimeCheck(
   checkedAt: string,
-  model: string,
+  runtimeConfig: Awaited<ReturnType<RuntimeConfigStore["getPublic"]>>,
   latestProbe: AuditRunSummary | null,
 ): OperationsCheck {
-  if (!latestProbe) {
+  const summary = summarizeRuntimeState(runtimeConfig, latestProbe);
+  if (!summary.lastProbe) {
     return {
-      status: "degraded",
-      summary: `尚未对 ${model} 执行运行时探测。`,
+      status: runtimeConfig.mode === "local" ? "degraded" : runtimeConfig.hasApiKey ? "degraded" : "down",
+      summary: summary.summary,
       checkedAt,
+      detail: {
+        mode: runtimeConfig.mode,
+        model: runtimeConfig.model,
+        cloudApiFlavor: runtimeConfig.cloudApiFlavor,
+        hasApiKey: runtimeConfig.hasApiKey,
+        businessStatus: summary.businessStatus,
+      },
     };
   }
-  const summary = summarizeProbe(latestProbe);
+  const latest = summary.lastProbe;
   return {
-    status: summary.status,
-    summary: summary.summary,
+    status: latest.status,
+    summary: latest.summary,
     checkedAt,
     detail: {
-      runId: latestProbe.id,
-      createdAt: latestProbe.createdAt,
-      model: latestProbe.model,
-      mode: latestProbe.mode,
+      runId: latest.id,
+      createdAt: latest.createdAt,
+      model: latest.model,
+      mode: latest.mode,
+      businessStatus: latest.businessStatus,
+      cloudApiFlavor: latest.cloudApiFlavor,
+      errorKind: latest.errorKind,
+      authStatus: latest.authStatus,
+      selectedCatalogEndpoint: latest.selectedCatalogEndpoint,
+      selectedInferenceEndpoint: latest.selectedInferenceEndpoint,
     },
   };
 }
@@ -832,6 +952,56 @@ function translateAuthMethod(value: string | undefined): string {
     return "Bearer 令牌";
   }
   return "未知方式";
+}
+
+function deriveRuntimeBusinessStatus(run: AuditRunSummary): string {
+  if (run.mode === "local") {
+    return "本地模式正常";
+  }
+  if (run.probeOk) {
+    return "云端可用";
+  }
+  if (run.listModelsOk && !run.inferenceOk) {
+    return "仅模型目录可用";
+  }
+  if (run.probeErrorKind === "unauthorized" || run.probeErrorKind === "missing_api_key") {
+    return "云端未授权";
+  }
+  if (run.probeErrorKind === "endpoint_not_supported") {
+    return "云端协议未匹配";
+  }
+  return "云端协议未匹配";
+}
+
+function summarizeCloudFailure(run: AuditRunSummary): string {
+  if (run.probeErrorKind === "missing_api_key") {
+    return "云端模式缺少 API Key，当前无法读取目录或执行推理。";
+  }
+  if (run.probeErrorKind === "unauthorized") {
+    return run.listModelsOk
+      ? "当前账号可读模型目录，但还没有推理权限。"
+      : "当前账号还没有云端访问权限。";
+  }
+  if (run.probeErrorKind === "endpoint_not_supported") {
+    return "当前 cloud protocol 没有匹配成功，请切换协议或确认服务端点。";
+  }
+  if (run.probeErrorKind === "model_not_found") {
+    return `云端未找到 ${run.model || "当前"} 模型，请检查模型名称。`;
+  }
+  if (run.probeErrorKind === "network_error") {
+    return "云端连接失败，请检查网络和基础地址配置。";
+  }
+  return "云端探针失败，请在系统设置里查看目录读取和推理的分离诊断。";
+}
+
+function translateCloudFlavor(value: string | undefined): string {
+  if (value === "ollama_native") {
+    return "Ollama Native";
+  }
+  if (value === "openai_compatible") {
+    return "OpenAI Compatible";
+  }
+  return "Auto";
 }
 
 function translateRisk(value: string | undefined): string {

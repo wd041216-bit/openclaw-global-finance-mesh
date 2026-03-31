@@ -147,6 +147,7 @@ test("operations service returns a business-friendly overview and keeps open mod
     mode: "cloud",
     model: "qwen3:8b",
     cloudBaseUrl: "https://ollama.example.com",
+    cloudApiFlavor: "auto",
     apiKey: "cloud-secret",
     persistSecret: true,
   });
@@ -204,15 +205,22 @@ test("operations service returns a business-friendly overview and keeps open mod
       model: "qwen3:8b",
       localBaseUrl: "http://127.0.0.1:11434",
       cloudBaseUrl: "https://ollama.example.com",
+      cloudApiFlavor: "auto",
       hasApiKey: true,
     },
     probe: {
       ok: true,
       mode: "cloud",
       model: "qwen3:8b",
+      cloudApiFlavor: "auto",
       listModelsOk: true,
       inferenceOk: true,
       availableModels: ["qwen3:8b"],
+      authStatus: "authorized",
+      catalogChecks: [],
+      inferenceChecks: [],
+      selectedCatalogEndpoint: "/api/tags",
+      selectedInferenceEndpoint: "/api/chat",
       latencyMs: 240,
     },
     actor: null,
@@ -257,6 +265,8 @@ test("operations service returns a business-friendly overview and keeps open mod
   assert.match(overview.identity.summary, /开放模式/);
   assert.equal(overview.runtime.mode, "cloud");
   assert.equal(overview.runtime.hasApiKey, true);
+  assert.equal(overview.runtime.cloudApiFlavor, "auto");
+  assert.equal(overview.runtime.businessStatus, "云端可用");
   assert.equal(overview.decisioning.counts24h.decision, 1);
   assert.equal(overview.decisioning.counts24h.replay, 1);
   assert.equal(overview.governance.legalLibrary.draftCount, 1);
@@ -302,15 +312,22 @@ test("operations health marks backup targets degraded when replication only part
       model: "qwen3:8b",
       localBaseUrl: "http://127.0.0.1:11434",
       cloudBaseUrl: "https://ollama.com",
+      cloudApiFlavor: "auto",
       hasApiKey: false,
     },
     probe: {
       ok: true,
       mode: "local",
       model: "qwen3:8b",
+      cloudApiFlavor: "auto",
       listModelsOk: true,
       inferenceOk: true,
       availableModels: ["qwen3:8b"],
+      authStatus: "not_required",
+      catalogChecks: [],
+      inferenceChecks: [],
+      selectedCatalogEndpoint: "/api/tags",
+      selectedInferenceEndpoint: "/api/chat",
       latencyMs: 120,
     },
     actor: {
@@ -391,4 +408,128 @@ test("operations health marks backup targets degraded when replication only part
   assert.ok(overview.governance.backups.lastBackup);
   assert.ok(overview.governance.recovery.latestDrill);
   assert.match(overview.governance.backups.summary, /部分成功/);
+});
+
+test("operations overview translates cloud catalog-only access into business-friendly runtime guidance", async () => {
+  const harness = await buildOperationsHarness();
+  const {
+    tempDir,
+    ledger,
+    auditRuns,
+    accessControl,
+    runtimeStore,
+    legalLibrary,
+  } = harness;
+
+  await accessControl.bootstrapAdmin({
+    name: "Alice Admin",
+    token: "admin-secret",
+    enableAuth: true,
+  });
+  const login = await accessControl.loginWithToken("admin-secret");
+  await runtimeStore.update({
+    mode: "cloud",
+    model: "qwen3:8b",
+    cloudBaseUrl: "https://ollama.example.com",
+    cloudApiFlavor: "auto",
+    apiKey: "cloud-secret",
+    persistSecret: true,
+  });
+  await legalLibrary.createDocument({
+    title: "Approved source",
+    body: "Approved source.",
+    status: "approved",
+    jurisdiction: "GLOBAL",
+    domain: "governance",
+  });
+  await auditRuns.recordProbe({
+    config: {
+      mode: "cloud",
+      model: "qwen3:8b",
+      localBaseUrl: "http://127.0.0.1:11434",
+      cloudBaseUrl: "https://ollama.example.com",
+      cloudApiFlavor: "auto",
+      hasApiKey: true,
+    },
+    probe: {
+      ok: false,
+      mode: "cloud",
+      model: "qwen3:8b",
+      cloudApiFlavor: "auto",
+      listModelsOk: true,
+      inferenceOk: false,
+      availableModels: ["qwen3:8b"],
+      errorKind: "unauthorized",
+      authStatus: "unauthorized",
+      catalogChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/tags",
+          ok: true,
+          latencyMs: 80,
+          authStatus: "authorized",
+          modelCount: 1,
+          availableModels: ["qwen3:8b"],
+        },
+      ],
+      inferenceChecks: [
+        {
+          flavor: "ollama_native",
+          endpoint: "/api/chat",
+          ok: false,
+          latencyMs: 120,
+          statusCode: 401,
+          authStatus: "unauthorized",
+          errorKind: "unauthorized",
+          error: "unauthorized",
+        },
+      ],
+      selectedCatalogEndpoint: "/api/tags",
+    },
+    actor: login.actor,
+  });
+
+  const operations = new OperationsService({
+    version: "0.1.0",
+    startedAt: Date.now() - 5_000,
+    accessControl,
+    runtimeStore,
+    legalLibrary,
+    auditLedger: ledger,
+    auditRuns,
+    backups: new BackupReplicationStore({
+      ledger,
+      sourceRoot: tempDir,
+      backupRoot: path.join(tempDir, "data", "backups"),
+      environment: "beta",
+      teamScope: "north-america-finance",
+    }),
+    restores: new RestoreDrillStore({
+      ledger,
+      backups: new BackupReplicationStore({
+        ledger,
+        sourceRoot: tempDir,
+        backupRoot: path.join(tempDir, "data", "backups"),
+        environment: "beta",
+        teamScope: "north-america-finance",
+      }),
+      drillRoot: path.join(tempDir, "data", "restore-drills"),
+      warnHours: 24,
+    }),
+  });
+
+  const overview = await operations.getDashboardOverview({
+    authenticated: true,
+    actor: login.actor,
+    authMethod: login.authMethod,
+    currentSession: login.currentSession,
+    csrfToken: login.csrfToken,
+  });
+  const health = await operations.getHealthStatus();
+
+  assert.equal(overview.runtime.businessStatus, "仅模型目录可用");
+  assert.match(overview.runtime.summary, /模型目录/);
+  assert.equal(overview.runtime.lastProbe?.errorKind, "unauthorized");
+  assert.equal(health.checks.runtime.status, "degraded");
+  assert.match(health.checks.runtime.summary, /推理权限/);
 });

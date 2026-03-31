@@ -503,6 +503,7 @@ async function saveRuntimeConfig(form) {
         model: payload.model,
         localBaseUrl: payload.localBaseUrl,
         cloudBaseUrl: payload.cloudBaseUrl,
+        cloudApiFlavor: payload.cloudApiFlavor,
         apiKey: payload.apiKey || undefined,
         temperature: payload.temperature ? Number(payload.temperature) : undefined,
         systemPrompt: payload.systemPrompt,
@@ -1015,39 +1016,62 @@ function renderRuntime() {
 
   const globalData = shell.getGlobal();
   const health = globalData.operationsHealth;
+  const runtimeOverview = globalData.overview?.runtime;
   const runtime = state.runtimeConfig;
   const lastProbe = state.probeResult || health?.recent?.probe || globalData.overview?.runtime?.lastProbe;
   const canOperateNow = canOperate(globalData);
   const canManageNow = canManageAdmin(globalData);
-
+  const runtimeBusinessStatus = runtimeOverview?.businessStatus || lastProbe?.businessStatus || "等待诊断";
   const runtimeSummary = health
-    ? summaryCard({
-        kicker: "运行摘要",
-        title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置",
-        note: health.checks.runtime?.summary || "系统运行状态会显示在这里。",
-        pillHtml: pill(
-          health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
-          translateStatus(health.checks.runtime?.status || "pending"),
-        ),
-        meta: [
-          `${health.environment}/${health.teamScope}`,
-          `已运行 ${humanizeSeconds(health.uptimeSeconds)}`,
-          health.recent?.backup?.createdAt ? `最近备份 ${formatDateTime(health.recent.backup.createdAt)}` : "尚无备份",
-        ],
-      })
+    ? `
+      <div class="summary-band three-up">
+        ${summaryCard({
+          kicker: "运行摘要",
+          title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置",
+          note: runtimeOverview?.summary || health.checks.runtime?.summary || "系统运行状态会显示在这里。",
+          pillHtml: pill(
+            health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
+            runtimeBusinessStatus,
+          ),
+          meta: [
+            `${health.environment}/${health.teamScope}`,
+            `已运行 ${humanizeSeconds(health.uptimeSeconds)}`,
+            health.recent?.backup?.createdAt ? `最近备份 ${formatDateTime(health.recent.backup.createdAt)}` : "尚无备份",
+          ],
+        })}
+        ${summaryCard({
+          kicker: "目录读取",
+          title: formatCatalogStatus(runtime, lastProbe),
+          note: describeCatalogStatus(runtime, lastProbe),
+          pillHtml: pill(statusToneForBoolean(lastProbe?.listModelsOk), lastProbe?.listModelsOk ? "catalog_ready" : "catalog_pending"),
+          meta: [
+            runtime?.mode === "cloud" ? `协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
+            lastProbe?.selectedCatalogEndpoint || "等待探针",
+          ],
+        })}
+        ${calloutCard({
+          kicker: "推理诊断",
+          title: formatInferenceStatus(runtime, lastProbe),
+          note: describeInferenceStatus(runtime, lastProbe),
+          tone: lastProbe?.inferenceOk ? "good" : lastProbe?.errorKind === "unauthorized" ? "warning" : "info",
+          meta: [
+            `错误分类 ${formatErrorKind(lastProbe?.errorKind)}`,
+            `鉴权状态 ${formatAuthStatus(lastProbe?.authStatus, runtime)}`,
+          ],
+        })}
+      </div>
+    `
     : emptyState("等待系统健康摘要。");
 
   runtimeContainer.innerHTML = `
     ${runtimeSummary}
     ${calloutCard({
       kicker: "下一步",
-      title: health?.checks.recoveryDrill?.status === "healthy"
-        ? "系统健康摘要已经足够支撑日常管理"
-        : health?.checks.recoveryDrill?.summary || "先补一次探针或恢复演练",
+      title: buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
       note: canOperateNow
-        ? "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。"
+        ? buildRuntimeActionNote(runtime, runtimeOverview, lastProbe)
         : "当前角色只能看摘要，探针动作需要 operator 或 admin。",
-      tone: health?.checks.runtime?.status === "healthy" && health?.checks.recoveryDrill?.status === "healthy" ? "good" : "warning",
+      tone: lastProbe?.inferenceOk ? "good" : "warning",
       meta: [
         health?.metricsAvailable ? "metrics 已启用" : "metrics 未启用",
         lastProbe?.createdAt ? `最近探针 ${formatDateTime(lastProbe.createdAt)}` : "尚未探针",
@@ -1065,7 +1089,11 @@ function renderRuntime() {
         ${summaryCard({
           kicker: "运行时配置",
           title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待读取运行时配置",
-          note: runtime?.systemPrompt ? "系统提示词已配置，可在下方折叠区修改。" : "当前还没有系统提示词配置。",
+          note: runtime?.mode === "cloud"
+            ? `当前 cloud protocol 为 ${formatCloudFlavor(runtime.cloudApiFlavor)}。`
+            : runtime?.systemPrompt
+              ? "系统提示词已配置，可在下方折叠区修改。"
+              : "当前还没有系统提示词配置。",
           pillHtml: pill("info", "editable"),
         })}
       </div>
@@ -1079,14 +1107,14 @@ function renderRuntime() {
             <form id="runtime-config-form" class="stack">
               <div class="form-grid three">
                 <label>
-                  Mode
+                  运行模式
                   <select name="mode">
                     <option value="local" ${runtime?.mode === "local" ? "selected" : ""}>local</option>
                     <option value="cloud" ${runtime?.mode === "cloud" ? "selected" : ""}>cloud</option>
                   </select>
                 </label>
                 <label>
-                  Model
+                  模型名称
                   <input name="model" value="${escapeHtml(runtime?.model || "")}" placeholder="qwen3:8b" />
                 </label>
                 <label>
@@ -1094,14 +1122,22 @@ function renderRuntime() {
                   <input name="temperature" type="number" step="0.1" min="0" max="2" value="${escapeHtml(runtime?.temperature ?? 0.2)}" />
                 </label>
               </div>
-              <div class="form-grid">
+              <div class="form-grid three">
                 <label>
-                  Local Base URL
+                  本地 Base URL
                   <input name="localBaseUrl" value="${escapeHtml(runtime?.localBaseUrl || "")}" placeholder="http://127.0.0.1:11434" />
                 </label>
                 <label>
-                  Cloud Base URL
+                  云端 Base URL
                   <input name="cloudBaseUrl" value="${escapeHtml(runtime?.cloudBaseUrl || "")}" placeholder="https://ollama.com" />
+                </label>
+                <label>
+                  Cloud Protocol
+                  <select name="cloudApiFlavor">
+                    <option value="auto" ${runtime?.cloudApiFlavor === "auto" ? "selected" : ""}>auto</option>
+                    <option value="ollama_native" ${runtime?.cloudApiFlavor === "ollama_native" ? "selected" : ""}>ollama_native</option>
+                    <option value="openai_compatible" ${runtime?.cloudApiFlavor === "openai_compatible" ? "selected" : ""}>openai_compatible</option>
+                  </select>
                 </label>
               </div>
               <label>
@@ -1132,6 +1168,7 @@ function renderRuntime() {
         ${runtime ? detailRows([
           { label: "模式", value: runtime.mode },
           { label: "模型", value: runtime.model },
+          { label: "Cloud Protocol", value: formatCloudFlavor(runtime.cloudApiFlavor) },
           { label: "Local Base URL", value: runtime.localBaseUrl },
           { label: "Cloud Base URL", value: runtime.cloudBaseUrl },
         ]) : emptyState(state.runtimeError || "当前还没有可展示的运行时配置。")}
@@ -1143,7 +1180,7 @@ function renderRuntime() {
       <div class="section-head compact">
         <div>
           <p class="section-kicker">模型列表</p>
-          <h4>按需拉取可用模型</h4>
+          <h4>按当前协议按需拉取可用模型</h4>
         </div>
         <button id="load-models" type="button" class="ghost">读取模型列表</button>
       </div>
@@ -1167,12 +1204,210 @@ function renderRuntime() {
       <div class="metric-grid">
         ${metricRow("Metrics", health?.metricsAvailable ? "enabled" : "unavailable")}
         ${metricRow("Active Sessions", String(globalData.overview?.governance?.sessions?.activeCount ?? 0))}
-        ${metricRow("Probe Status", lastProbe?.status || "pending")}
+        ${metricRow("Probe Status", runtimeBusinessStatus)}
       </div>
       ${globalData.metricsPreview ? jsonDetails("查看 metrics 文本", globalData.metricsPreview) : ""}
       ${runtime ? jsonDetails("查看运行时技术详情", runtime) : ""}
     </article>
   `;
+}
+
+function formatCloudFlavor(value) {
+  if (value === "ollama_native") {
+    return "Ollama Native";
+  }
+  if (value === "openai_compatible") {
+    return "OpenAI Compatible";
+  }
+  return "Auto";
+}
+
+function statusToneForBoolean(value) {
+  if (value === true) {
+    return "good";
+  }
+  if (value === false) {
+    return "warn";
+  }
+  return "neutral";
+}
+
+function formatCatalogStatus(runtime, lastProbe) {
+  if (!runtime) {
+    return "等待运行时配置";
+  }
+  if (runtime.mode !== "cloud") {
+    return lastProbe?.listModelsOk === false ? "本地目录读取失败" : "本地模型目录可读";
+  }
+  if (!runtime.hasApiKey) {
+    return "等待云端授权";
+  }
+  if (lastProbe?.listModelsOk) {
+    return "模型目录可读";
+  }
+  if (lastProbe?.errorKind === "unauthorized") {
+    return "目录访问未授权";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "目录协议未匹配";
+  }
+  return "等待目录诊断";
+}
+
+function describeCatalogStatus(runtime, lastProbe) {
+  if (!runtime) {
+    return "先保存运行时配置，再执行一次探针。";
+  }
+  if (runtime.mode !== "cloud") {
+    return "本地模式固定使用 Ollama native 目录接口。";
+  }
+  if (!runtime.hasApiKey) {
+    return "云端模式还没有 API Key，目录读取和推理都不会成功。";
+  }
+  if (lastProbe?.listModelsOk) {
+    return `当前通过 ${lastProbe.selectedCatalogEndpoint || "已探测目录接口"} 读取到模型目录。`;
+  }
+  if (lastProbe?.errorKind === "unauthorized") {
+    return "当前账号连模型目录都没有权限读取。";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "当前 cloud protocol 没有命中可用的目录接口。";
+  }
+  return "执行一次探针后，这里会告诉你目录是没授权、没匹配，还是网络问题。";
+}
+
+function formatInferenceStatus(runtime, lastProbe) {
+  if (!runtime) {
+    return "等待运行时配置";
+  }
+  if (runtime.mode !== "cloud") {
+    return lastProbe?.inferenceOk === false ? "本地推理失败" : "本地推理正常";
+  }
+  if (!runtime.hasApiKey) {
+    return "缺少云端 API Key";
+  }
+  if (lastProbe?.inferenceOk) {
+    return "云端推理可用";
+  }
+  if (lastProbe?.errorKind === "unauthorized") {
+    return lastProbe?.listModelsOk ? "目录可读，但推理未授权" : "云端推理未授权";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "推理协议未匹配";
+  }
+  if (lastProbe?.errorKind === "model_not_found") {
+    return "模型名称未匹配";
+  }
+  return "等待推理诊断";
+}
+
+function describeInferenceStatus(runtime, lastProbe) {
+  if (!runtime) {
+    return "保存配置并执行探针后，这里会显示推理是否真的可用。";
+  }
+  if (runtime.mode !== "cloud") {
+    return lastProbe?.inferenceOk
+      ? "本地模式可以直接推理。"
+      : "如果本地探针失败，先检查本地 Ollama 服务和模型名。";
+  }
+  if (!runtime.hasApiKey) {
+    return "先配置 API Key，再判断云端是未授权还是协议不匹配。";
+  }
+  if (lastProbe?.inferenceOk) {
+    return `当前通过 ${lastProbe.selectedInferenceEndpoint || "已探测推理接口"} 完成推理。`;
+  }
+  if (lastProbe?.errorKind === "unauthorized" && lastProbe?.listModelsOk) {
+    return "当前账号可读模型目录，但还没有推理权限。";
+  }
+  if (lastProbe?.errorKind === "unauthorized") {
+    return "当前账号还没有云端推理权限。";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "切换 cloud protocol 后再重新执行探针，确认服务端到底支持哪套接口。";
+  }
+  if (lastProbe?.errorKind === "model_not_found") {
+    return "当前模型名没有在云端命中，可先读取模型列表再回填。";
+  }
+  return "探针会把失败细分成未授权、协议不匹配、模型不存在或网络问题。";
+}
+
+function formatErrorKind(value) {
+  if (value === "missing_api_key") {
+    return "缺少 API Key";
+  }
+  if (value === "unauthorized") {
+    return "未授权";
+  }
+  if (value === "endpoint_not_supported") {
+    return "协议未匹配";
+  }
+  if (value === "model_not_found") {
+    return "模型不存在";
+  }
+  if (value === "network_error") {
+    return "网络错误";
+  }
+  if (value === "unknown") {
+    return "未知错误";
+  }
+  return "等待探针";
+}
+
+function formatAuthStatus(value, runtime) {
+  if (runtime?.mode !== "cloud") {
+    return "本地模式";
+  }
+  if (value === "authorized") {
+    return "已带认证";
+  }
+  if (value === "unauthorized") {
+    return "未授权";
+  }
+  if (value === "missing_api_key") {
+    return "缺少 API Key";
+  }
+  if (value === "unknown") {
+    return "待确认";
+  }
+  return "等待探针";
+}
+
+function buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health) {
+  if (runtimeOverview?.businessStatus === "云端可用" || lastProbe?.inferenceOk) {
+    return "当前云端推理已经可用";
+  }
+  if (lastProbe?.errorKind === "unauthorized" && lastProbe?.listModelsOk) {
+    return "先补云端推理权限，不要再改代码路径";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "先切换 cloud protocol，再重跑探针";
+  }
+  if (lastProbe?.errorKind === "model_not_found") {
+    return "先读取模型目录，再确认模型名";
+  }
+  if (runtime?.mode === "cloud" && !runtime?.hasApiKey) {
+    return "先补云端 API Key";
+  }
+  if (health?.checks.recoveryDrill?.status === "healthy") {
+    return "系统健康摘要已经足够支撑日常管理";
+  }
+  return health?.checks.recoveryDrill?.summary || "先补一次探针或恢复演练";
+}
+
+function buildRuntimeActionNote(runtime, runtimeOverview, lastProbe) {
+  if (runtimeOverview?.businessStatus === "云端可用" || lastProbe?.inferenceOk) {
+    return "如果今天刚改过模型或基础地址，再执行一次探针确认协议和推理能力没有漂移。";
+  }
+  if (lastProbe?.errorKind === "unauthorized" && lastProbe?.listModelsOk) {
+    return "代码已经能读到目录，下一步应该检查账号 entitlement 或 API key 的推理权限，而不是继续改 endpoint。";
+  }
+  if (lastProbe?.errorKind === "endpoint_not_supported") {
+    return "当前更像协议不匹配：优先在配置里切换 auto / ollama_native / openai_compatible，再重新探针。";
+  }
+  if (runtime?.mode === "cloud" && !runtime?.hasApiKey) {
+    return "先保存 API Key，再执行探针，系统会告诉你目录和推理分别是否可用。";
+  }
+  return "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。";
 }
 
 function escapeHtml(value) {
