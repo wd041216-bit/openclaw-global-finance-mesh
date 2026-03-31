@@ -1,27 +1,28 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、Apple 风格白色多页面控制台、面向 Claude / Manus / OpenClaw 的统一兼容层、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、面向非技术人员的白色多页面业务控制台、面向 Claude / Manus / OpenClaw 的统一兼容层、带结构化输出的 MCP 工具契约、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
 
 ## 控制台截图
 
 <p align="center">
-  <img src="./docs/assets/workbench-enterprise-beta.png" alt="工作台：决策、回放与状态摘要" width="31%" />
-  <img src="./docs/assets/governance-enterprise-beta.png" alt="治理中心：审计链、导出、备份与时间线" width="31%" />
-  <img src="./docs/assets/system-enterprise-beta.png" alt="系统设置：身份、运行时与部署观测" width="31%" />
+  <img src="./docs/assets/workbench-apple-ui.png" alt="工作台：推荐动作与最近摘要" width="23%" />
+  <img src="./docs/assets/decisions-apple-ui.png" alt="决策中心：三段式任务流" width="23%" />
+  <img src="./docs/assets/recovery-apple-ui.png" alt="恢复中心：备份与恢复就绪度" width="23%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub：OpenClaw、Claude、Manus 接入卡片" width="23%" />
 </p>
 
 ## 已落地内容
 
 - 九页面中文控制台，按任务路径拆开，不再把所有功能堆在一屏里：
   - `首页`：品牌首页、环境摘要、角色入口
-  - `业务工作台`：推荐动作与最近结果
-  - `决策中心`：新决策执行与历史
-  - `回放中心`：候选规则与基线的影响对比
-  - `依据库`：法规资料搜索、治理、采集
+  - `业务工作台`：推荐动作、建议路径与最近结果
+  - `决策中心`：按“事件来源 -> 决策模式 / Pack -> 结果摘要”三步运行决策
+  - `回放中心`：按“事件来源 -> 基线 / 候选 Pack -> 差异摘要”三步查看规则漂移
+  - `依据库`：搜索优先，治理与采集退到 reviewer/admin 的次级面板
   - `治理中心`：审计链、导出、Operator Activity
   - `恢复中心`：备份、恢复演练、恢复建议
   - `系统设置`：身份、会话、运行时、部署健康
-  - `Agent Hub`：OpenClaw / Claude / Manus 接入说明
+  - `Agent Hub`：OpenClaw / Claude / Manus 接入说明，按“能做什么 -> 如何启动 -> 如何验证 -> 技术详情”展开
 - 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
 - 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
 - `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
@@ -33,6 +34,7 @@
 - 非破坏性的恢复演练，支持从挂载目录、S3-compatible 目标或本地 snapshot 验证恢复可行性
 - `/api/dashboard/overview`、`/api/operations/health`、`/api/metrics` 三个聚合 / 观测接口
 - `/api/integrations/adapters` 与 `/api/integrations/adapters/:id` 两个统一适配器发现接口
+- 五个共享 MCP 工具现在都带人类摘要、`structuredContent` 和 `outputSchema`
 - 结构化日志，便于请求、actor、run、backup 的串联排查
 - 持久化 operator activity timeline，记录 RBAC、session、运行时配置、法规治理和执行动作
 - 统一 local-first adapter registry：OpenClaw 原生插件 + Claude/Manus MCP connector
@@ -103,10 +105,10 @@ npm run dev
 控制台已经不再是单页切 tab 的后台壳。
 
 - `index.html`：品牌首页
-- `workbench.html`：业务首页
-- `decisions.html`：决策执行
-- `replays.html`：回放分析
-- `library.html`：依据库
+- `workbench.html`：业务首页，直接使用 `/api/dashboard/overview` 的推荐动作
+- `decisions.html`：三段式决策执行页
+- `replays.html`：三段式回放分析页
+- `library.html`：搜索优先的依据库阅读页
 - `governance.html`：治理中心
 - `recovery.html`：恢复中心
 - `system.html`：系统设置
@@ -123,6 +125,7 @@ npm run dev
 - `integrations/claude/`：Claude 本地接入说明与示例配置
 - `integrations/manus/`：Manus 本地接入说明与示例配置
 - `npm run mcp:serve`：直接启动共享 MCP connector
+- `npm run smoke:mcp`：本地验证五个工具可见，并真实调用决策与法规搜索
 
 当前统一暴露的工具面包括：
 
@@ -131,6 +134,14 @@ npm run dev
 - 回放运行
 - 法律资料检索
 - 审计完整性读取
+
+这五个共享 MCP 工具现在都固定返回：
+
+- 一段宿主可直接展示的人类摘要
+- 稳定的 `structuredContent`
+- 明确的 `outputSchema`
+
+这样 Claude 与 Manus 共用同一套本地契约，OpenClaw 则继续走原生插件面，但描述元数据仍然来自同一个 registry。
 
 ## 审计历史
 

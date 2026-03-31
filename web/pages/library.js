@@ -6,6 +6,8 @@ import {
   rememberAction,
 } from "../core/api.js";
 import {
+  bulletList,
+  calloutCard,
   detailRows,
   emptyState,
   jsonDetails,
@@ -16,11 +18,18 @@ import {
 import { formatDateTime, splitTags } from "../core/format.js";
 import { initShell } from "../core/shell.js";
 
+const RECOMMENDED_QUERIES = [
+  "VAT prepayment",
+  "跨境 SaaS 预收收入",
+  "审批授权 matrix",
+  "retention withholding tax",
+];
+
 const shell = await initShell({
   pageId: "library",
   sectionLabel: "依据库",
-  title: "把法规与治理资料读成业务语言",
-  intro: "搜索结果、资料详情和治理动作拆成明确区域。先检索和理解，再决定是否进入状态流转或补录。",
+  title: "先搜索，再理解，再决定是否治理",
+  intro: "依据库现在是搜索优先的阅读页。默认先给你最相关的资料和摘要，治理动作只在 reviewer/admin 场景下展开。",
   heroActions: `
     <a class="button" href="/workbench.html">返回工作台</a>
     <a class="button ghost" href="/governance.html">查看治理中心</a>
@@ -31,31 +40,37 @@ const state = {
   documents: [],
   results: [],
   selectedId: null,
+  query: "",
+  includeDrafts: false,
 };
 
 renderFrame();
 await refreshDocuments();
 
 function renderFrame() {
+  const canGovern = canReview(shell.getGlobal());
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
       <article class="page-section">
         <div class="section-head compact">
           <div>
             <p class="section-kicker">搜索</p>
-            <h3>检索法规依据</h3>
-            <p class="section-copy">默认优先看 reviewed / approved 材料。高级模式下 reviewer/admin 可以把 draft 也纳入搜索。</p>
+            <h3>从业务问题开始查资料</h3>
+            <p class="section-copy">默认优先返回 reviewed / approved 资料。只有 reviewer/admin 在高级模式下才会把 draft 纳入结果。</p>
           </div>
           <button id="refresh-library" type="button" class="ghost">刷新</button>
         </div>
         <form id="search-form" class="stack">
           <label>
             关键词
-            <input name="query" placeholder="按 jurisdiction、topic、title 或 obligation 搜索" />
+            <input name="query" placeholder="按 jurisdiction、topic、title 或 obligation 搜索" value="${escapeValue(state.query)}" />
           </label>
+          <div class="chip-row">
+            ${RECOMMENDED_QUERIES.map((query) => `<button type="button" class="chip-button" data-library-query="${escapeValue(query)}">${query}</button>`).join("")}
+          </div>
           <label class="inline-toggle">
-            <input id="search-include-drafts" name="includeDrafts" type="checkbox" />
-            高级模式下允许把 draft 也纳入搜索
+            <input id="search-include-drafts" name="includeDrafts" type="checkbox" ${state.includeDrafts ? "checked" : ""} />
+            在高级模式下把 draft 也纳入搜索
           </label>
           <div class="action-row">
             <button type="submit">搜索依据库</button>
@@ -67,7 +82,8 @@ function renderFrame() {
         <div class="section-head compact">
           <div>
             <p class="section-kicker">资料详情</p>
-            <h3>先读摘要，再决定是否治理</h3>
+            <h3>先读摘要，再看正文和技术细节</h3>
+            <p class="section-copy">这里优先展示标题、状态、适用范围、摘要和引文来源；需要时再进入治理和原始对象。</p>
           </div>
         </div>
         <div id="library-detail" class="detail-card detail-panel"></div>
@@ -77,133 +93,129 @@ function renderFrame() {
       <div class="section-head compact">
         <div>
           <p class="section-kicker">结果列表</p>
-          <h3>搜索结果与最近文档</h3>
+          <h3>${state.query ? `与“${escapeHtml(state.query)}”相关的资料` : "最近可用资料"}</h3>
         </div>
       </div>
       <div id="library-results" class="record-list"></div>
     </section>
-    <section class="page-grid two-up">
-      <article class="page-section">
+    ${canGovern ? `
+      <section class="page-section" id="library-governance">
         <div class="section-head compact">
           <div>
-            <p class="section-kicker">治理</p>
-            <h3>更新资料状态</h3>
+            <p class="section-kicker">治理动作</p>
+            <h3>只有 reviewer/admin 才会看到这些表单</h3>
+            <p class="section-copy">先阅读资料，再决定是否更新状态、录入新材料或从外部来源补录。</p>
           </div>
         </div>
-        <form id="review-form" class="stack">
-          <label>
-            Document ID
-            <input name="documentId" placeholder="legal-library document id" />
-          </label>
-          <label>
-            目标状态
-            <select name="status">
-              <option value="draft">draft</option>
-              <option value="reviewed">reviewed</option>
-              <option value="approved">approved</option>
-              <option value="retired">retired</option>
-            </select>
-          </label>
-          <div class="action-row">
-            <button type="submit">更新状态</button>
-          </div>
-        </form>
-      </article>
-      <article class="page-section">
-        <div class="section-head compact">
-          <div>
-            <p class="section-kicker">新建资料</p>
-            <h3>录入治理材料</h3>
-          </div>
+        <div class="section-stack">
+          <details class="technical-details" open>
+            <summary>更新资料状态</summary>
+            <form id="review-form" class="stack">
+              <label>
+                Document ID
+                <input name="documentId" placeholder="legal-library document id" value="${escapeValue(state.selectedId || "")}" />
+              </label>
+              <label>
+                目标状态
+                <select name="status">
+                  <option value="draft">draft</option>
+                  <option value="reviewed">reviewed</option>
+                  <option value="approved">approved</option>
+                  <option value="retired">retired</option>
+                </select>
+              </label>
+              <div class="action-row">
+                <button type="submit">更新状态</button>
+              </div>
+            </form>
+          </details>
+          <details class="technical-details">
+            <summary>录入新资料</summary>
+            <form id="create-document-form" class="stack">
+              <label>
+                标题
+                <input name="title" placeholder="例如：欧盟 VAT 处理备忘" />
+              </label>
+              <div class="form-grid">
+                <label>
+                  Jurisdiction
+                  <input name="jurisdiction" placeholder="GLOBAL / EU / CN" />
+                </label>
+                <label>
+                  Domain
+                  <input name="domain" placeholder="tax / accounting / control" />
+                </label>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Source Type
+                  <input name="sourceType" placeholder="manual / official_url" />
+                </label>
+                <label>
+                  Source Ref
+                  <input name="sourceRef" placeholder="https://official-source.example" />
+                </label>
+              </div>
+              <label>
+                Tags
+                <input name="tags" placeholder="comma,separated,tags" />
+              </label>
+              <label>
+                Summary
+                <textarea name="summary" rows="3"></textarea>
+              </label>
+              <label>
+                Body
+                <textarea name="body" rows="6"></textarea>
+              </label>
+              <div class="action-row">
+                <button type="submit">新建资料</button>
+              </div>
+            </form>
+          </details>
+          <details class="technical-details">
+            <summary>从 URL 或本地文件补录</summary>
+            <form id="ingest-form" class="stack">
+              <div class="form-grid three">
+                <label>
+                  标题
+                  <input name="title" />
+                </label>
+                <label>
+                  Jurisdiction
+                  <input name="jurisdiction" />
+                </label>
+                <label>
+                  Domain
+                  <input name="domain" />
+                </label>
+              </div>
+              <div class="form-grid">
+                <label>
+                  Source URL
+                  <input name="url" />
+                </label>
+                <label>
+                  Local File Path
+                  <input name="filePath" />
+                </label>
+              </div>
+              <label>
+                Tags
+                <input name="tags" />
+              </label>
+              <label>
+                Raw Text
+                <textarea name="body" rows="6"></textarea>
+              </label>
+              <div class="action-row">
+                <button type="submit">采集到依据库</button>
+              </div>
+            </form>
+          </details>
         </div>
-        <form id="create-document-form" class="stack">
-          <label>
-            标题
-            <input name="title" placeholder="例如：欧盟 VAT 处理备忘" />
-          </label>
-          <div class="form-grid">
-            <label>
-              Jurisdiction
-              <input name="jurisdiction" placeholder="GLOBAL / EU / CN" />
-            </label>
-            <label>
-              Domain
-              <input name="domain" placeholder="tax / accounting / control" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label>
-              Source Type
-              <input name="sourceType" placeholder="manual / official_url" />
-            </label>
-            <label>
-              Source Ref
-              <input name="sourceRef" placeholder="https://official-source.example" />
-            </label>
-          </div>
-          <label>
-            Tags
-            <input name="tags" placeholder="comma,separated,tags" />
-          </label>
-          <label>
-            Summary
-            <textarea name="summary" rows="3"></textarea>
-          </label>
-          <label>
-            Body
-            <textarea name="body" rows="6"></textarea>
-          </label>
-          <div class="action-row">
-            <button type="submit">新建资料</button>
-          </div>
-        </form>
-      </article>
-    </section>
-    <section class="page-section">
-      <div class="section-head compact">
-        <div>
-          <p class="section-kicker">采集</p>
-          <h3>从 URL 或本地文件补录依据</h3>
-        </div>
-      </div>
-      <form id="ingest-form" class="stack">
-        <div class="form-grid three">
-          <label>
-            标题
-            <input name="title" />
-          </label>
-          <label>
-            Jurisdiction
-            <input name="jurisdiction" />
-          </label>
-          <label>
-            Domain
-            <input name="domain" />
-          </label>
-        </div>
-        <div class="form-grid">
-          <label>
-            Source URL
-            <input name="url" />
-          </label>
-          <label>
-            Local File Path
-            <input name="filePath" />
-          </label>
-        </div>
-        <label>
-          Tags
-          <input name="tags" />
-        </label>
-        <label>
-          Raw Text
-          <textarea name="body" rows="6"></textarea>
-        </label>
-        <div class="action-row">
-          <button type="submit">采集到依据库</button>
-        </div>
-      </form>
-    </section>
+      </section>
+    ` : ""}
   `;
 
   shell.pageContent.querySelector("#search-form")?.addEventListener("submit", onSearch);
@@ -219,6 +231,16 @@ function renderFrame() {
     renderResults();
     renderDetail();
   });
+  shell.pageContent.querySelectorAll("[data-library-query]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.query = button.getAttribute("data-library-query") || "";
+      const form = shell.pageContent.querySelector("#search-form");
+      if (form) {
+        form.querySelector('input[name="query"]').value = state.query;
+      }
+      void runSearch();
+    });
+  });
   shell.pageContent.querySelector("#review-form")?.addEventListener("submit", onUpdateStatus);
   shell.pageContent.querySelector("#create-document-form")?.addEventListener("submit", onCreateDocument);
   shell.pageContent.querySelector("#ingest-form")?.addEventListener("submit", onIngest);
@@ -226,7 +248,6 @@ function renderFrame() {
   renderSummary();
   renderResults();
   renderDetail();
-  updateGovernanceVisibility();
 }
 
 async function refreshDocuments() {
@@ -238,14 +259,13 @@ async function refreshDocuments() {
     renderSummary();
     renderResults();
     renderDetail();
-    updateGovernanceVisibility();
     return;
   }
 
   try {
     const result = await api("/api/legal-library/documents");
     state.documents = result.documents || [];
-    if (!state.results.length) {
+    if (!state.query) {
       state.results = state.documents.map((document) => ({
         document,
         excerpt: document.summary,
@@ -262,27 +282,40 @@ async function refreshDocuments() {
   renderSummary();
   renderResults();
   renderDetail();
-  updateGovernanceVisibility();
 }
 
 async function onSearch(event) {
   event.preventDefault();
+  state.query = String(formToObject(event.currentTarget).query || "").trim();
+  state.includeDrafts = Boolean(formToObject(event.currentTarget).includeDrafts);
+  await runSearch();
+}
+
+async function runSearch() {
   const globalData = shell.getGlobal();
   if (!canViewLibrary(globalData)) {
     renderSummaryMessage("登录后才能查看依据库。");
     return;
   }
 
-  const payload = formToObject(event.currentTarget);
   try {
     const includeDrafts =
       canReview(globalData)
       && globalData.prefs.advancedMode
-      && Boolean(payload.includeDrafts);
-    const result = await api(`/api/legal-library/search?q=${encodeURIComponent(String(payload.query || ""))}${includeDrafts ? "&includeDrafts=true" : ""}`);
-    state.results = result.results || [];
-    state.selectedId = state.results[0]?.document?.id || null;
-    rememberAction(`已搜索依据库：${String(payload.query || "全部资料")}`);
+      && Boolean(state.includeDrafts);
+    if (!state.query) {
+      state.results = state.documents.map((document) => ({
+        document,
+        excerpt: document.summary,
+        score: 0,
+      }));
+      state.selectedId = state.results[0]?.document?.id || null;
+    } else {
+      const result = await api(`/api/legal-library/search?q=${encodeURIComponent(state.query)}${includeDrafts ? "&includeDrafts=true" : ""}`);
+      state.results = result.results || [];
+      state.selectedId = state.results[0]?.document?.id || null;
+      rememberAction(`已搜索依据库：${state.query}`);
+    }
   } catch (error) {
     state.results = [];
     state.selectedId = null;
@@ -382,16 +415,27 @@ function renderSummary() {
   }
   const globalData = shell.getGlobal();
   const stats = globalData.overview?.governance?.legalLibrary;
+  const viewingResults = state.query ? `${state.results.length} 条搜索结果` : `共 ${stats?.totalDocuments ?? state.documents.length} 份资料`;
   container.innerHTML = `
     ${summaryCard({
       kicker: "资料库状态",
-      title: `共 ${stats?.totalDocuments ?? state.documents.length} 份资料`,
-      note: "默认搜索 reviewed / approved 资料，高级模式下 reviewer/admin 可以显式把 draft 纳入搜索。",
+      title: viewingResults,
+      note: state.query
+        ? `当前关键词：${state.query}`
+        : "默认优先阅读 reviewed / approved 资料，高级模式下 reviewer/admin 才会显式加入 draft。",
       pillHtml: pill("info", `${stats?.approvedCount ?? 0} 已批准`),
       meta: [
         `草稿 ${stats?.draftCount ?? 0}`,
         stats?.latestUpdatedAt ? `最近更新 ${formatDateTime(stats.latestUpdatedAt)}` : "暂无更新时间",
       ],
+    })}
+    ${calloutCard({
+      kicker: "阅读建议",
+      title: state.query ? "先读前三条最相关结果" : "先从最近已治理资料开始",
+      note: state.query
+        ? "如果搜索结果里已经有 reviewed / approved 资料，优先阅读这些内容，不要先跳去治理表单。"
+        : "当还没有明确关键词时，先从最近更新的 approved / reviewed 资料熟悉控制台的依据表达方式。",
+      tone: "info",
     })}
   `;
 }
@@ -402,7 +446,7 @@ function renderResults() {
     return;
   }
   if (!state.results.length) {
-    container.innerHTML = emptyState("还没有可展示的搜索结果。");
+    container.innerHTML = emptyState(state.query ? `没有找到与“${state.query}”直接相关的资料。` : "还没有可展示的资料。");
     return;
   }
   container.innerHTML = state.results
@@ -414,9 +458,13 @@ function renderResults() {
         title: item.document.title,
         note: item.excerpt || item.document.summary,
         pillHtml: pill(item.document.status === "approved" ? "good" : item.document.status === "draft" ? "warn" : "info", item.document.status),
-        meta: [item.document.jurisdiction, item.document.domain, formatDateTime(item.document.updatedAt)],
-      }),
-    )
+        meta: [
+          item.document.jurisdiction,
+          item.document.domain,
+          item.score ? `相关度 ${item.score}` : "最近资料",
+          formatDateTime(item.document.updatedAt),
+        ],
+      }))
     .join("");
 }
 
@@ -445,28 +493,25 @@ function renderDetail() {
       })}
       ${detailRows([
         { label: "Document ID", value: selected.id },
-        { label: "Source", value: selected.sourceRef },
+        { label: "适用范围", value: `${selected.jurisdiction} / ${selected.domain}` },
+        { label: "来源", value: selected.sourceRef },
         { label: "Reviewed By", value: selected.reviewedBy },
         { label: "Updated At", value: formatDateTime(selected.updatedAt) },
       ])}
-      <div class="detail-row">
-        <span>正文</span>
-        <div class="summary-note">${selected.body}</div>
+      ${selected.tags?.length ? calloutCard({
+        kicker: "标签与索引",
+        title: "这份资料适合用这些关键词再检索",
+        note: "如果你要给同事复用搜索路径，可以直接复制下面这些 tags。",
+        tone: "info",
+        content: bulletList(selected.tags),
+      }) : ""}
+      <div class="focus-item">
+        <strong>正文摘要</strong>
+        <p>${escapeHtml(selected.body)}</p>
       </div>
       ${jsonDetails("查看技术详情", selected)}
     </div>
   `;
-}
-
-function updateGovernanceVisibility() {
-  const globalData = shell.getGlobal();
-  const allowed = canReview(globalData);
-  for (const selector of ["#review-form", "#create-document-form", "#ingest-form"]) {
-    const node = shell.pageContent.querySelector(selector);
-    if (node) {
-      node.closest(".page-section").style.display = allowed ? "" : "none";
-    }
-  }
 }
 
 function renderSummaryMessage(message) {
@@ -476,3 +521,14 @@ function renderSummaryMessage(message) {
   }
 }
 
+function escapeValue(value) {
+  return escapeHtml(String(value || ""));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}

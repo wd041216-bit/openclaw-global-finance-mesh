@@ -1,17 +1,62 @@
-import { featureCard, pill, summaryCard } from "../core/components.js";
+import {
+  calloutCard,
+  featureCard,
+  pill,
+  stepCard,
+  summaryCard,
+} from "../core/components.js";
 import { formatDateTime, formatRisk } from "../core/format.js";
 import { initShell } from "../core/shell.js";
 
 const shell = await initShell({
   pageId: "workbench",
   sectionLabel: "业务工作台",
-  title: "把高频业务动作放到第一屏",
-  intro: "先给结论和下一步动作，再进入决策、回放、依据和恢复等专门页面。这里不再堆放治理或系统级表单。",
+  title: "先告诉业务用户下一步做什么",
+  intro: "工作台不再像工程后台那样堆满面板，而是优先给出推荐任务、最近结论和最顺手的进入路径。",
   heroActions: `
-    <a class="button" href="/decisions.html">运行新决策</a>
-    <a class="button ghost" href="/replays.html">查看规则回放</a>
+    <a class="button" href="/decisions.html#example">运行示例决策</a>
+    <a class="button ghost" href="/library.html">先查法规依据</a>
   `,
 });
+
+const ACTION_LINKS = {
+  run_example_decision: {
+    href: "/decisions.html#example",
+    buttonLabel: "运行示例决策",
+  },
+  run_example_replay: {
+    href: "/replays.html#example",
+    buttonLabel: "运行示例回放",
+  },
+  search_legal_library: {
+    href: "/library.html#search",
+    buttonLabel: "打开依据库",
+  },
+  open_system_health: {
+    href: "/system.html#health",
+    buttonLabel: "查看系统状态",
+  },
+  verify_audit_chain: {
+    href: "/governance.html#integrity",
+    buttonLabel: "打开治理中心",
+  },
+  run_restore_drill: {
+    href: "/recovery.html#restore",
+    buttonLabel: "进入恢复中心",
+  },
+  configure_backups: {
+    href: "/system.html#backups",
+    buttonLabel: "前往系统设置",
+  },
+  review_draft_documents: {
+    href: "/library.html#review",
+    buttonLabel: "处理待审资料",
+  },
+  open_login: {
+    href: "/system.html#login",
+    buttonLabel: "登录控制台",
+  },
+};
 
 render();
 
@@ -20,6 +65,9 @@ function render() {
   const overview = globalData.overview;
   const decision = overview?.decisioning?.lastDecision;
   const replay = overview?.decisioning?.lastReplay;
+  const actions = Array.isArray(overview?.actions) && overview.actions.length > 0
+    ? overview.actions
+    : buildFallbackActions(overview);
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -27,52 +75,38 @@ function render() {
         <div class="section-head compact">
           <div>
             <p class="section-kicker">推荐任务</p>
-            <h3>业务用户下一步最可能要做的事</h3>
+            <h3>今天先做这几件事</h3>
+            <p class="section-copy">从这里直接进入最常见的业务路径，不需要先理解 session、ledger 或治理术语。</p>
           </div>
         </div>
         <div class="feature-grid two-up">
-          ${featureCard({
-            title: "运行决策",
-            note: "进入独立决策页，填写事件、Pack 路径和证据后生成 Decision Packet。",
-            meta: [decision?.summary || "适合处理新的财务判断请求"],
-            href: "/decisions.html",
-            buttonLabel: "打开决策页",
-          })}
-          ${featureCard({
-            title: "回放规则变更",
-            note: "进入回放页，对比基线和候选规则影响，先看 changed / higher-risk / confidence。",
-            meta: [replay?.summary || "适合规则变更发布前验证"],
-            href: "/replays.html",
-            buttonLabel: "打开回放页",
-          })}
-          ${featureCard({
-            title: "查询法规依据",
-            note: "进入依据库检索法规、治理资料和引文摘要，再决定是否需要进入资料治理。",
-            meta: [`草稿资料 ${overview?.governance?.legalLibrary?.draftCount ?? 0} 条`],
-            href: "/library.html",
-            buttonLabel: "打开依据库",
-          })}
-          ${featureCard({
-            title: "查看恢复状态",
-            note: "如果今天更关心备份、恢复演练和就绪度，不要再去治理页里翻。",
-            meta: [overview?.governance?.recovery?.summary || "等待恢复状态"],
-            href: "/recovery.html",
-            buttonLabel: "打开恢复中心",
-          })}
+          ${actions.slice(0, 4).map(renderActionCard).join("")}
         </div>
+        <div class="soft-divider"></div>
+        ${calloutCard({
+          kicker: "业务提示",
+          title: overview?.identity?.summary || "先从最接近业务问题的页面开始",
+          note: overview?.governance?.recovery?.recommendedAction || "如果今天更关心规则发布影响，就从回放中心开始。",
+          tone: actions.some((item) => item.tone === "warning") ? "warning" : "info",
+          meta: [
+            `24h 决策 ${overview?.decisioning?.counts24h?.decision ?? 0}`,
+            `24h 回放 ${overview?.decisioning?.counts24h?.replay ?? 0}`,
+          ],
+        })}
       </article>
       <article class="page-section">
         <div class="section-head compact">
           <div>
             <p class="section-kicker">最近结论</p>
-            <h3>把最近结果读成人话</h3>
+            <h3>先读摘要，不要先读 JSON</h3>
+            <p class="section-copy">决策、回放和治理提醒都先翻译成业务语言，技术细节留给后续页面展开。</p>
           </div>
         </div>
         <div class="summary-grid">
           ${summaryCard({
             kicker: "最近决策",
-            title: decision?.label || "暂无决策记录",
-            note: decision?.summary || "从决策页开始生成新的 Decision Packet。",
+            title: decision?.label || "还没有最近决策",
+            note: decision?.summary || "从决策中心可以直接运行示例事件、文件路径或粘贴 JSON。",
             pillHtml: pill("good", decision?.riskRating ? `风险 ${formatRisk(decision.riskRating)}` : "等待执行"),
             meta: [
               decision?.confidence != null ? `置信度 ${(decision.confidence * 100).toFixed(0)}%` : null,
@@ -81,22 +115,22 @@ function render() {
           })}
           ${summaryCard({
             kicker: "最近回放",
-            title: replay?.label || "暂无回放记录",
-            note: replay?.summary || "回放页会专门展示 changed events 与高风险事件。",
+            title: replay?.label || "还没有最近回放",
+            note: replay?.summary || "回放中心会把高风险变化和 changed events 拆开讲清楚。",
             pillHtml: pill("info", replay?.changedEvents != null ? `变更事件 ${replay.changedEvents}` : "等待执行"),
-            meta: [replay?.createdAt ? formatDateTime(replay.createdAt) : null].filter(Boolean),
+            meta: [replay?.createdAt ? formatDateTime(replay.createdAt) : "暂无记录"],
           })}
           ${summaryCard({
             kicker: "治理提醒",
             title: overview?.governance?.integrity?.summary || "等待治理状态",
-            note: overview?.governance?.recovery?.recommendedAction || "恢复建议会在恢复中心显示得更完整。",
+            note: overview?.governance?.recovery?.summary || "恢复状态会在恢复中心给出更明确的下一步动作。",
             pillHtml: pill(
               overview?.governance?.integrity?.isStale ? "warn" : "info",
               overview?.governance?.integrity?.status || "pending",
             ),
             meta: [
+              `待审资料 ${overview?.governance?.legalLibrary?.draftCount ?? 0}`,
               `活跃会话 ${overview?.governance?.sessions?.activeCount ?? 0}`,
-              `已批准资料 ${overview?.governance?.legalLibrary?.approvedCount ?? 0}`,
             ],
           })}
         </div>
@@ -105,25 +139,90 @@ function render() {
     <section class="page-section">
       <div class="section-head compact">
         <div>
-          <p class="section-kicker">业务动线</p>
-          <h3>建议按这个顺序使用控制台</h3>
+          <p class="section-kicker">建议路径</p>
+          <h3>一条标准业务动线</h3>
+          <p class="section-copy">这条路径适合第一次使用的人，也适合在团队里做统一培训。</p>
         </div>
       </div>
-      <div class="feature-grid three-up">
-        ${featureCard({
-          title: "1. 先判断类型",
-          note: "新的业务问题去决策页；规则发布前验证去回放页。",
+      <div class="page-grid three-up">
+        ${stepCard({
+          step: "01",
+          title: "先判断问题类型",
+          note: "新业务判断去决策中心；规则变更验证去回放中心；需要引用法规时再进入依据库。",
         })}
-        ${featureCard({
-          title: "2. 再补依据",
-          note: "如果结果需要解释或引用，去依据库搜索 reviewed / approved 文档。",
+        ${stepCard({
+          step: "02",
+          title: "先看摘要，再看依据",
+          note: "结果页会先给结论、风险和建议动作；只有需要深挖时才展开高级详情。",
         })}
-        ${featureCard({
-          title: "3. 最后看治理",
-          note: "审计链、导出、恢复演练和系统配置都在单独页面，不再影响业务主屏。",
+        ${stepCard({
+          step: "03",
+          title: "治理和恢复独立处理",
+          note: "审计链、导出、备份和恢复演练已经拆到独立页面，不会干扰业务主流程。",
         })}
       </div>
     </section>
   `;
 }
 
+function renderActionCard(action) {
+  const resolved = ACTION_LINKS[action.intent] || { href: "/workbench.html", buttonLabel: "打开" };
+  return featureCard({
+    title: action.title,
+    note: action.description,
+    meta: [
+      `页面：${translateWorkspace(action.workspace)}`,
+      action.tone === "warning" ? "建议优先处理" : "适合现在开始",
+    ],
+    href: resolved.href,
+    buttonLabel: resolved.buttonLabel,
+  });
+}
+
+function buildFallbackActions(overview) {
+  return [
+    {
+      title: "运行示例决策",
+      description: "最快速地熟悉 Zhouheng 的业务决策路径。",
+      intent: "run_example_decision",
+      workspace: "workbench",
+      tone: "primary",
+    },
+    {
+      title: "查看规则回放",
+      description: "在规则发布前先看 changed events 和高风险漂移。",
+      intent: "run_example_replay",
+      workspace: "workbench",
+      tone: "secondary",
+    },
+    {
+      title: "搜索法规依据",
+      description: overview?.governance?.legalLibrary?.draftCount
+        ? `当前有 ${overview.governance.legalLibrary.draftCount} 条待审资料，先搜索再决定是否治理。`
+        : "搜索 reviewed / approved 资料，优先阅读已经治理过的内容。",
+      intent: "search_legal_library",
+      workspace: "library",
+      tone: "secondary",
+    },
+    {
+      title: "查看恢复状态",
+      description: overview?.governance?.recovery?.recommendedAction || "恢复中心会告诉你最近演练是否健康。",
+      intent: "run_restore_drill",
+      workspace: "system",
+      tone: "warning",
+    },
+  ];
+}
+
+function translateWorkspace(workspace) {
+  if (workspace === "library") {
+    return "依据库";
+  }
+  if (workspace === "governance") {
+    return "治理中心";
+  }
+  if (workspace === "system") {
+    return "系统设置";
+  }
+  return "业务工作台";
+}

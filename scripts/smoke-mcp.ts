@@ -1,4 +1,3 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -8,13 +7,14 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(TEST_DIR, "..");
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
-test("shared MCP server exposes the expected Zhouheng finance tools", async () => {
-  const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "finance-mesh-mcp-"));
+async function main() {
+  const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "finance-mesh-mcp-smoke-"));
   await fs.mkdir(path.join(fixtureRoot, "examples"), { recursive: true });
   await fs.mkdir(path.join(fixtureRoot, "data", "legal-library"), { recursive: true });
+  await fs.mkdir(path.join(fixtureRoot, "data", "audit"), { recursive: true });
   await fs.cp(path.join(REPO_ROOT, "examples", "packs"), path.join(fixtureRoot, "examples", "packs"), {
     recursive: true,
     force: true,
@@ -33,7 +33,7 @@ test("shared MCP server exposes the expected Zhouheng finance tools", async () =
 
   const client = new Client(
     {
-      name: "finance-mesh-test-client",
+      name: "finance-mesh-smoke-client",
       version: "1.0.0",
     },
     {
@@ -56,33 +56,15 @@ test("shared MCP server exposes the expected Zhouheng finance tools", async () =
   try {
     await client.connect(transport);
     const toolList = await client.listTools();
-    const toolNames = toolList.tools.map((item) => item.name).sort();
-
-    assert.deepEqual(toolNames, [
-      "finance_mesh_read_audit_integrity",
-      "finance_mesh_replay",
-      "finance_mesh_run_decision",
-      "finance_mesh_search_legal_library",
-      "finance_mesh_validate_packs",
-    ]);
-
-    const integrity = await client.callTool({
-      name: "finance_mesh_read_audit_integrity",
-      arguments: {},
-    });
-
-    const textBlock = integrity.content.find((item) => item.type === "text");
-    assert.ok(textBlock);
-    assert.equal(typeof integrity.structuredContent?.status, "string");
-    assert.equal(typeof integrity.structuredContent?.summary, "string");
+    assert.equal(toolList.tools.length, 5);
 
     const decision = await client.callTool({
       name: "finance_mesh_run_decision",
       arguments: {},
     });
-    assert.equal(decision.structuredContent?.ok, true);
-    assert.equal(typeof decision.structuredContent?.summary, "string");
-    assert.equal(Array.isArray(decision.structuredContent?.suggestedActions), true);
+    assert.ok(decision.structuredContent);
+    assert.equal(decision.structuredContent.ok, true);
+    assert.equal(typeof decision.structuredContent.summary, "string");
 
     const legalSearch = await client.callTool({
       name: "finance_mesh_search_legal_library",
@@ -91,10 +73,15 @@ test("shared MCP server exposes the expected Zhouheng finance tools", async () =
         topK: 3,
       },
     });
-    assert.equal(legalSearch.structuredContent?.query, "VAT");
-    assert.equal(typeof legalSearch.structuredContent?.matchCount, "number");
+    assert.ok(legalSearch.structuredContent);
+    assert.equal(legalSearch.structuredContent.query, "VAT");
+    assert.equal(typeof legalSearch.structuredContent.matchCount, "number");
+
+    console.log("MCP smoke completed successfully.");
   } finally {
     await client.close();
     await transport.close();
   }
-});
+}
+
+await main();

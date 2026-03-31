@@ -2,7 +2,7 @@
   "plugins": {
     "load": {
       "paths": [
-        "/absolute/path/to/zhouheng-global-finance-mesh"
+        "/absolute/path/to/zhouheng-global-finance-mesh/integrations/openclaw"
       ]
     },
     "entries": [

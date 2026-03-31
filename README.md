@@ -1,29 +1,30 @@
 # Zhouheng Global Finance Mesh
 
-Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, an Apple-style multi-page operator console, local-first agent connectors, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
+Enterprise beta finance control plane for Pack validation, deterministic decision packets, replay analysis, governed legal grounding, OIDC-ready operator sessions, a business-first Apple-style multi-page console, local-first agent connectors with structured MCP outputs, non-destructive recovery drills, and a tamper-evident SQLite audit ledger.
 
 This repository turns the Zhouheng Global Finance Mesh design into a runnable product baseline instead of a document-only spec. It is not an OpenClaw sub-skill; OpenClaw support remains optional under `integrations/openclaw/`.
 
 ## Console snapshots
 
 <p align="center">
-  <img src="./docs/assets/workbench-enterprise-beta.png" alt="Business workbench with decisions, replay, and summary cards" width="31%" />
-  <img src="./docs/assets/governance-enterprise-beta.png" alt="Governance center with integrity, exports, backups, and timelines" width="31%" />
-  <img src="./docs/assets/system-enterprise-beta.png" alt="System workspace for identity, runtime, and observability" width="31%" />
+  <img src="./docs/assets/workbench-apple-ui.png" alt="Business workbench with next actions and summary cards" width="23%" />
+  <img src="./docs/assets/decisions-apple-ui.png" alt="Decision center with a three-step workflow" width="23%" />
+  <img src="./docs/assets/recovery-apple-ui.png" alt="Recovery center with backup and restore readiness" width="23%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub with OpenClaw, Claude, and Manus setup cards" width="23%" />
 </p>
 
 ## What ships in the current baseline
 
 - nine-page Chinese-first web console with a white, high-whitespace, Apple-like shell:
   - `首页` for brand framing, environment snapshot, and role entry
-  - `业务工作台` for business-friendly next actions and recent results
-  - `决策中心` for new decision execution and decision history
-  - `回放中心` for candidate-vs-baseline replay analysis
-  - `依据库` for legal-source search, review, and ingestion
+  - `业务工作台` for business-friendly next actions, recommended routes, and recent summaries
+  - `决策中心` for a three-step decision workflow: choose event source, choose mode/Packs, then read the result summary
+  - `回放中心` for a parallel three-step replay workflow focused on changed events and risk drift
+  - `依据库` for search-first legal reading, with review/ingestion pushed behind secondary governance actions
   - `治理中心` for integrity, exports, and operator activity
   - `恢复中心` for backups, restore drills, and recovery guidance
   - `系统设置` for identity, session, runtime, and observability controls
-  - `Agent Hub` for OpenClaw, Claude, and Manus connector guidance
+  - `Agent Hub` for OpenClaw, Claude, and Manus connector guidance ordered as capabilities, start, verify, then technical details
 - service-side operator sessions with `HttpOnly` cookies, CSRF protection, logout, revoke, and active-session inspection
 - hybrid identity model: break-glass local tokens plus standards-based OIDC authorization-code login
 - `viewer`, `operator`, `reviewer`, and `admin` roles with subject/email identity bindings for OIDC users
@@ -35,6 +36,12 @@ This repository turns the Zhouheng Global Finance Mesh design into a runnable pr
 - non-destructive restore drills that validate manifests, restored ledger integrity, and identity-state readability in an isolated path
 - `/api/dashboard/overview`, `/api/operations/health`, and Prometheus-friendly `/api/metrics`
 - `/api/integrations/adapters` and `/api/integrations/adapters/:id` for unified agent-adapter discovery
+- stable MCP tool contracts that return human summary text, `structuredContent`, and `outputSchema` for:
+  - pack validation
+  - decision run
+  - replay run
+  - legal library search
+  - audit integrity read
 - structured request logging with request, actor, run, and backup references
 - persisted operator activity timeline for RBAC, session, runtime, legal-library, and release actions
 - unified local-first adapter registry for OpenClaw native plugin mode plus Claude/Manus MCP connector mode
@@ -124,9 +131,10 @@ See [docs/identity-operations.md](./docs/identity-operations.md) for full bootst
 The console is no longer a single overloaded screen.
 
 - `index.html` is the brand homepage with environment snapshot and entry routing
-- `workbench.html` is the business-first starting point
-- `decisions.html` and `replays.html` split execution from impact analysis
-- `library.html`, `governance.html`, and `recovery.html` keep legal grounding, audit governance, and recovery operations separate
+- `workbench.html` is the business-first starting point with recommended actions sourced from `/api/dashboard/overview`
+- `decisions.html` and `replays.html` now use explicit three-step flows instead of raw operator forms
+- `library.html` is search-first, with governance actions moved behind reviewer/admin-only secondary panels
+- `governance.html`, `recovery.html`, and `system.html` keep audit governance, recovery operations, and admin/runtime controls separate
 - `system.html` isolates identity, session, runtime, and observability controls
 - `agents.html` gives non-technical and technical users a single place to understand how Zhouheng plugs into external hosts
 
@@ -141,6 +149,7 @@ Zhouheng now has a unified adapter registry instead of a one-off OpenClaw-only i
 - `integrations/claude/` contains Claude connector docs and example MCP config
 - `integrations/manus/` contains Manus connector docs and example MCP config
 - `npm run mcp:serve` starts the shared MCP connector directly
+- `npm run smoke:mcp` validates that the MCP server lists all five tools and can execute structured decision/legal-library calls locally
 
 Supported tool surfaces today:
 
@@ -149,6 +158,14 @@ Supported tool surfaces today:
 - replay run
 - legal library search
 - audit integrity read
+
+All five shared MCP tools now return:
+
+- a short human-readable summary that hosts can display directly
+- stable `structuredContent`
+- an explicit `outputSchema`
+
+This keeps Claude and Manus on the same contract, while OpenClaw continues to use its native plugin surface sourced from the same registry metadata.
 
 ## Legal library governance
 

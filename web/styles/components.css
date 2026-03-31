@@ -8,7 +8,9 @@
 .record-card,
 .detail-card,
 .metric-card,
-.install-card {
+.install-card,
+.callout-card,
+.step-card {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
@@ -19,7 +21,9 @@
 .record-card,
 .detail-card,
 .metric-card,
-.install-card {
+.install-card,
+.callout-card,
+.step-card {
   padding: 18px;
 }
 
@@ -109,6 +113,62 @@
   gap: 10px;
 }
 
+.callout-card,
+.step-card {
+  display: grid;
+  gap: 12px;
+}
+
+.step-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.step-footer {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.tone-neutral {
+  background: var(--bg-elevated);
+}
+
+.tone-info {
+  background: linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
+}
+
+.tone-warning {
+  background: linear-gradient(180deg, #ffffff 0%, #fffaf2 100%);
+}
+
+.tone-good {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fcf8 100%);
+}
+
+.tone-critical {
+  background: linear-gradient(180deg, #ffffff 0%, #fff7f6 100%);
+}
+
 .feature-card .button {
   justify-self: start;
 }
@@ -190,8 +250,32 @@
   margin: 0;
   padding: 18px;
   border-radius: var(--radius-md);
-  background: var(--bg-muted);
+  background: #fcfcfd;
   border: 1px dashed var(--line-strong);
+}
+
+.compact-list,
+.verify-list,
+.capability-list,
+.step-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+}
+
+.compact-list li,
+.verify-list li,
+.capability-list li,
+.step-list li {
+  margin-bottom: 8px;
+  line-height: 1.55;
+}
+
+.compact-list li:last-child,
+.verify-list li:last-child,
+.capability-list li:last-child,
+.step-list li:last-child {
+  margin-bottom: 0;
 }
 
 details.technical-details {

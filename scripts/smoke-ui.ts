@@ -13,6 +13,9 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 async function main() {
+  const captureDir = process.env.FINANCE_MESH_CAPTURE_DIR
+    ? path.resolve(process.env.FINANCE_MESH_CAPTURE_DIR)
+    : null;
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "finance-mesh-smoke-ui-"));
   const appDir = path.join(tempRoot, "app");
   const offboxDir = path.join(tempRoot, "offbox-backups");
@@ -41,8 +44,11 @@ async function main() {
         waitUntil: "networkidle",
       });
       await page.waitForFunction(() => document.body.textContent?.includes("像 Apple 一样克制的财务控制台"));
+      await maybeCapture(page, captureDir, "home-apple-ui.png");
       await page.getByRole("link", { name: "打开业务工作台" }).click();
       await page.waitForURL(`http://127.0.0.1:${appPort}/workbench.html`);
+      await page.waitForFunction(() => document.body.textContent?.includes("今天先做这几件事"));
+      await maybeCapture(page, captureDir, "workbench-apple-ui.png");
 
       await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
         waitUntil: "networkidle",
@@ -50,7 +56,26 @@ async function main() {
       await page.locator('#token-login-form input[name="token"]').fill("admin-secret");
       await page.getByRole("button", { name: "用本地令牌登录" }).click();
       await page.waitForFunction(() => document.body.textContent?.includes("Alice Admin"));
+      await maybeCapture(page, captureDir, "system-apple-ui.png");
 
+      await page.goto(`http://127.0.0.1:${appPort}/decisions.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("按三步完成一次决策"));
+      await page.getByRole("button", { name: "运行决策" }).click();
+      await page.waitForFunction(() => document.querySelector("#decision-result")?.textContent?.includes("当前结论"));
+      await maybeCapture(page, captureDir, "decisions-apple-ui.png");
+
+      await page.goto(`http://127.0.0.1:${appPort}/library.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.locator('#search-form input[name="query"]').fill("VAT");
+      await page.getByRole("button", { name: "搜索依据库" }).click();
+      await page.waitForFunction(() => document.querySelectorAll("#library-results [data-document-id]").length > 0);
+
+      await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
+        waitUntil: "networkidle",
+      });
       await page.locator('#binding-form input[name="label"]').fill("Smoke Admin Binding");
       await page.locator('#binding-form select[name="matchType"]').selectOption("email");
       await page.locator('#binding-form select[name="role"]').selectOption("admin");
@@ -79,6 +104,7 @@ async function main() {
       await page.getByRole("button", { name: "立即执行演练" }).click();
       await page.waitForFunction(() => document.querySelectorAll("#restore-list [data-restore-id]").length > 0);
       await page.waitForFunction(() => document.querySelector("#recovery-summary")?.textContent?.includes("恢复"));
+      await maybeCapture(page, captureDir, "recovery-apple-ui.png");
 
       await page.goto(`http://127.0.0.1:${appPort}/agents.html`, {
         waitUntil: "networkidle",
@@ -86,6 +112,31 @@ async function main() {
       await page.waitForFunction(() => document.body.textContent?.includes("OpenClaw Plugin"));
       await page.waitForFunction(() => document.body.textContent?.includes("Claude MCP Connector"));
       await page.waitForFunction(() => document.body.textContent?.includes("Manus MCP Connector"));
+      await maybeCapture(page, captureDir, "agents-apple-ui.png");
+
+      await page.setViewportSize({
+        width: 390,
+        height: 844,
+      });
+      await page.goto(`http://127.0.0.1:${appPort}/workbench.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("今天先做这几件事"));
+      await page.goto(`http://127.0.0.1:${appPort}/decisions.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("按三步完成一次决策"));
+      await page.getByRole("button", { name: "运行决策" }).click();
+      await page.waitForFunction(() => document.querySelector("#decision-result")?.textContent?.includes("当前结论"));
+      await page.goto(`http://127.0.0.1:${appPort}/agents.html`, {
+        waitUntil: "networkidle",
+      });
+      await page.waitForFunction(() => document.body.textContent?.includes("最小闭环"));
+
+      await page.setViewportSize({
+        width: 1440,
+        height: 1100,
+      });
 
       await page.goto(`http://127.0.0.1:${appPort}/system.html`, {
         waitUntil: "networkidle",
@@ -269,6 +320,17 @@ function sendJson(res: http.ServerResponse, status: number, payload: Record<stri
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function maybeCapture(page: import("playwright").Page, captureDir: string | null, fileName: string): Promise<void> {
+  if (!captureDir) {
+    return;
+  }
+  await fs.mkdir(captureDir, { recursive: true });
+  await page.screenshot({
+    path: path.join(captureDir, fileName),
+    fullPage: true,
+  });
 }
 
 await main();

@@ -22,3 +22,144 @@
   font-size: 18px;
   letter-spacing: -0.02em;
 }
+
+.workflow-shell,
+.choice-grid,
+.insight-grid,
+.input-summary-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.choice-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choice-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #fcfcfd;
+}
+
+.choice-card.active {
+  border-color: rgba(0, 113, 227, 0.22);
+  box-shadow: 0 8px 24px rgba(0, 113, 227, 0.08);
+}
+
+.choice-card input {
+  width: auto;
+  margin: 0;
+}
+
+.choice-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.choice-note {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip-button {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.chip-button.active {
+  border-color: rgba(0, 113, 227, 0.18);
+  color: var(--accent);
+  background: rgba(0, 113, 227, 0.06);
+}
+
+.supporting-copy {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.result-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.focus-list {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-item {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: #fcfcfd;
+}
+
+.focus-item strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.focus-item p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.secondary-action {
+  margin-top: 8px;
+}
+
+.inline-form-note {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--ink-soft);
+}
+
+.stacked-details {
+  display: grid;
+  gap: 16px;
+}
+
+.source-inputs {
+  display: grid;
+  gap: 14px;
+}
+
+.assistant-copy {
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+.section-split {
+  display: grid;
+  gap: 16px;
+}
+
+.soft-divider {
+  height: 1px;
+  background: var(--line);
+}
+
+@media (max-width: 960px) {
+  .choice-grid {
+    grid-template-columns: 1fr;
+  }
+}

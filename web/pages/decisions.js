@@ -6,31 +6,43 @@ import {
   rememberAction,
 } from "../core/api.js";
 import {
+  bulletList,
+  calloutCard,
   detailRows,
   emptyState,
   jsonDetails,
   pill,
   recordButton,
+  stepCard,
   summaryCard,
 } from "../core/components.js";
 import {
   formatDateTime,
   formatRisk,
+  splitPaths,
 } from "../core/format.js";
 import { initShell } from "../core/shell.js";
 
 const shell = await initShell({
   pageId: "decisions",
   sectionLabel: "决策中心",
-  title: "把业务事件变成可解释的 Decision Packet",
-  intro: "这里只做一件事：运行决策，并把结果解释清楚。历史审计记录只作为辅助，不再和其他治理模块混排。",
+  title: "把业务事件读成一份可解释的 Decision Packet",
+  intro: "这页只负责一件事：运行决策。输入来源、决策模式和结果解释都放成清晰步骤，不再让人先面对技术细节。",
   heroActions: `
     <a class="button" href="/workbench.html">返回工作台</a>
-    <a class="button ghost" href="/library.html">打开依据库</a>
+    <a class="button ghost" href="/library.html">先查法规依据</a>
   `,
 });
 
 const state = {
+  draft: {
+    sourceType: window.location.hash === "#path" ? "path" : window.location.hash === "#paste" ? "paste" : "example",
+    eventPath: "",
+    eventPayloadText: "",
+    mode: "L1",
+    packPaths: "examples/packs",
+    availableEvidence: "",
+  },
   result: null,
   runs: [],
   selectedRunId: null,
@@ -47,39 +59,79 @@ function renderFrame() {
         <div class="section-head compact">
           <div>
             <p class="section-kicker">运行决策</p>
-            <h3>输入模式与 Pack 路径</h3>
-            <p class="section-copy">业务用户从这里启动一次真实决策；更深的 JSON 只在高级详情中展开。</p>
+            <h3>按三步完成一次决策</h3>
+            <p class="section-copy">先选事件来源，再选 Pack 与模式，最后查看结论、风险与建议动作。</p>
           </div>
         </div>
-        <form id="decision-form" class="stack">
-          <div class="form-grid">
-            <label>
-              决策等级
-              <select name="mode">
-                <option value="L1">L1</option>
-                <option value="L0">L0</option>
-                <option value="L2">L2</option>
-                <option value="L3">L3</option>
-              </select>
-            </label>
-            <label>
-              Pack 路径
-              <input name="packPaths" value="examples/packs" placeholder="examples/packs" />
-            </label>
-          </div>
-          <div class="action-row">
-            <button type="submit">运行决策</button>
-          </div>
+        <form id="decision-form" class="workflow-shell">
+          ${stepCard({
+            step: "01",
+            title: "选择事件来源",
+            note: "业务同事通常从示例事件开始；如果已有业务事件文件，也可以直接读路径或粘贴 JSON。",
+            content: `
+              <fieldset>
+                <legend>事件来源</legend>
+                <div class="choice-grid">
+                  ${renderSourceChoice("example", "示例事件", "直接使用仓库自带的 SaaS 预付费示例，最快看到完整决策结果。")}
+                  ${renderSourceChoice("path", "读取文件", "输入一个本地 JSON 文件路径，让控制台直接读取该业务事件。")}
+                  ${renderSourceChoice("paste", "粘贴 JSON", "把业务事件直接粘贴进来，适合临时判断或复制外部系统事件。")}
+                </div>
+              </fieldset>
+              <div class="source-inputs">
+                ${renderSourceInputs()}
+              </div>
+            `,
+          })}
+          ${stepCard({
+            step: "02",
+            title: "选择决策模式与 Pack",
+            note: "默认 L1 足够覆盖大多数业务判断；只有需要更严格审批时再切高等级。",
+            content: `
+              <div class="form-grid">
+                <label>
+                  决策等级
+                  <select name="mode">
+                    ${["L0", "L1", "L2", "L3"].map((mode) => `<option value="${mode}" ${state.draft.mode === mode ? "selected" : ""}>${mode}</option>`).join("")}
+                  </select>
+                </label>
+                <label>
+                  Pack 路径
+                  <textarea name="packPaths" rows="3" placeholder="examples/packs">${escapeValue(state.draft.packPaths)}</textarea>
+                </label>
+              </div>
+              <details class="technical-details advanced-only">
+                <summary>补充证据线索</summary>
+                <label>
+                  Available evidence（可选）
+                  <textarea name="availableEvidence" rows="3" placeholder="invoice, contract, approval_memo">${escapeValue(state.draft.availableEvidence)}</textarea>
+                </label>
+              </details>
+            `,
+          })}
+          ${stepCard({
+            step: "03",
+            title: "运行并阅读摘要",
+            note: "结果区会先显示结论、风险、建议动作和缺失证据，只有需要时再展开技术详情。",
+            content: `
+              <div class="inline-form-note">
+                当前建议：先用示例事件熟悉这条路径，再切换到你的真实事件文件或粘贴 JSON。
+              </div>
+              <div class="action-row">
+                <button type="submit">运行决策</button>
+              </div>
+            `,
+          })}
         </form>
       </article>
       <article class="page-section">
         <div class="section-head compact">
           <div>
             <p class="section-kicker">结果摘要</p>
-            <h3>先看结论，再看技术细节</h3>
+            <h3>先看结论，再决定是否下钻</h3>
+            <p class="section-copy">这里不会先把 Decision Packet 砸给你，而是先用业务语言解释结果。</p>
           </div>
         </div>
-        <div id="decision-result" class="section-stack"></div>
+        <div id="decision-result" class="result-summary"></div>
       </article>
     </section>
     <section class="page-section">
@@ -87,7 +139,7 @@ function renderFrame() {
         <div>
           <p class="section-kicker">最近审计</p>
           <h3>最近的决策记录</h3>
-          <p class="section-copy">只有 reviewer/admin 能看到完整历史；operator 仍然可以在当前页面运行新的决策。</p>
+          <p class="section-copy">只有 reviewer/admin 能查看完整历史；operator 仍然可以在当前页直接运行新的决策。</p>
         </div>
         <div class="section-actions">
           <button id="refresh-runs" type="button" class="ghost">刷新历史</button>
@@ -100,7 +152,20 @@ function renderFrame() {
     </section>
   `;
 
-  shell.pageContent.querySelector("#decision-form")?.addEventListener("submit", onRunDecision);
+  const form = shell.pageContent.querySelector("#decision-form");
+  form?.addEventListener("submit", onRunDecision);
+  form?.addEventListener("input", syncDraftFromForm);
+  form?.addEventListener("change", (event) => {
+    syncDraftFromForm();
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.name === "sourceType") {
+      state.draft.sourceType = target.value;
+      renderFrame();
+      renderHistory();
+      renderResult();
+    }
+  });
+
   shell.pageContent.querySelector("#refresh-runs")?.addEventListener("click", () => {
     void refreshHistory();
   });
@@ -124,21 +189,17 @@ async function onRunDecision(event) {
     return;
   }
 
+  syncDraftFromForm();
   renderMessage("decision-result", "正在生成 Decision Packet…");
   try {
     const payload = formToObject(event.currentTarget);
+    const request = buildDecisionRequest(payload);
     const result = await api("/api/decision/run", {
       method: "POST",
-      body: JSON.stringify({
-        mode: payload.mode,
-        packPaths: String(payload.packPaths || "")
-          .split(/[\n,]/)
-          .map((item) => item.trim())
-          .filter(Boolean),
-      }),
+      body: JSON.stringify(request),
     });
     state.result = result;
-    rememberAction("已运行一次业务决策");
+    rememberAction(`已运行一次业务决策：${result.decision?.decisionPacket?.summary || "Decision Packet 已生成"}`);
     await shell.refreshChrome();
     await refreshHistory(result.auditRun?.id);
   } catch (error) {
@@ -146,6 +207,27 @@ async function onRunDecision(event) {
     rememberAction(`决策运行失败：${String(error.message || error)}`);
   }
   renderResult();
+}
+
+function buildDecisionRequest(payload) {
+  const request = {
+    mode: payload.mode,
+    packPaths: splitPaths(payload.packPaths),
+    availableEvidence: splitPaths(payload.availableEvidence),
+  };
+  if (payload.sourceType === "path") {
+    if (!String(payload.eventPath || "").trim()) {
+      throw new Error("请输入事件文件路径。");
+    }
+    request.eventPath = String(payload.eventPath || "").trim();
+  }
+  if (payload.sourceType === "paste") {
+    if (!String(payload.eventPayloadText || "").trim()) {
+      throw new Error("请粘贴一份事件 JSON。");
+    }
+    request.eventPayload = JSON.parse(String(payload.eventPayloadText || ""));
+  }
+  return request;
 }
 
 async function refreshHistory(preferredId) {
@@ -194,7 +276,13 @@ function renderResult() {
     return;
   }
   if (!state.result) {
-    container.innerHTML = emptyState("还没有运行过新的决策。");
+    container.innerHTML = calloutCard({
+      kicker: "等待运行",
+      title: "还没有新的决策结果",
+      note: "先选择示例事件、文件路径或粘贴 JSON，再点击“运行决策”。",
+      tone: "info",
+      meta: ["建议第一次先用示例事件", "技术详情默认折叠"],
+    });
     return;
   }
   if (state.result.error) {
@@ -202,29 +290,71 @@ function renderResult() {
     return;
   }
 
-  const packet = state.result.decision?.decisionPacket || state.result.decisionPacket || state.result.decisionPacket;
-  const decisionPacket = state.result.decisionPacket || state.result.decision?.decisionPacket || state.result?.decisionPacket || state.result?.decision?.decisionPacket;
-  const activePacket = decisionPacket || state.result?.decisionPacket || packet;
-  const packetSummary = activePacket?.summary || "决策已生成";
+  const decision = state.result.decision;
+  const packet = decision?.decisionPacket;
+  const actionPlan = Array.isArray(packet?.action_plan) ? packet.action_plan : [];
+  const missingEvidence = Array.isArray(decision?.missingEvidence) ? decision.missingEvidence : [];
+  const applicablePacks = Array.isArray(packet?.applicable_packs) ? packet.applicable_packs : [];
+  const matchedRules = Array.isArray(decision?.matchedRules) ? decision.matchedRules : [];
+  const auditMeta = state.result.auditRun;
+
   container.innerHTML = `
     ${summaryCard({
       kicker: "Decision Packet",
-      title: packetSummary,
-      note: activePacket?.action_plan?.length
-        ? `建议动作：${activePacket.action_plan.slice(0, 2).join("；")}`
-        : "可以展开高级详情查看完整 Packet。",
-      pillHtml: pill("good", activePacket?.risk_rating ? `风险 ${formatRisk(activePacket.risk_rating)}` : "已生成"),
+      title: packet?.summary || "决策已生成",
+      note: actionPlan.length
+        ? `建议动作：${actionPlan.slice(0, 2).join("；")}`
+        : "没有额外建议动作，可以按当前结论继续处理。",
+      pillHtml: pill("good", packet?.risk_rating ? `风险 ${formatRisk(packet.risk_rating)}` : "已生成"),
       meta: [
-        activePacket?.confidence != null ? `置信度 ${(activePacket.confidence * 100).toFixed(0)}%` : null,
-        state.result.auditRun?.createdAt ? formatDateTime(state.result.auditRun.createdAt) : null,
+        packet?.confidence != null ? `置信度 ${(packet.confidence * 100).toFixed(0)}%` : null,
+        auditMeta?.createdAt ? formatDateTime(auditMeta.createdAt) : null,
       ].filter(Boolean),
     })}
+    <div class="summary-grid">
+      ${summaryCard({
+        kicker: "当前结论",
+        title: packet?.accounting_treatment?.recognition || "已生成结论",
+        note: packet?.tax_treatment?.vat || "税务影响与审批路径已写进 Decision Packet。",
+        pillHtml: pill("info", packet?.mode || "L1"),
+        meta: [
+          packet?.decision_packet_id ? `Packet ${packet.decision_packet_id}` : null,
+          applicablePacks.length ? `命中 Pack ${applicablePacks.length}` : "未命中 Pack",
+        ].filter(Boolean),
+      })}
+      ${summaryCard({
+        kicker: "缺失证据",
+        title: missingEvidence.length ? `还缺 ${missingEvidence.length} 项证据` : "当前没有缺失证据",
+        note: missingEvidence.length
+          ? missingEvidence.slice(0, 3).join("；")
+          : "如果需要复核，可以继续查看适用 Pack 和命中规则。",
+        pillHtml: pill(missingEvidence.length ? "warn" : "good", missingEvidence.length ? "待补证据" : "证据完整"),
+        meta: [matchedRules.length ? `命中规则 ${matchedRules.length}` : "暂无命中规则"],
+      })}
+    </div>
+    ${calloutCard({
+      kicker: "建议动作",
+      title: actionPlan.length ? "下一步应该怎么做" : "当前不需要额外动作",
+      note: missingEvidence.length
+        ? "建议先补全缺失证据，再决定是否执行或升级审批。"
+        : "如果这份结论要进入流程，可直接把建议动作抄给业务同事。",
+      tone: missingEvidence.length ? "warning" : "good",
+      content: actionPlan.length ? bulletList(actionPlan.slice(0, 5)) : "",
+    })}
     ${detailRows([
-      { label: "Decision Packet ID", value: activePacket?.decision_packet_id },
-      { label: "模式", value: activePacket?.mode },
-      { label: "审计记录", value: state.result.auditRun?.id },
-      { label: "审计序号", value: state.result.auditRun?.sequence ? `#${state.result.auditRun.sequence}` : "" },
+      { label: "Decision Packet ID", value: packet?.decision_packet_id },
+      { label: "模式", value: packet?.mode },
+      { label: "风险等级", value: packet?.risk_rating ? formatRisk(packet.risk_rating) : "" },
+      { label: "审计记录", value: auditMeta?.id },
+      { label: "审计序号", value: auditMeta?.sequence ? `#${auditMeta.sequence}` : "" },
     ])}
+    ${applicablePacks.length ? calloutCard({
+      kicker: "适用规则集",
+      title: `命中 ${applicablePacks.length} 个 Pack`,
+      note: "如果需要解释结论来源，可以从这些 Pack 和规则版本开始追溯。",
+      tone: "info",
+      content: bulletList(applicablePacks.map((item) => `${item.pack_id}@${item.version} · ${item.type}`)),
+    }) : ""}
     ${jsonDetails("查看技术详情", state.result)}
   `;
 }
@@ -254,8 +384,7 @@ function renderHistory() {
             note: item.summary || "已生成决策结果。",
             pillHtml: pill("good", item.sequence ? `#${item.sequence}` : "decision"),
             meta: [formatDateTime(item.createdAt), item.actorName || "anonymous"],
-          }),
-        )
+          }))
         .join("")
     : emptyState("还没有可展示的决策审计记录。");
 
@@ -281,6 +410,60 @@ function renderHistory() {
   `;
 }
 
+function renderSourceChoice(value, label, note) {
+  return `
+    <label class="choice-card ${state.draft.sourceType === value ? "active" : ""}">
+      <span class="choice-head">
+        <input name="sourceType" type="radio" value="${value}" ${state.draft.sourceType === value ? "checked" : ""} />
+        <strong>${label}</strong>
+      </span>
+      <p class="choice-note">${note}</p>
+    </label>
+  `;
+}
+
+function renderSourceInputs() {
+  if (state.draft.sourceType === "path") {
+    return `
+      <label>
+        事件文件路径
+        <input name="eventPath" placeholder="examples/events/saas-annual-prepayment.json" value="${escapeValue(state.draft.eventPath)}" />
+      </label>
+      <p class="supporting-copy">路径支持相对于仓库根目录的 JSON 文件。</p>
+    `;
+  }
+  if (state.draft.sourceType === "paste") {
+    return `
+      <label>
+        事件 JSON
+        <textarea name="eventPayloadText" rows="10" placeholder='{"event_id":"evt-001","event_type":"saas.annual_prepayment"}'>${escapeValue(state.draft.eventPayloadText)}</textarea>
+      </label>
+      <p class="supporting-copy">这里直接粘贴单个事件对象即可，系统会自动读取 event_id 和 event_type。</p>
+    `;
+  }
+  return `
+    <div class="inline-form-note">
+      当前会直接读取仓库内置示例事件：<code>examples/events/saas-annual-prepayment.json</code>。
+    </div>
+  `;
+}
+
+function syncDraftFromForm() {
+  const form = shell.pageContent.querySelector("#decision-form");
+  if (!form) {
+    return;
+  }
+  const payload = formToObject(form);
+  state.draft = {
+    sourceType: String(payload.sourceType || state.draft.sourceType || "example"),
+    eventPath: String(payload.eventPath || ""),
+    eventPayloadText: String(payload.eventPayloadText || ""),
+    mode: String(payload.mode || "L1"),
+    packPaths: String(payload.packPaths || ""),
+    availableEvidence: String(payload.availableEvidence || ""),
+  };
+}
+
 function renderMessage(id, message) {
   const container = shell.pageContent.querySelector(`#${id}`);
   if (container) {
@@ -288,3 +471,10 @@ function renderMessage(id, message) {
   }
 }
 
+function escapeValue(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}

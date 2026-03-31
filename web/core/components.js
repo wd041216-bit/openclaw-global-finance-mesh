@@ -37,6 +37,49 @@ export function featureCard({ title, note, meta = [], href, buttonLabel }) {
   `;
 }
 
+export function stepCard({ step, title, note, content = "", footer = "" }) {
+  return `
+    <article class="step-card">
+      <div class="step-head">
+        <span class="step-index">${escapeHtml(step || "")}</span>
+        <div class="step-copy">
+          <strong>${escapeHtml(title || "")}</strong>
+          ${note ? `<p class="summary-note">${escapeHtml(note)}</p>` : ""}
+        </div>
+      </div>
+      ${content ? `<div class="step-content">${content}</div>` : ""}
+      ${footer ? `<div class="step-footer">${footer}</div>` : ""}
+    </article>
+  `;
+}
+
+export function calloutCard({ kicker, title, note, tone = "neutral", meta = [], content = "" }) {
+  return `
+    <article class="callout-card tone-${escapeHtml(tone)}">
+      <p class="section-kicker">${escapeHtml(kicker || "")}</p>
+      <div class="record-head">
+        <strong>${escapeHtml(title || "")}</strong>
+        ${pill(tone === "critical" ? "bad" : tone === "warning" ? "warn" : tone === "good" ? "good" : "info", tone === "critical" ? "优先处理" : tone === "warning" ? "建议处理" : tone === "good" ? "状态良好" : "摘要")}
+      </div>
+      ${note ? `<p class="summary-note">${escapeHtml(note)}</p>` : ""}
+      ${meta.length ? `<div class="record-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>` : ""}
+      ${content || ""}
+    </article>
+  `;
+}
+
+export function bulletList(items, className = "compact-list") {
+  const filtered = (items || []).filter(Boolean);
+  if (!filtered.length) {
+    return "";
+  }
+  return `
+    <ul class="${escapeHtml(className)}">
+      ${filtered.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}
+    </ul>
+  `;
+}
+
 export function emptyState(message) {
   return `<p class="empty-state">${escapeHtml(message)}</p>`;
 }
@@ -95,4 +138,3 @@ export function recordButton({ id, selected = false, title, note, meta = [], pil
     </button>
   `;
 }
-

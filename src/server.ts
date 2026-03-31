@@ -13,7 +13,7 @@ import { BackupReplicationStore } from "./backup-store.ts";
 import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "./auth-session-store.ts";
 import { OllamaBrainRuntime } from "./brain.ts";
 import { runDecision } from "./engine.ts";
-import { loadFinancePacksFromPaths } from "./fs.ts";
+import { loadEventsFromPaths, loadFinancePacksFromPaths } from "./fs.ts";
 import { LegalLibraryStore } from "./legal-library.ts";
 import { FinanceMeshLogger } from "./logging.ts";
 import { FinanceMeshMetrics } from "./metrics.ts";
@@ -882,11 +882,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       return;
     }
 
-    const eventPayload =
-      body.eventPayload ??
-      JSON.parse(
-        await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
-      );
+    const eventPayload = await resolveDecisionEventPayload(body);
     const mode = normalizeMode(body.mode);
     const result = runDecision({
       request: {
@@ -945,14 +941,8 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       return;
     }
 
-    const exampleEvent = JSON.parse(
-      await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
-    );
     const mode = normalizeMode(body.mode);
-    const events =
-      Array.isArray(body.events) && body.events.length > 0
-        ? body.events
-        : [exampleEvent];
+    const events = await resolveReplayEvents(body);
     const replay = runReplay({
       mode,
       baselinePacks: baseline.map((item) => item.pack),
@@ -1382,6 +1372,45 @@ function normalizeMode(value: unknown): "L0" | "L1" | "L2" | "L3" {
     return value;
   }
   return "L1";
+}
+
+async function resolveDecisionEventPayload(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (body.eventPayload && typeof body.eventPayload === "object") {
+    return body.eventPayload as Record<string, unknown>;
+  }
+
+  if (typeof body.eventPath === "string" && body.eventPath.trim()) {
+    const [event] = await loadEventsFromPaths([body.eventPath.trim()], REPO_ROOT);
+    if (!event) {
+      throw new Error(`No event found at ${body.eventPath}`);
+    }
+    return event;
+  }
+
+  return readExampleEvent();
+}
+
+async function resolveReplayEvents(body: Record<string, unknown>): Promise<Array<Record<string, unknown>>> {
+  if (Array.isArray(body.events) && body.events.length > 0) {
+    return body.events.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+  }
+
+  if (Array.isArray(body.eventPaths) && body.eventPaths.length > 0) {
+    const eventPaths = body.eventPaths
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .map((item) => item.trim());
+    if (eventPaths.length > 0) {
+      return loadEventsFromPaths(eventPaths, REPO_ROOT);
+    }
+  }
+
+  return [await readExampleEvent()];
+}
+
+async function readExampleEvent(): Promise<Record<string, unknown>> {
+  return JSON.parse(
+    await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
+  ) as Record<string, unknown>;
 }
 
 function normalizeOptionalNumber(value: unknown): number | undefined {

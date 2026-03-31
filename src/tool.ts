@@ -1,10 +1,24 @@
+import {
+  buildAuditIntegrityToolResult,
+  buildDecisionToolResult,
+  buildDecisionValidationToolResult,
+  buildLegalSearchToolResult,
+  buildPackValidationToolResult,
+  buildReplayToolResult,
+  buildReplayValidationToolResult,
+} from "./agent-tool-results.ts";
 import { loadEventsFromPaths, loadFinancePacksFromPaths } from "./fs.ts";
 import { runDecision } from "./engine.ts";
+import { AuditLedgerStore } from "./audit-ledger.ts";
+import { LegalLibraryStore } from "./legal-library.ts";
 import { runReplay } from "./replay.ts";
 import { validatePackCollection } from "./validation.ts";
 
 import type { FinanceMeshConfig } from "./config.ts";
 import type { DecisionRunInput, EventPayload } from "./types.ts";
+
+const auditLedger = new AuditLedgerStore();
+const legalLibrary = new LegalLibraryStore();
 
 export function createPackValidationTool(params: { config: FinanceMeshConfig }) {
   return {
@@ -28,18 +42,10 @@ export function createPackValidationTool(params: { config: FinanceMeshConfig }) 
       const packPaths = normalizePathList(rawParams.packPaths, params.config.packRoots);
       const loadedPacks = await loadFinancePacksFromPaths(packPaths);
       const validation = validatePackCollection(loadedPacks);
-      const details = {
-        ...validation,
-        pack_count: loadedPacks.length,
-        packs: loadedPacks.map((item) => ({
-          path: item.path,
-          pack_id: item.pack.pack_id,
-          version: item.pack.version,
-        })),
-      };
+      const details = buildPackValidationToolResult(validation, loadedPacks);
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(details, null, 2) }],
+        content: [{ type: "text" as const, text: details.summary }],
         details,
       };
     },
@@ -88,43 +94,36 @@ export function createDecisionRunTool(params: { config: FinanceMeshConfig }) {
       const validation = validatePackCollection(loadedPacks);
 
       if (!validation.ok) {
-        const details = {
-          ok: false,
-          reason: "Pack validation failed.",
+        const details = buildDecisionValidationToolResult({
           validation,
-        };
+          loadedPacks,
+          mode: normalizeMode(rawParams.mode, params.config.defaultMode),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(details, null, 2) }],
+          content: [{ type: "text" as const, text: details.summary }],
           details,
         };
       }
 
       const eventPayload = await resolveEventPayload(rawParams);
+      const mode = normalizeMode(rawParams.mode, params.config.defaultMode);
       const result = runDecision({
         request: {
-          mode: normalizeMode(rawParams.mode, params.config.defaultMode),
+          mode,
           event_payload: eventPayload,
           available_evidence: normalizePathList(rawParams.availableEvidence, []),
         },
         packs: loadedPacks.map((item) => item.pack),
       });
-
-      const details = {
-        ok: true,
-        decisionPacket: result.decisionPacket,
-        evidenceGraph: result.evidenceGraph,
-        matchedRules: result.matchedRules.map((item) => ({
-          pack_id: item.pack.pack_id,
-          rule_id: item.rule.rule_id,
-          blocking_matches: item.blockingMatches.length,
-          warning_matches: item.warningMatches.length,
-        })),
-        missingEvidence: result.missingEvidence,
-        conflicts: result.conflicts,
-      };
+      const details = buildDecisionToolResult({
+        result,
+        event: eventPayload,
+        loadedPacks,
+        mode,
+      });
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(details, null, 2) }],
+        content: [{ type: "text" as const, text: details.summary }],
         details,
       };
     },
@@ -180,28 +179,108 @@ export function createReplayTool(params: { config: FinanceMeshConfig }) {
       const validation = validatePackCollection([...baseline, ...candidate]);
 
       if (!validation.ok) {
-        const details = {
-          ok: false,
-          reason: "Pack validation failed.",
+        const details = buildReplayValidationToolResult({
           validation,
-        };
+          loadedPacks: [...baseline, ...candidate],
+          mode: normalizeMode(rawParams.mode, params.config.defaultMode),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(details, null, 2) }],
+          content: [{ type: "text" as const, text: details.summary }],
           details,
         };
       }
 
       const events = await resolveEvents(rawParams);
+      const mode = normalizeMode(rawParams.mode, params.config.defaultMode);
       const replay = runReplay({
-        mode: normalizeMode(rawParams.mode, params.config.defaultMode),
+        mode,
         events,
         baselinePacks: baseline.map((item) => item.pack),
         candidatePacks: candidate.map((item) => item.pack),
       });
+      const details = buildReplayToolResult({
+        replay,
+        mode,
+      });
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(replay, null, 2) }],
-        details: replay,
+        content: [{ type: "text" as const, text: details.summary }],
+        details,
+      };
+    },
+  };
+}
+
+export function createLegalLibrarySearchTool() {
+  return {
+    name: "finance_mesh_search_legal_library",
+    label: "Search Legal Library",
+    description: "Search governed legal and control-library documents for grounding and review.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        query: {
+          type: "string",
+          description: "Keyword or business question to search.",
+        },
+        topK: {
+          type: "number",
+          minimum: 1,
+          maximum: 20,
+        },
+        statuses: {
+          type: "array",
+          items: {
+            type: "string",
+            enum: ["draft", "reviewed", "approved", "retired"],
+          },
+        },
+      },
+      required: ["query"],
+    },
+    async execute(_toolCallId: string, rawParams: Record<string, unknown>) {
+      const query = typeof rawParams.query === "string" ? rawParams.query.trim() : "";
+      if (!query) {
+        throw new Error("query is required");
+      }
+      const topK = Number.isFinite(Number(rawParams.topK)) ? Number(rawParams.topK) : 5;
+      const statuses = Array.isArray(rawParams.statuses)
+        ? rawParams.statuses.filter((item): item is "draft" | "reviewed" | "approved" | "retired" =>
+          item === "draft" || item === "reviewed" || item === "approved" || item === "retired")
+        : ["reviewed", "approved"];
+      const matches = await legalLibrary.search(query, topK, {
+        statuses: statuses.length > 0 ? statuses : ["reviewed", "approved"],
+      });
+      const details = buildLegalSearchToolResult({
+        query,
+        topK,
+        matches,
+      });
+      return {
+        content: [{ type: "text" as const, text: details.summary }],
+        details,
+      };
+    },
+  };
+}
+
+export function createAuditIntegrityReadTool() {
+  return {
+    name: "finance_mesh_read_audit_integrity",
+    label: "Read Audit Integrity",
+    description: "Read the current audit-ledger integrity state, latest verification, and export summary.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {},
+    },
+    async execute() {
+      const status = await auditLedger.getIntegrityStatus();
+      const details = buildAuditIntegrityToolResult(status);
+      return {
+        content: [{ type: "text" as const, text: details.summary }],
+        details,
       };
     },
   };
@@ -247,4 +326,3 @@ function normalizePathList(value: unknown, fallback: string[]): string[] {
 function normalizeMode(value: unknown, fallback: FinanceMeshConfig["defaultMode"]): DecisionRunInput["mode"] {
   return value === "L0" || value === "L2" || value === "L3" ? value : fallback;
 }
-

@@ -1,3 +1,4 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 
 import { AuditLedgerStore } from "../../src/audit-ledger.ts";
+import {
+  buildAuditIntegrityToolResult,
+  buildDecisionToolResult,
+  buildDecisionValidationToolResult,
+  buildLegalSearchToolResult,
+  buildPackValidationToolResult,
+  buildReplayToolResult,
+  buildReplayValidationToolResult,
+} from "../../src/agent-tool-results.ts";
 import { runDecision } from "../../src/engine.ts";
 import { loadEventsFromPaths, loadFinancePacksFromPaths } from "../../src/fs.ts";
 import { LegalLibraryStore } from "../../src/legal-library.ts";
@@ -24,6 +34,116 @@ const packageJson = require("../../package.json") as { version?: string };
 const auditLedger = new AuditLedgerStore(path.join(REPO_ROOT, "data", "audit", "ledger.sqlite"));
 const legalLibrary = new LegalLibraryStore(path.join(REPO_ROOT, "data", "legal-library", "library.json"));
 
+const ValidationFindingSchema = z.object({
+  severity: z.enum(["error", "warning"]),
+  code: z.string(),
+  message: z.string(),
+  path: z.string().optional(),
+});
+
+const PackValidationOutputSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  packCount: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  warningCount: z.number().int().nonnegative(),
+  packs: z.array(z.object({
+    path: z.string(),
+    packId: z.string(),
+    displayName: z.string(),
+    version: z.string(),
+    status: z.string(),
+  })),
+  errors: z.array(ValidationFindingSchema),
+  warnings: z.array(ValidationFindingSchema),
+});
+
+const DecisionOutputSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  mode: z.string(),
+  eventId: z.string(),
+  eventType: z.string(),
+  packCount: z.number().int().nonnegative(),
+  applicablePackCount: z.number().int().nonnegative(),
+  riskRating: z.string(),
+  confidence: z.number(),
+  suggestedActions: z.array(z.string()),
+  missingEvidence: z.array(z.string()),
+  matchedRuleCount: z.number().int().nonnegative(),
+  conflictCount: z.number().int().nonnegative(),
+  applicablePacks: z.array(z.object({
+    packId: z.string(),
+    version: z.string(),
+    type: z.string(),
+  })),
+  matchedRules: z.array(z.object({
+    packId: z.string(),
+    ruleId: z.string(),
+    blockingMatches: z.number().int().nonnegative(),
+    warningMatches: z.number().int().nonnegative(),
+  })),
+  evidenceGraph: z.object({
+    graphRef: z.string(),
+    nodeCount: z.number().int().nonnegative(),
+    edgeCount: z.number().int().nonnegative(),
+  }),
+  decisionPacket: z.record(z.string(), z.unknown()),
+  conflicts: z.array(z.string()),
+  validation: PackValidationOutputSchema.optional(),
+});
+
+const ReplayOutputSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  mode: z.string(),
+  comparedEvents: z.number().int().nonnegative(),
+  changedEvents: z.number().int().nonnegative(),
+  higherRiskEvents: z.number().int().nonnegative(),
+  lowerConfidenceEvents: z.number().int().nonnegative(),
+  topDiffs: z.array(z.object({
+    eventId: z.string(),
+    changedFields: z.array(z.string()),
+    baselineRisk: z.string(),
+    candidateRisk: z.string(),
+    candidateSummary: z.string(),
+  })),
+  diffs: z.array(z.record(z.string(), z.unknown())),
+  validation: PackValidationOutputSchema.optional(),
+});
+
+const LegalSearchOutputSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  query: z.string(),
+  topK: z.number().int().positive(),
+  matchCount: z.number().int().nonnegative(),
+  matches: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    jurisdiction: z.string(),
+    status: z.string(),
+    sourceRef: z.string().optional(),
+    score: z.number(),
+    excerpt: z.string(),
+  })),
+});
+
+const AuditIntegrityOutputSchema = z.object({
+  ok: z.boolean(),
+  summary: z.string(),
+  status: z.string(),
+  latestSequence: z.number().int().nonnegative(),
+  verifiedThroughSequence: z.number().int().nonnegative(),
+  mismatchCount: z.number().int().nonnegative(),
+  lastVerifiedAt: z.string().optional(),
+  isStale: z.boolean(),
+  environment: z.string(),
+  teamScope: z.string(),
+  latestExportId: z.string().optional(),
+  latestExportCreatedAt: z.string().optional(),
+});
+
 const server = new McpServer({
   name: "zhouheng-global-finance-mesh",
   version: packageJson.version || "0.0.0",
@@ -37,23 +157,17 @@ server.registerTool(
     inputSchema: {
       packPaths: z.array(z.string()).optional().describe("Pack file paths or directories. Defaults to configured pack roots."),
     },
+    outputSchema: PackValidationOutputSchema,
   },
   async ({ packPaths }) => {
     const roots = resolvePackPaths(packPaths);
     const loadedPacks = await loadFinancePacksFromPaths(roots, REPO_ROOT);
     const validation = validatePackCollection(loadedPacks);
-    const details = {
-      ...validation,
-      pack_count: loadedPacks.length,
-      packs: loadedPacks.map((item) => ({
-        path: item.path,
-        pack_id: item.pack.pack_id,
-        version: item.pack.version,
-      })),
-    };
+    const details = buildPackValidationToolResult(validation, loadedPacks);
 
     return {
-      content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
+      content: [{ type: "text", text: details.summary }],
+      structuredContent: details,
     };
   },
 );
@@ -70,64 +184,49 @@ server.registerTool(
       mode: z.enum(["L0", "L1", "L2", "L3"]).optional(),
       availableEvidence: z.array(z.string()).optional(),
     },
+    outputSchema: DecisionOutputSchema,
   },
   async ({ packPaths, eventPath, eventPayload, mode, availableEvidence }) => {
     const roots = resolvePackPaths(packPaths);
     const loadedPacks = await loadFinancePacksFromPaths(roots, REPO_ROOT);
+    const selectedMode = mode || "L1";
     const validation = validatePackCollection(loadedPacks);
     if (!validation.ok) {
+      const details = buildDecisionValidationToolResult({
+        validation,
+        loadedPacks,
+        mode: selectedMode,
+      });
       return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ok: false,
-                reason: "Pack validation failed.",
-                validation,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
+        content: [{ type: "text", text: details.summary }],
+        structuredContent: details,
       };
     }
 
-    const resolvedEvent =
-      eventPath && eventPath.trim()
-        ? (await loadEventsFromPaths([path.resolve(REPO_ROOT, eventPath)], REPO_ROOT))[0]
-        : eventPayload;
-
-    if (!resolvedEvent) {
-      throw new Error("Provide eventPath or eventPayload.");
-    }
+    const resolvedEvent = await resolveDecisionEvent({
+      eventPath,
+      eventPayload,
+    });
 
     const result = runDecision({
       request: {
-        mode: mode || "L1",
+        mode: selectedMode,
         event_payload: resolvedEvent,
         available_evidence: Array.isArray(availableEvidence) ? availableEvidence : [],
       },
       packs: loadedPacks.map((item) => item.pack),
     });
 
-    const details = {
-      ok: true,
-      decisionPacket: result.decisionPacket,
-      evidenceGraph: result.evidenceGraph,
-      matchedRules: result.matchedRules.map((item) => ({
-        pack_id: item.pack.pack_id,
-        rule_id: item.rule.rule_id,
-        blocking_matches: item.blockingMatches.length,
-        warning_matches: item.warningMatches.length,
-      })),
-      missingEvidence: result.missingEvidence,
-      conflicts: result.conflicts,
-    };
+    const details = buildDecisionToolResult({
+      result,
+      event: resolvedEvent,
+      loadedPacks,
+      mode: selectedMode,
+    });
 
     return {
-      content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
+      content: [{ type: "text", text: details.summary }],
+      structuredContent: details,
     };
   },
 );
@@ -144,51 +243,47 @@ server.registerTool(
       events: z.array(z.record(z.string(), z.unknown())).optional(),
       mode: z.enum(["L0", "L1", "L2", "L3"]).optional(),
     },
+    outputSchema: ReplayOutputSchema,
   },
   async ({ baselinePackPaths, candidatePackPaths, eventPaths, events, mode }) => {
     const baselineRoots = resolvePackPaths(baselinePackPaths);
     const candidateRoots = resolvePackPaths(candidatePackPaths);
     const baseline = await loadFinancePacksFromPaths(baselineRoots, REPO_ROOT);
     const candidate = await loadFinancePacksFromPaths(candidateRoots, REPO_ROOT);
+    const selectedMode = mode || "L1";
     const validation = validatePackCollection([...baseline, ...candidate]);
 
     if (!validation.ok) {
+      const details = buildReplayValidationToolResult({
+        validation,
+        loadedPacks: [...baseline, ...candidate],
+        mode: selectedMode,
+      });
       return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ok: false,
-                reason: "Pack validation failed.",
-                validation,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
+        content: [{ type: "text", text: details.summary }],
+        structuredContent: details,
       };
     }
 
-    const resolvedEvents =
-      Array.isArray(eventPaths) && eventPaths.length > 0
-        ? await loadEventsFromPaths(eventPaths.map((item) => path.resolve(REPO_ROOT, item)), REPO_ROOT)
-        : events;
-
-    if (!resolvedEvents || resolvedEvents.length === 0) {
-      throw new Error("Provide eventPaths or inline events.");
-    }
+    const resolvedEvents = await resolveReplayEvents({
+      eventPaths,
+      events,
+    });
 
     const replay = runReplay({
-      mode: mode || "L1",
+      mode: selectedMode,
       events: resolvedEvents,
       baselinePacks: baseline.map((item) => item.pack),
       candidatePacks: candidate.map((item) => item.pack),
     });
+    const details = buildReplayToolResult({
+      replay,
+      mode: selectedMode,
+    });
 
     return {
-      content: [{ type: "text", text: JSON.stringify(replay, null, 2) }],
+      content: [{ type: "text", text: details.summary }],
+      structuredContent: details,
     };
   },
 );
@@ -203,29 +298,21 @@ server.registerTool(
       topK: z.number().int().positive().max(20).optional(),
       statuses: z.array(z.enum(["draft", "reviewed", "approved", "retired"])).optional(),
     },
+    outputSchema: LegalSearchOutputSchema,
   },
   async ({ query, topK, statuses }) => {
     const matches = await legalLibrary.search(query, topK || 5, {
       statuses: statuses?.length ? statuses : ["reviewed", "approved"],
     });
-
-    const payload = {
-      ok: true,
+    const details = buildLegalSearchToolResult({
       query,
       topK: topK || 5,
-      matches: matches.map((item) => ({
-        id: item.document.id,
-        title: item.document.title,
-        jurisdiction: item.document.jurisdiction,
-        status: item.document.status,
-        sourceRef: item.document.sourceRef,
-        score: item.score,
-        excerpt: item.excerpt,
-      })),
-    };
+      matches,
+    });
 
     return {
-      content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+      content: [{ type: "text", text: details.summary }],
+      structuredContent: details,
     };
   },
 );
@@ -236,11 +323,14 @@ server.registerTool(
     title: "Read Audit Integrity",
     description: "Read the current audit-ledger integrity state, latest verification, and export summary.",
     inputSchema: {},
+    outputSchema: AuditIntegrityOutputSchema,
   },
   async () => {
     const status = await auditLedger.getIntegrityStatus();
+    const details = buildAuditIntegrityToolResult(status);
     return {
-      content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
+      content: [{ type: "text", text: details.summary }],
+      structuredContent: details,
     };
   },
 );
@@ -275,4 +365,40 @@ function resolvePackPaths(values: string[] | undefined): string[] {
     return values.map((item) => path.resolve(REPO_ROOT, item));
   }
   return DEFAULT_PACK_ROOTS;
+}
+
+async function resolveDecisionEvent(input: {
+  eventPath?: string;
+  eventPayload?: Record<string, unknown>;
+}) {
+  if (input.eventPath?.trim()) {
+    const [event] = await loadEventsFromPaths([path.resolve(REPO_ROOT, input.eventPath)], REPO_ROOT);
+    if (!event) {
+      throw new Error(`No event found at ${input.eventPath}`);
+    }
+    return event;
+  }
+  if (input.eventPayload) {
+    return input.eventPayload;
+  }
+  return readExampleEvent();
+}
+
+async function resolveReplayEvents(input: {
+  eventPaths?: string[];
+  events?: Array<Record<string, unknown>>;
+}) {
+  if (Array.isArray(input.eventPaths) && input.eventPaths.length > 0) {
+    return loadEventsFromPaths(input.eventPaths.map((item) => path.resolve(REPO_ROOT, item)), REPO_ROOT);
+  }
+  if (Array.isArray(input.events) && input.events.length > 0) {
+    return input.events;
+  }
+  return [await readExampleEvent()];
+}
+
+async function readExampleEvent(): Promise<Record<string, unknown>> {
+  return JSON.parse(
+    await fs.readFile(path.join(REPO_ROOT, "examples", "events", "saas-annual-prepayment.json"), "utf8"),
+  ) as Record<string, unknown>;
 }
