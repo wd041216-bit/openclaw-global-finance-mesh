@@ -69,6 +69,7 @@ function render() {
     ? overview.actions
     : buildFallbackActions(overview);
   const runtime = overview?.runtime;
+  const runtimeDiagnosis = runtime?.diagnosis;
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -87,7 +88,7 @@ function render() {
         ${calloutCard({
           kicker: "业务提示",
           title: overview?.identity?.summary || "先从最接近业务问题的页面开始",
-          note: runtime?.summary || overview?.governance?.recovery?.recommendedAction || "如果今天更关心规则发布影响，就从回放中心开始。",
+          note: runtimeDiagnosis?.nextActionTitle || runtime?.summary || overview?.governance?.recovery?.recommendedAction || "如果今天更关心规则发布影响，就从回放中心开始。",
           tone: actions.some((item) => item.tone === "warning") ? "warning" : "info",
           meta: [
             `24h 决策 ${overview?.decisioning?.counts24h?.decision ?? 0}`,
@@ -129,6 +130,7 @@ function render() {
             pillHtml: pill(runtime?.lastProbe?.inferenceOk ? "good" : runtime?.mode === "cloud" ? "warn" : "info", runtime?.cloudApiFlavor || "local"),
             meta: [
               runtime?.model ? `模型 ${runtime.model}` : null,
+              runtimeDiagnosis?.nextActionTitle || null,
               runtime?.lastProbe?.createdAt ? formatDateTime(runtime.lastProbe.createdAt) : "尚未探针",
             ].filter(Boolean),
           })}

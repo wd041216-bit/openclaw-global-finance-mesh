@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import { AuditLedgerStore } from "./audit-ledger.ts";
 
 import type { AuthenticatedActor } from "./access-control.ts";
-import type { BrainProbeResult } from "./brain.ts";
+import type { BrainEndpointCheck, BrainProbeResult } from "./brain.ts";
 import type { LedgerMetadata } from "./audit-ledger.ts";
 import type { BrainAuthStatus, BrainErrorKind } from "./brain.ts";
 import type { BrainMode, BrainRuntimeConfig, CloudApiFlavor } from "./runtime-config.ts";
@@ -39,6 +39,11 @@ export interface AuditRunSummary extends LedgerMetadata {
   probeAuthStatus?: BrainAuthStatus;
   selectedCatalogEndpoint?: string;
   selectedInferenceEndpoint?: string;
+  catalogChecks?: BrainEndpointCheck[];
+  inferenceChecks?: BrainEndpointCheck[];
+  inferencePreview?: string;
+  probeError?: string;
+  latencyMs?: number;
 }
 
 export interface AuditRunRecord extends AuditRunSummary {
@@ -262,6 +267,26 @@ export class AuditRunStore {
     const { detail: _detail, ...summary } = payload;
     return {
       ...summary,
+      catalogChecks:
+        payload.type === "probe"
+          ? ((payload.detail.probe as BrainProbeResult | undefined)?.catalogChecks ?? [])
+          : undefined,
+      inferenceChecks:
+        payload.type === "probe"
+          ? ((payload.detail.probe as BrainProbeResult | undefined)?.inferenceChecks ?? [])
+          : undefined,
+      inferencePreview:
+        payload.type === "probe"
+          ? (payload.detail.probe as BrainProbeResult | undefined)?.inferencePreview
+          : undefined,
+      probeError:
+        payload.type === "probe"
+          ? (payload.detail.probe as BrainProbeResult | undefined)?.error
+          : undefined,
+      latencyMs:
+        payload.type === "probe"
+          ? (payload.detail.probe as BrainProbeResult | undefined)?.latencyMs
+          : undefined,
       sequence: metadata.sequence,
       entryHash: metadata.entryHash,
       prevHash: metadata.prevHash,

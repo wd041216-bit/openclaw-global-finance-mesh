@@ -114,6 +114,7 @@ Minimal cloud verification flow:
 ```bash
 curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
+npm run smoke:cloud
 ```
 
 Expected outcomes:
@@ -124,6 +125,8 @@ Expected outcomes:
 - `errorKind=endpoint_not_supported`: switch `FINANCE_MESH_CLOUD_API_FLAVOR` or confirm the provider surface
 
 Catalog access is not the same as inference access. Do not treat a successful model listing as proof that cloud reasoning is enabled.
+
+See [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md) for the cloud runtime runbook.
 
 ## Identity and access
 
@@ -306,6 +309,7 @@ See [docs/enterprise-readiness.md](./docs/enterprise-readiness.md) for a candid 
 ## Docs
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)
 - [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)

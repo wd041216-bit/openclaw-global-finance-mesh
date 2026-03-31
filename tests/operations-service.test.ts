@@ -267,6 +267,7 @@ test("operations service returns a business-friendly overview and keeps open mod
   assert.equal(overview.runtime.hasApiKey, true);
   assert.equal(overview.runtime.cloudApiFlavor, "auto");
   assert.equal(overview.runtime.businessStatus, "云端可用");
+  assert.equal(overview.runtime.diagnosis.businessStatus, "云端可用");
   assert.equal(overview.decisioning.counts24h.decision, 1);
   assert.equal(overview.decisioning.counts24h.replay, 1);
   assert.equal(overview.governance.legalLibrary.draftCount, 1);
@@ -529,7 +530,11 @@ test("operations overview translates cloud catalog-only access into business-fri
 
   assert.equal(overview.runtime.businessStatus, "仅模型目录可用");
   assert.match(overview.runtime.summary, /模型目录/);
+  assert.equal(overview.runtime.diagnosis.catalog.status, "ready");
+  assert.equal(overview.runtime.diagnosis.inference.status, "warning");
+  assert.match(overview.runtime.diagnosis.nextActionTitle, /推理权限|entitlement/);
   assert.equal(overview.runtime.lastProbe?.errorKind, "unauthorized");
+  assert.equal(overview.runtime.lastProbe?.diagnosis.businessStatus, "仅模型目录可用");
   assert.equal(health.checks.runtime.status, "degraded");
   assert.match(health.checks.runtime.summary, /推理权限/);
 });

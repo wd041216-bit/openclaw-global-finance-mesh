@@ -44,6 +44,7 @@ const state = {
   models: [],
   modelsError: "",
   probeResult: null,
+  probeDiagnosis: null,
   sessions: [],
   currentSessionId: null,
   selectedSessionId: null,
@@ -228,6 +229,7 @@ async function refreshRuntimeConfig() {
     state.models = [];
     state.modelsError = "";
     state.probeResult = null;
+    state.probeDiagnosis = null;
     renderRuntime();
     return;
   }
@@ -536,11 +538,13 @@ async function runProbe() {
       body: JSON.stringify({}),
     });
     state.probeResult = result.probe || null;
+    state.probeDiagnosis = result.diagnosis || null;
     rememberAction("已执行运行时探针");
     await shell.refreshChrome();
     renderRuntime();
   } catch (error) {
     state.probeResult = null;
+    state.probeDiagnosis = null;
     state.runtimeMessage = String(error.message || error);
     renderRuntime();
   }
@@ -1019,16 +1023,17 @@ function renderRuntime() {
   const runtimeOverview = globalData.overview?.runtime;
   const runtime = state.runtimeConfig;
   const lastProbe = state.probeResult || health?.recent?.probe || globalData.overview?.runtime?.lastProbe;
+  const diagnosis = state.probeDiagnosis || runtimeOverview?.diagnosis || lastProbe?.diagnosis || null;
   const canOperateNow = canOperate(globalData);
   const canManageNow = canManageAdmin(globalData);
-  const runtimeBusinessStatus = runtimeOverview?.businessStatus || lastProbe?.businessStatus || "等待诊断";
+  const runtimeBusinessStatus = diagnosis?.businessStatus || runtimeOverview?.businessStatus || lastProbe?.businessStatus || "等待诊断";
   const runtimeSummary = health
     ? `
       <div class="summary-band three-up">
         ${summaryCard({
           kicker: "运行摘要",
           title: runtime ? `${runtime.mode} · ${runtime.model}` : "等待运行时配置",
-          note: runtimeOverview?.summary || health.checks.runtime?.summary || "系统运行状态会显示在这里。",
+          note: diagnosis?.summary || runtimeOverview?.summary || health.checks.runtime?.summary || "系统运行状态会显示在这里。",
           pillHtml: pill(
             health.checks.runtime?.status === "healthy" ? "good" : health.checks.runtime?.status === "degraded" ? "warn" : "neutral",
             runtimeBusinessStatus,
@@ -1041,18 +1046,18 @@ function renderRuntime() {
         })}
         ${summaryCard({
           kicker: "目录读取",
-          title: formatCatalogStatus(runtime, lastProbe),
-          note: describeCatalogStatus(runtime, lastProbe),
+          title: formatCatalogStatus(runtime, diagnosis || lastProbe),
+          note: diagnosis?.catalog?.summary || describeCatalogStatus(runtime, lastProbe),
           pillHtml: pill(statusToneForBoolean(lastProbe?.listModelsOk), lastProbe?.listModelsOk ? "catalog_ready" : "catalog_pending"),
           meta: [
             runtime?.mode === "cloud" ? `协议 ${formatCloudFlavor(runtime.cloudApiFlavor)}` : "本地 Ollama",
-            lastProbe?.selectedCatalogEndpoint || "等待探针",
+            diagnosis?.catalog?.selectedEndpoint || lastProbe?.selectedCatalogEndpoint || "等待探针",
           ],
         })}
         ${calloutCard({
           kicker: "推理诊断",
-          title: formatInferenceStatus(runtime, lastProbe),
-          note: describeInferenceStatus(runtime, lastProbe),
+          title: formatInferenceStatus(runtime, diagnosis || lastProbe),
+          note: diagnosis?.inference?.summary || describeInferenceStatus(runtime, lastProbe),
           tone: lastProbe?.inferenceOk ? "good" : lastProbe?.errorKind === "unauthorized" ? "warning" : "info",
           meta: [
             `错误分类 ${formatErrorKind(lastProbe?.errorKind)}`,
@@ -1067,9 +1072,9 @@ function renderRuntime() {
     ${runtimeSummary}
     ${calloutCard({
       kicker: "下一步",
-      title: buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
+      title: diagnosis?.nextActionTitle || buildRuntimeActionTitle(runtime, runtimeOverview, lastProbe, health),
       note: canOperateNow
-        ? buildRuntimeActionNote(runtime, runtimeOverview, lastProbe)
+        ? (diagnosis?.recommendedActions?.join(" ") || buildRuntimeActionNote(runtime, runtimeOverview, lastProbe))
         : "当前角色只能看摘要，探针动作需要 operator 或 admin。",
       tone: lastProbe?.inferenceOk ? "good" : "warning",
       meta: [
@@ -1078,6 +1083,7 @@ function renderRuntime() {
       ],
     })}
     ${state.runtimeMessage ? `<p class="footer-note">${escapeHtml(state.runtimeMessage)}</p>` : ""}
+    ${diagnosis ? renderRuntimeRecommendations(diagnosis) : ""}
     ${lastProbe ? jsonDetails("查看探针技术详情", lastProbe) : ""}
   `;
 
@@ -1177,6 +1183,19 @@ function renderRuntime() {
 
   detailContainer.innerHTML = `
     <article class="detail-card">
+      <p class="section-kicker">协议对比</p>
+      <h4>把目录读取和推理分开看</h4>
+      ${diagnosis
+        ? `
+          <p class="summary-note">${escapeHtml(diagnosis.protocolSummary)}</p>
+          <div class="page-grid two-up top-gap">
+            ${renderCheckDiagnosisCard(diagnosis.catalog)}
+            ${renderCheckDiagnosisCard(diagnosis.inference)}
+          </div>
+        `
+        : emptyState("执行一次探针后，这里会展示当前协议的目录与推理对比。")}
+    </article>
+    <article class="detail-card">
       <div class="section-head compact">
         <div>
           <p class="section-kicker">模型列表</p>
@@ -1242,7 +1261,7 @@ function formatCatalogStatus(runtime, lastProbe) {
   if (!runtime.hasApiKey) {
     return "等待云端授权";
   }
-  if (lastProbe?.listModelsOk) {
+  if (lastProbe?.catalog?.status === "ready" || lastProbe?.listModelsOk) {
     return "模型目录可读";
   }
   if (lastProbe?.errorKind === "unauthorized") {
@@ -1286,7 +1305,7 @@ function formatInferenceStatus(runtime, lastProbe) {
   if (!runtime.hasApiKey) {
     return "缺少云端 API Key";
   }
-  if (lastProbe?.inferenceOk) {
+  if (lastProbe?.inference?.status === "ready" || lastProbe?.inferenceOk) {
     return "云端推理可用";
   }
   if (lastProbe?.errorKind === "unauthorized") {
@@ -1408,6 +1427,74 @@ function buildRuntimeActionNote(runtime, runtimeOverview, lastProbe) {
     return "先保存 API Key，再执行探针，系统会告诉你目录和推理分别是否可用。";
   }
   return "如果今天刚改过模型、备份目标或身份配置，优先执行一次运行时探针。";
+}
+
+function renderRuntimeRecommendations(diagnosis) {
+  if (!diagnosis?.recommendedActions?.length) {
+    return "";
+  }
+  return `
+    <article class="detail-card top-gap">
+      <p class="section-kicker">排障建议</p>
+      <h4>${escapeHtml(diagnosis.nextActionTitle || "下一步")}</h4>
+      <div class="record-list">
+        ${diagnosis.recommendedActions
+          .map((item, index) =>
+            recordButton({
+              id: `recommendation-${index + 1}`,
+              title: `建议 ${index + 1}`,
+              note: item,
+              pillHtml: pill("info", "next"),
+              meta: [],
+            }))
+          .join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderCheckDiagnosisCard(check) {
+  return `
+    <div class="detail-card">
+      <p class="section-kicker">${escapeHtml(check.title)}</p>
+      <h4>${escapeHtml(check.summary)}</h4>
+      <div class="meta-list">
+        <span>${pill(statusToneFromCheck(check.status), check.status)}</span>
+        <span>${escapeHtml(check.selectedEndpoint || "尚未选中稳定接口")}</span>
+      </div>
+      ${check.checks?.length
+        ? `<div class="record-list top-gap">
+            ${check.checks.map((item, index) =>
+              recordButton({
+                id: `${check.title}-${index}`,
+                title: `${formatCloudFlavor(item.flavor)} · ${item.endpoint}`,
+                note: item.ok
+                  ? `请求成功，延迟 ${item.latencyMs}ms`
+                  : `${formatErrorKind(item.errorKind)}${item.statusCode ? ` · ${item.statusCode}` : ""}`,
+                pillHtml: pill(item.ok ? "good" : "warn", item.ok ? "ok" : "issue"),
+                meta: [
+                  item.availableModels?.length ? `模型 ${item.availableModels.length}` : null,
+                  item.authStatus ? `鉴权 ${item.authStatus}` : null,
+                ].filter(Boolean),
+              }))
+              .join("")}
+          </div>`
+        : emptyState("当前还没有协议检查结果。")}
+    </div>
+  `;
+}
+
+function statusToneFromCheck(status) {
+  if (status === "ready") {
+    return "good";
+  }
+  if (status === "warning") {
+    return "warn";
+  }
+  if (status === "failure") {
+    return "bad";
+  }
+  return "neutral";
 }
 
 function escapeHtml(value) {

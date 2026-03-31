@@ -21,6 +21,7 @@ import { OperationsService } from "./operations-service.ts";
 import { runReplay } from "./replay.ts";
 import { RestoreDrillStore } from "./restore-drill-store.ts";
 import { RuntimeConfigStore } from "./runtime-config.ts";
+import { buildRuntimeDiagnosis } from "./runtime-diagnostics.ts";
 import { validatePackCollection } from "./validation.ts";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -679,6 +680,15 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
     }
     const config = await runtimeStore.get();
     const probe = await brain.probe(config);
+    const diagnosis = buildRuntimeDiagnosis(
+      {
+        mode: config.mode,
+        model: config.model,
+        hasApiKey: Boolean(config.apiKey),
+        cloudApiFlavor: config.cloudApiFlavor,
+      },
+      probe,
+    );
     const configSnapshot = toRuntimeConfigSnapshot(config);
     const auditRun = await auditRuns.recordProbe({
       config: configSnapshot,
@@ -702,7 +712,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, re
       actor: auth.actor,
       runId: auditRun.id,
     });
-    sendJson(res, 200, { ok: true, probe, auditRun });
+    sendJson(res, 200, { ok: true, probe, diagnosis, auditRun });
     return;
   }
 

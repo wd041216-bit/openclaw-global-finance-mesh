@@ -58,6 +58,7 @@ The intended operating mode is:
   - model listing works
   - inference is unauthorized
   - protocol mismatch vs. real authorization failure
+- `npm run smoke:cloud` prints the normalized cloud diagnosis object for operator troubleshooting
 
 ## Known current truth
 

@@ -88,6 +88,7 @@ npm run dev
 ```bash
 curl -s http://127.0.0.1:3030/api/runtime/config
 curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
+npm run smoke:cloud
 ```
 
 结果判断原则：
@@ -98,6 +99,8 @@ curl -s -X POST http://127.0.0.1:3030/api/runtime/probe
 - `errorKind=endpoint_not_supported`：优先切换 `FINANCE_MESH_CLOUD_API_FLAVOR` 或确认服务端兼容面
 
 要特别注意：能读模型目录，不代表能做云端推理。
+
+完整排障路径见 [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)。
 
 ## 身份与访问控制
 
@@ -273,6 +276,7 @@ npm run mcp:serve
 ## 相关文档
 
 - [docs/identity-operations.md](./docs/identity-operations.md)
+- [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)
 - [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
 - [docs/roadmap.md](./docs/roadmap.md)
