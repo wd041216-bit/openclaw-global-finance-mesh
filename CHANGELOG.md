@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- shipped GitHub Pages as a public product entry with structured `Why / Try / Install / Connect Agents / Pilot / Download` sections
+- upgraded Windows packaging to NSIS `.exe` plus `.zip` fallback while keeping tray flow and local data semantics
+- expanded release workflow to attach desktop artifacts and `SHA256SUMS` in a standardized release bundle
+- added release-artifact and Pages smoke scripts for CI/release gate consistency
+- aligned desktop first-launch onboarding across web, macOS menu bar, and Windows tray entry points
+- expanded host matrix documentation and checks for OpenClaw + Claude/Manus/Cursor/Cline/Cherry Studio
+- refreshed README and README.zh-CN top sections for developer conversion + pilot credibility messaging
+- added repository governance docs for security and support routing
+
 ## 0.3.0
 
 - repositioned the repository as the standalone `zhouheng-global-finance-mesh` product

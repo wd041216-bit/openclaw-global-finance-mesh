@@ -79,7 +79,10 @@ function render() {
             href: pickSystemActionHref(overview, runtimeVerification),
             buttonLabel: pickSystemActionButton(overview, runtimeVerification),
             tone: runtimeVerification?.goLiveReady && overview?.governance?.recovery?.status !== "failure" ? "good" : "warning",
-            meta: overview?.experience?.globalBlockers?.slice(0, 2) || [],
+            meta: [
+              ...(overview?.experience?.globalBlockers?.slice(0, 2) || []),
+              ...(overview?.experience?.desktopBlockers?.slice(0, 1) || []),
+            ].filter(Boolean),
           })}
         </div>
       </article>

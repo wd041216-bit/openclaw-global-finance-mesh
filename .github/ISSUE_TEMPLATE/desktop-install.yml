@@ -1,0 +1,56 @@
+name: Desktop install issue
+description: Report problems in macOS/Windows install, first launch onboarding, tray/menu behaviors, or desktop runtime bootstrap.
+title: "[Desktop]: "
+labels:
+  - bug
+  - desktop
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please share enough detail so we can reproduce your install or first-launch issue.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Install artifact
+      options:
+        - macOS .pkg
+        - macOS .dmg
+        - macOS .zip
+        - Windows .exe
+        - Windows .zip
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe observed behavior and expected behavior.
+      placeholder: Installer finished but first launch did not open onboarding page.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Download artifact
+        2. Install app
+        3. Launch menu bar/tray app
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Paste sanitized logs or screenshots.

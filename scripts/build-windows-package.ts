@@ -31,6 +31,8 @@ const PROJECT_FILES = [
 
 interface CliOptions {
   outDir?: string;
+  skipExe: boolean;
+  requireExe: boolean;
 }
 
 async function main(): Promise<void> {
@@ -43,6 +45,7 @@ async function main(): Promise<void> {
   const runtimeRoot = path.join(buildReleaseRoot, "node-runtime");
   const releaseRoot = path.join(outDir, releaseName);
   const zipPath = path.join(outDir, `${releaseName}.zip`);
+  const exePath = path.join(outDir, `${releaseName}.exe`);
 
   try {
     await fs.mkdir(buildReleaseRoot, { recursive: true });
@@ -57,6 +60,13 @@ async function main(): Promise<void> {
 
     await publishReleaseFolder(buildReleaseRoot, releaseRoot);
     await createZip(buildReleaseRoot, zipPath);
+    const generatedExePath = options.skipExe
+      ? null
+      : await createNsisInstallerExe({
+          releaseRoot: buildReleaseRoot,
+          outFilePath: exePath,
+          requireExe: options.requireExe,
+        });
 
     console.log(
       JSON.stringify(
@@ -64,6 +74,7 @@ async function main(): Promise<void> {
           ok: true,
           releaseRoot,
           zipPath,
+          exePath: generatedExePath,
           nodeVersion: NODE_VERSION,
           version: VERSION,
         },
@@ -78,8 +89,18 @@ async function main(): Promise<void> {
 
 function parseArgs(args: string[]): CliOptions {
   let outDir: string | undefined;
+  let skipExe = false;
+  let requireExe = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+    if (arg === "--skip-exe") {
+      skipExe = true;
+      continue;
+    }
+    if (arg === "--require-exe") {
+      requireExe = true;
+      continue;
+    }
     if (arg === "--out-dir") {
       outDir = args[index + 1];
       index += 1;
@@ -87,7 +108,7 @@ function parseArgs(args: string[]): CliOptions {
     }
     throw new Error(`Unknown argument: ${arg}`);
   }
-  return { outDir };
+  return { outDir, skipExe, requireExe };
 }
 
 async function bundleOfficialWindowsRuntime(runtimeRoot: string): Promise<void> {
@@ -104,10 +125,7 @@ async function bundleOfficialWindowsRuntime(runtimeRoot: string): Promise<void> 
   if (!(await pathExists(extractedDistRoot))) {
     await fs.rm(extractionRoot, { recursive: true, force: true });
     await fs.mkdir(extractionRoot, { recursive: true });
-    runCommand("ditto", ["-x", "-k", archivePath, extractionRoot], {
-      cwd: cacheDir,
-      stdio: "inherit",
-    });
+    await extractZipArchive(archivePath, extractionRoot);
   }
 
   await fs.rm(runtimeRoot, { recursive: true, force: true });
@@ -182,8 +200,29 @@ async function publishReleaseFolder(sourceReleaseRoot: string, destinationReleas
 async function createZip(releaseRoot: string, zipPath: string): Promise<void> {
   await fs.mkdir(path.dirname(zipPath), { recursive: true });
   await fs.rm(zipPath, { force: true });
-  runCommand("zip", ["-q", "-r", "-X", zipPath, path.basename(releaseRoot)], {
-    cwd: path.dirname(releaseRoot),
+  const parentDir = path.dirname(releaseRoot);
+  const releaseFolderName = path.basename(releaseRoot);
+  if (process.platform === "win32") {
+    const source = path.join(parentDir, releaseFolderName).replace(/'/g, "''");
+    const destination = zipPath.replace(/'/g, "''");
+    runCommand(
+      "powershell",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Compress-Archive -Path '${source}' -DestinationPath '${destination}' -Force`,
+      ],
+      {
+        cwd: parentDir,
+        stdio: "inherit",
+      },
+    );
+    return;
+  }
+  runCommand("zip", ["-q", "-r", "-X", zipPath, releaseFolderName], {
+    cwd: parentDir,
     stdio: "inherit",
   });
 }
@@ -214,6 +253,39 @@ async function downloadIfMissing(url: string, destinationPath: string): Promise<
   await fs.writeFile(destinationPath, bytes);
 }
 
+async function extractZipArchive(archivePath: string, destinationDir: string): Promise<void> {
+  if (process.platform === "win32") {
+    const source = archivePath.replace(/'/g, "''");
+    const destination = destinationDir.replace(/'/g, "''");
+    runCommand(
+      "powershell",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Expand-Archive -Path '${source}' -DestinationPath '${destination}' -Force`,
+      ],
+      {
+        cwd: path.dirname(archivePath),
+        stdio: "inherit",
+      },
+    );
+    return;
+  }
+  if (process.platform === "darwin") {
+    runCommand("ditto", ["-x", "-k", archivePath, destinationDir], {
+      cwd: path.dirname(archivePath),
+      stdio: "inherit",
+    });
+    return;
+  }
+  runCommand("unzip", ["-q", archivePath, "-d", destinationDir], {
+    cwd: path.dirname(archivePath),
+    stdio: "inherit",
+  });
+}
+
 async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
@@ -235,6 +307,79 @@ async function removeFinderMetadata(targetRoot: string): Promise<void> {
       await fs.rm(entryPath, { force: true });
     }
   }
+}
+
+async function createNsisInstallerExe(input: {
+  releaseRoot: string;
+  outFilePath: string;
+  requireExe: boolean;
+}): Promise<string | null> {
+  const makensis = resolveMakensisBinary();
+  if (!makensis) {
+    if (input.requireExe) {
+      throw new Error("NSIS is required but `makensis` was not found on PATH.");
+    }
+    console.warn("NSIS not found. Skipping .exe generation and keeping zip fallback.");
+    return null;
+  }
+
+  const nsisScriptPath = path.join(os.tmpdir(), `${PACKAGE_SLUG}-${VERSION}-installer.nsi`);
+  const releaseRootForNsis = normalizeWindowsPath(input.releaseRoot);
+  const outFileForNsis = normalizeWindowsPath(input.outFilePath);
+  const startMenuFolder = APP_NAME.replace(/"/g, "");
+  const nsisScript = `
+Unicode true
+Name "${APP_NAME}"
+OutFile "${outFileForNsis}"
+InstallDir "$LOCALAPPDATA\\\\Programs\\\\${APP_NAME}"
+RequestExecutionLevel user
+!include "MUI2.nsh"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\\\\Start ${APP_NAME}.cmd"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch ${APP_NAME}"
+!insertmacro MUI_PAGE_FINISH
+!insertmacro MUI_LANGUAGE "English"
+
+Section "Install"
+  SetOutPath "$INSTDIR"
+  File /r "${releaseRootForNsis}\\\\*"
+  CreateDirectory "$SMPROGRAMS\\\\${startMenuFolder}"
+  CreateShortCut "$SMPROGRAMS\\\\${startMenuFolder}\\\\${APP_NAME}.lnk" "$INSTDIR\\\\Start ${APP_NAME}.cmd"
+  CreateShortCut "$SMPROGRAMS\\\\${startMenuFolder}\\\\Stop ${APP_NAME}.lnk" "$INSTDIR\\\\Stop ${APP_NAME}.cmd"
+  CreateShortCut "$SMPROGRAMS\\\\${startMenuFolder}\\\\Edit ${APP_NAME} Config.lnk" "$INSTDIR\\\\Edit ${APP_NAME} Desktop Config.cmd"
+SectionEnd
+`.trimStart();
+
+  await fs.writeFile(nsisScriptPath, nsisScript, "utf8");
+  runCommand(makensis, [nsisScriptPath], {
+    cwd: input.releaseRoot,
+    stdio: "inherit",
+  });
+  await fs.rm(nsisScriptPath, { force: true });
+  return input.outFilePath;
+}
+
+function resolveMakensisBinary(): string | null {
+  const candidates = process.platform === "win32"
+    ? ["makensis.exe", "makensis"]
+    : ["makensis"];
+  for (const command of candidates) {
+    const probe = spawnSync(command, ["-VERSION"], {
+      stdio: "ignore",
+      shell: process.platform === "win32",
+    });
+    if (probe.status === 0) {
+      return command;
+    }
+  }
+  return null;
+}
+
+function normalizeWindowsPath(inputPath: string): string {
+  return inputPath.replace(/\//g, "\\");
 }
 
 function renderInstallCmd(): string {
@@ -352,6 +497,7 @@ function renderReleaseReadme(): string {
   return `Zhouheng Finance Mesh Windows desktop package (${VERSION})
 
 Included artifacts:
+- ${PACKAGE_SLUG}-${VERSION}-windows.exe
 - ${releaseNamePlaceholder()}
 - Install ${APP_NAME}.cmd
 - Start ${APP_NAME}.cmd
@@ -360,12 +506,13 @@ Included artifacts:
 What this package gives you:
 - a local Windows install under %LOCALAPPDATA%\\Programs\\${APP_NAME}
 - an official Node.js ${NODE_VERSION} Windows runtime bundled inside the package
+- an NSIS one-click installer (.exe) plus zip fallback
 - a tray launcher with start / stop / open-console actions
 - local data under %LOCALAPPDATA%\\${APP_NAME}
 
 Recommended flow:
-1. Unzip the package.
-2. Double-click "Install ${APP_NAME}.cmd".
+1. Run "${PACKAGE_SLUG}-${VERSION}-windows.exe" for one-click install.
+2. Use the zip package only when `.exe` install is restricted by policy.
 3. Let the installer create Start Menu shortcuts and launch the tray app.
 4. Fill in OLLAMA_API_KEY from the desktop config or the system page.
 `;

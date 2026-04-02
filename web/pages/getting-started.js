@@ -1,5 +1,7 @@
 import {
   getPreferredConsoleMode,
+  setDesktopOnboardingCompleted,
+  setDesktopOnboardingSeen,
   setPreferredConsoleMode,
 } from "../core/api.js";
 import {
@@ -13,9 +15,14 @@ import { initShell } from "../core/shell.js";
 
 const params = new URLSearchParams(window.location.search);
 const requestedMode = params.get("mode");
+const requestedEntry = params.get("entry");
 const initialMode = requestedMode === "admin" || requestedMode === "business" ? requestedMode : null;
+const entry = requestedEntry === "desktop" ? "desktop" : "web";
 if (initialMode) {
   setPreferredConsoleMode(initialMode);
+}
+if (entry === "desktop") {
+  setDesktopOnboardingSeen(true);
 }
 
 const shell = await initShell({
@@ -41,6 +48,9 @@ shell.pageContent.addEventListener("click", (event) => {
     setPreferredConsoleMode(mode);
     const url = new URL(window.location.href);
     url.searchParams.set("mode", mode);
+    if (entry === "desktop") {
+      url.searchParams.set("entry", "desktop");
+    }
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     render();
   }
@@ -51,9 +61,16 @@ function render() {
   const overview = globalData.overview;
   const experience = overview?.experience;
   const mode = getPreferredConsoleMode(globalData);
-  const steps = mode === "admin" ? experience?.adminGuide || [] : experience?.businessGuide || [];
+  const steps = mode === "admin"
+    ? experience?.onboarding?.adminSteps || experience?.adminGuide || []
+    : experience?.onboarding?.businessSteps || experience?.businessGuide || [];
   const runtimeVerification = overview?.runtime?.verification || overview?.runtime?.doctorReport;
   const completedCount = steps.filter((step) => step.status === "verified" || step.status === "healthy" || step.status === "ready").length;
+  const completed = steps.length > 0 && completedCount === steps.length;
+  if (entry === "desktop") {
+    setDesktopOnboardingSeen(true);
+    setDesktopOnboardingCompleted(completed);
+  }
 
   shell.pageContent.innerHTML = `
     <section class="page-grid two-up">
@@ -65,6 +82,11 @@ function render() {
             <p class="section-copy">业务模式适合财务、法务、风控；管理模式适合管理员与 reviewer。</p>
           </div>
         </div>
+        ${
+          entry === "desktop"
+            ? `<div class="flash-banner">桌面首次启动已进入统一向导。建议先走管理模式，把登录、运行时验证、备份与恢复演练串成一条链。</div>`
+            : ""
+        }
         <div class="mode-grid two-up">
           <button type="button" class="mode-card ${mode === "business" ? "active" : ""}" data-guide-mode="business">
             <div class="record-head">
@@ -96,8 +118,9 @@ function render() {
             note: mode === "admin"
               ? experience?.adminStatusLabel || "按顺序完成管理员链路。"
               : experience?.businessStatusLabel || "按顺序完成业务链路。",
-            pillHtml: pill(completedCount === steps.length && steps.length ? "good" : "warn", completedCount === steps.length && steps.length ? "已就绪" : "继续完成"),
+            pillHtml: pill(completed ? "good" : "warn", completed ? "已就绪" : "继续完成"),
             meta: [
+              entry === "desktop" ? "入口：桌面包首次向导" : "入口：Web 控制台",
               runtimeVerification?.lastVerifiedAt ? `最近验证 ${formatDateTime(runtimeVerification.lastVerifiedAt)}` : "等待真实验证",
               overview?.identity?.summary || "等待身份状态",
             ],
@@ -109,7 +132,10 @@ function render() {
             href: pickNextStepHref(steps),
             buttonLabel: pickNextStepButton(steps),
             tone: steps.some((step) => step.status === "down" || step.status === "not_configured") ? "warning" : "info",
-            meta: experience?.globalBlockers?.slice(0, 2) || [],
+            meta: [
+              ...(experience?.globalBlockers?.slice(0, 2) || []),
+              experience?.nextRecommendedInstall ? `建议集成：${experience.nextRecommendedInstall.title}` : "",
+            ].filter(Boolean),
           })}
         </div>
       </article>
@@ -134,6 +160,27 @@ function render() {
           blockingReason: step.blockingReason,
         })).join("")}
       </div>
+      ${
+        entry === "desktop"
+          ? `
+            <div class="top-gap">
+              ${nextActionCard({
+                kicker: "桌面入口",
+                title: completed ? "首次向导已完成，可直接进入业务工作台" : "建议继续完成桌面首次向导",
+                note: completed
+                  ? "你仍然可以从菜单栏/托盘菜单随时重新打开首次向导。"
+                  : experience?.desktopEntry?.summary || "先按清单完成关键步骤，再对外开放试点。",
+                href: completed ? "/workbench.html" : (experience?.desktopEntry?.href || "/getting-started.html?mode=admin&entry=desktop"),
+                buttonLabel: completed ? "进入业务工作台" : "继续首次向导",
+                tone: completed ? "good" : "warning",
+                meta: completed
+                  ? ["建议下一步：进入 Agent Hub 完成宿主集成", "可从菜单栏/托盘重新打开首次向导"]
+                  : (experience?.desktopBlockers || []).slice(0, 2),
+              })}
+            </div>
+          `
+          : ""
+      }
     </section>
   `;
 }

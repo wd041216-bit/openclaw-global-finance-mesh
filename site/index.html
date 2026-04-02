@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zhouheng Global Finance Mesh</title>
+    <meta
+      name="description"
+      content="Enterprise beta finance control plane with decision/replay, tamper-evident audit ledger, desktop onboarding, and multi-host agent integration."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Zhouheng Global Finance Mesh</div>
+      <nav class="topnav">
+        <a href="#why">Why</a>
+        <a href="#try">Try</a>
+        <a href="#install">Install</a>
+        <a href="#connect-agents">Connect Agents</a>
+        <a href="#pilot">Pilot</a>
+        <a href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Enterprise Beta • Single-instance</p>
+        <h1>Decision + Replay + Legal Grounding + Tamper-evident Audit</h1>
+        <p class="lead">
+          A business-friendly finance control plane with Apple-style guided console, desktop onboarding, and local-first agent integration.
+        </p>
+        <div class="actions">
+          <a class="button primary" href="#download">Download v0.4.0</a>
+          <a class="button" href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh">View on GitHub</a>
+          <a class="button ghost" href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/README.zh-CN.md">中文快速入口</a>
+        </div>
+      </section>
+
+      <section id="why" class="panel">
+        <h2>Why</h2>
+        <p>
+          Zhouheng is built for teams who need deterministic finance decisions, replay-safe rule rollout, governed legal references, and audit credibility
+          in one operator-ready console.
+        </p>
+        <div class="grid">
+          <article>
+            <h3>Business-first UX</h3>
+            <p>Role switch home + guided onboarding + cascade subpages.</p>
+          </article>
+          <article>
+            <h3>Trusted operations</h3>
+            <p>SQLite hash-chain ledger, backup replication, and non-destructive restore drills.</p>
+          </article>
+          <article>
+            <h3>Agent-ready integration</h3>
+            <p>OpenClaw native plugin + shared MCP for Claude/Manus/Cursor/Cline/Cherry Studio.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="try" class="panel">
+        <h2>Try</h2>
+        <ol>
+          <li>Install and launch desktop app.</li>
+          <li>Open first-launch onboarding and bootstrap admin.</li>
+          <li>Set `OLLAMA_MODE=cloud`, `OLLAMA_MODEL=kimi-k2.5`, `FINANCE_MESH_CLOUD_API_FLAVOR=auto`.</li>
+          <li>Run runtime probe, then example decision and replay.</li>
+        </ol>
+        <pre><code>npm install
+npm test
+npm run dev</code></pre>
+      </section>
+
+      <section id="install" class="panel">
+        <h2>Install</h2>
+        <div class="grid">
+          <article>
+            <h3>macOS</h3>
+            <p>Official package outputs: `.pkg`, `.dmg`, `.zip`.</p>
+            <p>First launch opens `getting-started.html?mode=admin&amp;entry=desktop`.</p>
+          </article>
+          <article>
+            <h3>Windows</h3>
+            <p>Official package outputs: `.exe` (NSIS) + `.zip` fallback.</p>
+            <p>Tray app includes onboarding, workbench, system, recovery, and Agent Hub entries.</p>
+          </article>
+          <article>
+            <h3>Cloud runtime default</h3>
+            <p>`OLLAMA_MODE=cloud` + `OLLAMA_MODEL=kimi-k2.5` + `FINANCE_MESH_CLOUD_API_FLAVOR=auto`.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="connect-agents" class="panel">
+        <h2>Connect Agents</h2>
+        <p>One capability surface, multiple host paths.</p>
+        <ul>
+          <li><strong>OpenClaw</strong>: Native plugin adapter.</li>
+          <li><strong>Claude</strong>: Shared MCP connector.</li>
+          <li><strong>Manus</strong>: Shared MCP connector.</li>
+          <li><strong>Cursor</strong>: Shared MCP connector.</li>
+          <li><strong>Cline</strong>: Shared MCP connector.</li>
+          <li><strong>Cherry Studio</strong>: Shared MCP connector.</li>
+        </ul>
+        <pre><code>npm run mcp:serve
+npm run smoke:mcp
+npm run smoke:openclaw
+npm run doctor:hosts</code></pre>
+      </section>
+
+      <section id="pilot" class="panel">
+        <h2>Pilot</h2>
+        <p>
+          Pilot baseline is single-instance Docker + cloud runtime verification gate.  
+          Go live only when runtime verification returns `fully_usable` with `goLiveReady=true`.
+        </p>
+        <div class="grid">
+          <article>
+            <h3>Validation</h3>
+            <p>`npm run verify:cloud-provider` and `npm run review:pilot`.</p>
+          </article>
+          <article>
+            <h3>Recovery readiness</h3>
+            <p>Backup target required + restore drill required before external access.</p>
+          </article>
+          <article>
+            <h3>Observability</h3>
+            <p>Use `/api/operations/health`, `/api/metrics`, and structured logs.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="download" class="panel">
+        <h2>Download</h2>
+        <p>Release assets are published to GitHub Releases and verified by `SHA256SUMS`.</p>
+        <div class="download-grid">
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/zhouheng-finance-mesh-0.4.0-macos.pkg">macOS .pkg</a>
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/zhouheng-finance-mesh-0.4.0-macos.dmg">macOS .dmg</a>
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/zhouheng-finance-mesh-0.4.0-macos.zip">macOS .zip</a>
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/zhouheng-finance-mesh-0.4.0-windows.exe">Windows .exe</a>
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/zhouheng-finance-mesh-0.4.0-windows.zip">Windows .zip</a>
+          <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases/latest/download/SHA256SUMS">SHA256SUMS</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh">GitHub</a> ·
+        <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/README.md">README</a> ·
+        <a href="https://github.com/wd041216-bit/zhouheng-global-finance-mesh/blob/main/README.zh-CN.md">README.zh-CN</a>
+      </p>
+    </footer>
+  </body>
+</html>

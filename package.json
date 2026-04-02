@@ -1,6 +1,6 @@
 {
   "name": "@wd041216-bit/zhouheng-global-finance-mesh",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": false,
   "description": "Enterprise beta finance control plane with OIDC-ready sessions, audit ledger integrity, decision replay, and legal-library grounding.",
   "license": "MIT",
@@ -47,6 +47,8 @@
     "smoke:cloud": "node scripts/smoke-cloud.ts",
     "smoke:restore": "node scripts/smoke-restore.ts",
     "smoke:ui": "node scripts/smoke-ui.ts",
+    "smoke:pages": "node scripts/smoke-pages.ts",
+    "smoke:release-artifacts": "node scripts/smoke-release-artifacts.ts",
     "release:check": "node scripts/release-check.ts"
   },
   "dependencies": {

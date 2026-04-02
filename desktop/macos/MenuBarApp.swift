@@ -29,9 +29,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
   private let summaryItem = NSMenuItem(title: "状态：启动中", action: nil, keyEquivalent: "")
   private let detailItem = NSMenuItem(title: "正在准备本地控制台…", action: nil, keyEquivalent: "")
+  private lazy var openOnboardingItem = NSMenuItem(title: "打开首次向导", action: #selector(openOnboarding), keyEquivalent: "")
   private lazy var openWorkbenchItem = NSMenuItem(title: "打开工作台", action: #selector(openWorkbench), keyEquivalent: "")
   private lazy var openSystemItem = NSMenuItem(title: "打开系统设置", action: #selector(openSystem), keyEquivalent: "")
   private lazy var openRecoveryItem = NSMenuItem(title: "打开恢复中心", action: #selector(openRecovery), keyEquivalent: "")
+  private lazy var openAgentsItem = NSMenuItem(title: "打开 Agent Hub", action: #selector(openAgents), keyEquivalent: "")
   private lazy var startOrRestartItem = NSMenuItem(title: "重启本地服务", action: #selector(startOrRestartService), keyEquivalent: "")
   private lazy var stopItem = NSMenuItem(title: "停止本地服务", action: #selector(stopServiceNow), keyEquivalent: "")
   private lazy var openDataItem = NSMenuItem(title: "打开数据目录", action: #selector(openDataFolder), keyEquivalent: "")
@@ -76,9 +78,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     menu.addItem(.separator())
 
     for item in [
+      openOnboardingItem,
       openWorkbenchItem,
       openSystemItem,
       openRecoveryItem,
+      openAgentsItem,
       startOrRestartItem,
       stopItem,
       openDataItem,
@@ -88,9 +92,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
       item.target = self
     }
 
+    menu.addItem(openOnboardingItem)
     menu.addItem(openWorkbenchItem)
     menu.addItem(openSystemItem)
     menu.addItem(openRecoveryItem)
+    menu.addItem(openAgentsItem)
     menu.addItem(.separator())
     menu.addItem(startOrRestartItem)
     menu.addItem(stopItem)
@@ -139,7 +145,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         }
 
         if response.firstLaunch == true {
-          self.openPage("system.html")
+          self.openPage("getting-started.html?mode=admin&entry=desktop")
         } else if let page = preferredPage {
           self.openPage(page)
         } else {
@@ -192,8 +198,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     detailItem.title = detailLabel
 
     openWorkbenchItem.isEnabled = isRunning
+    openOnboardingItem.isEnabled = true
     openRecoveryItem.isEnabled = isRunning
     openSystemItem.isEnabled = true
+    openAgentsItem.isEnabled = isRunning
     stopItem.isEnabled = isRunning
     startOrRestartItem.title = isRunning ? "重启本地服务" : "启动本地服务"
     startOrRestartItem.isEnabled = true
@@ -269,7 +277,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
       return
     }
 
-    let url = baseURL.appendingPathComponent(page)
+    guard let url = URL(string: page, relativeTo: baseURL)?.absoluteURL else {
+      showAlert(title: "页面地址不可用", message: "请检查本地服务地址是否正常。")
+      return
+    }
     NSWorkspace.shared.open(url)
   }
 
@@ -290,6 +301,14 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     alert.runModal()
   }
 
+  @objc private func openOnboarding() {
+    if currentBaseURL == nil {
+      startService(openPreferredPage: true, preferredPage: "getting-started.html?mode=admin&entry=desktop")
+      return
+    }
+    openPage("getting-started.html?mode=admin&entry=desktop")
+  }
+
   @objc private func openWorkbench() {
     openPage("workbench.html")
   }
@@ -304,6 +323,10 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
   @objc private func openRecovery() {
     openPage("recovery.html")
+  }
+
+  @objc private func openAgents() {
+    openPage("agents.html")
   }
 
   @objc private func startOrRestartService() {

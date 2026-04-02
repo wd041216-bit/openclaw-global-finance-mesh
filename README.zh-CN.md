@@ -1,6 +1,18 @@
 # Zhouheng Global Finance Mesh
 
-这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。它把“宙衡 Global Finance Mesh”从规格文档推进成了可运行、可验证、可持续演进的产品基线，并补上了 OIDC-ready 身份层、服务端 session、面向非技术人员的白色多页面业务控制台、摘要看板优先的后台页、面向 Claude / Manus / OpenClaw 的统一兼容层、带结构化输出的 MCP 工具契约、异地备份与恢复演练能力，以及基于 SQLite 的防篡改审计账本。
+[![CI](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/ci.yml)
+[![Release](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/release.yml/badge.svg)](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/actions/workflows/release.yml)
+[![npm version](https://img.shields.io/npm/v/@wd041216-bit/zhouheng-global-finance-mesh)](https://www.npmjs.com/package/@wd041216-bit/zhouheng-global-finance-mesh)
+[![GHCR](https://img.shields.io/badge/GHCR-zhouheng--global--finance--mesh-blue)](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/pkgs/container/zhouheng-global-finance-mesh)
+
+这是一个独立的财务控制平面产品仓库，不再把自己包装成 OpenClaw 的附属 skill。  
+它面向“开发者可快速上手 + 企业试点可可信落地”双轨目标。
+
+- 10 秒理解价值：决策、回放、法规依据、审计治理一体化
+- 3 分钟完成安装：桌面包一键安装 + 首次向导
+- 10 分钟接入宿主：OpenClaw / Claude / Manus / Cursor / Cline / Cherry Studio
+
+英文主文档: [README](./README.md)
 
 ## 控制台截图
 
@@ -10,41 +22,88 @@
   <img src="./docs/assets/governance-apple-ui.png" alt="治理中心：摘要优先的完整性与导出状态" width="15%" />
   <img src="./docs/assets/system-apple-ui.png" alt="系统设置：身份与运行时摘要" width="15%" />
   <img src="./docs/assets/recovery-apple-ui.png" alt="恢复中心：备份与恢复就绪度" width="15%" />
-  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub：OpenClaw、Claude、Manus 接入卡片" width="15%" />
+  <img src="./docs/assets/agents-apple-ui.png" alt="Agent Hub：OpenClaw + Claude/Manus/Cursor/Cline/Cherry Studio 接入卡片" width="15%" />
 </p>
 
-## 已落地内容
+## Why
 
-- 九页面中文控制台，按任务路径拆开，不再把所有功能堆在一屏里：
-  - `首页`：品牌首页、环境摘要、角色入口
-  - `业务工作台`：推荐动作、建议路径与最近结果
-  - `决策中心`：按“事件来源 -> 决策模式 / Pack -> 结果摘要”三步运行决策
-  - `回放中心`：按“事件来源 -> 基线 / 候选 Pack -> 差异摘要”三步查看规则漂移
-  - `依据库`：搜索优先，治理与采集退到 reviewer/admin 的次级面板
-  - `治理中心`：审计链、导出、Operator Activity，首屏先给结论和下一步
-  - `恢复中心`：备份、恢复演练、恢复建议，失败点与推荐动作优先展示
-  - `系统设置`：身份、会话、运行时、部署健康，管理表单退到次级折叠区
-  - `Agent Hub`：OpenClaw / Claude / Manus 接入说明，按“能做什么 -> 如何启动 -> 如何验证 -> 技术详情”展开
-- 服务端 operator session：`HttpOnly` cookie、CSRF、防登出残留、active session 查看与 revoke
-- 混合身份模式：break-glass 本地 token + 标准 OIDC authorization-code 登录
-- `viewer`、`operator`、`reviewer`、`admin` 四级角色，以及基于 `issuer + subject` / verified email 的 OIDC 身份绑定
-- 可插拔 Ollama 大脑，支持本地与云端模式，并能按 `auto` / `ollama_native` / `openai_compatible` 三种云端协议策略做探测与切换
-- Pack 校验、决策生成、回放对比、审计追溯快照
-- 法律资料库采集、检索、治理状态流转、引用注入链路
-- 基于 SQLite 的 append-only 审计账本，统一记录 decision / replay / runtime probe / integrity verify / export batch / operator activity
-- 目录复制与 S3-compatible 对象存储两种异地备份目标
-- 非破坏性的恢复演练，支持从挂载目录、S3-compatible 目标或本地 snapshot 验证恢复可行性
-- `/api/dashboard/overview`、`/api/operations/health`、`/api/metrics` 三个聚合 / 观测接口
-- `/api/integrations/adapters` 与 `/api/integrations/adapters/:id` 两个统一适配器发现接口
-- 五个共享 MCP 工具现在都带人类摘要、`structuredContent` 和 `outputSchema`
-- 结构化日志，便于请求、actor、run、backup 的串联排查
-- 持久化 operator activity timeline，记录 RBAC、session、运行时配置、法规治理和执行动作
-- 统一 local-first adapter registry：OpenClaw 原生插件 + Claude/Manus MCP connector
-- SaaS 年付预收场景示例
-- 可选 OpenClaw 兼容层，集中放在 `integrations/openclaw/`
-- Docker 单实例基线与 Kubernetes 原生单副本清单
-- GitHub Actions CI 与 semver 发布流程，覆盖 Node 22 / 25 兼容性校验、语法校验、restore smoke、浏览器 smoke、镜像发布和 npm 发布
-- 面向外部试点的交付资产：`.env.pilot.example`、`npm run review:pilot`、`npm run verify:cloud-provider`、以及单机试点 runbook
+- 业务决策与规则回放用同一条可解释链路承载，降低规则变更风险。
+- 法规依据库与治理动作拆层，业务可读、审核可追责。
+- 审计账本、备份复制、恢复演练形成可信运维闭环。
+- 桌面首启向导 + 多页面 IA，非技术人员也能上手。
+
+## Try
+
+```bash
+npm install
+npm test
+npm run dev
+```
+
+访问 `http://127.0.0.1:3030`，按引导完成首次链路。
+
+云端默认建议：
+
+```bash
+export OLLAMA_MODE=cloud
+export OLLAMA_MODEL=kimi-k2.5
+export FINANCE_MESH_CLOUD_API_FLAVOR=auto
+export OLLAMA_API_KEY=你的 key
+```
+
+## Install
+
+- macOS 产物：`.pkg`、`.dmg`、`.zip`
+- Windows 产物：`.exe`（NSIS）+ `.zip` fallback
+- 桌面首次启动统一打开：
+  - `getting-started.html?mode=admin&entry=desktop`
+
+构建命令：
+
+```bash
+npm run build:macos-installer
+npm run build:windows-package
+```
+
+## Connect Agents
+
+- OpenClaw：原生 plugin 适配（`integrations/openclaw/`）
+- Claude / Manus / Cursor / Cline / Cherry Studio：共享 MCP 入口（`integrations/mcp/server.ts`）
+
+验证命令：
+
+```bash
+npm run mcp:serve
+npm run smoke:mcp
+npm run smoke:openclaw
+npm run doctor:hosts
+```
+
+## Pilot
+
+- 外部试点基线：单实例自托管
+- 放行门禁：`verificationStatus=fully_usable` 且 `goLiveReady=true`
+- 运维门禁：备份目标已配置 + 恢复演练已完成
+
+关键文档：
+
+- [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)
+- [docs/external-pilot-runbook.md](./docs/external-pilot-runbook.md)
+- [docs/v0.4.0-launch-checklist.md](./docs/v0.4.0-launch-checklist.md)
+
+## Download
+
+本轮 release 统一附带并校验：
+
+- `zhouheng-finance-mesh-0.4.0-macos.pkg`
+- `zhouheng-finance-mesh-0.4.0-macos.dmg`
+- `zhouheng-finance-mesh-0.4.0-macos.zip`
+- `zhouheng-finance-mesh-0.4.0-windows.exe`
+- `zhouheng-finance-mesh-0.4.0-windows.zip`
+- `SHA256SUMS`
+
+下载入口: [GitHub Releases](https://github.com/wd041216-bit/zhouheng-global-finance-mesh/releases)
+网页入口: [wd041216-bit.github.io/zhouheng-global-finance-mesh](https://wd041216-bit.github.io/zhouheng-global-finance-mesh/)
 
 ## 当前定位
 
@@ -149,7 +208,7 @@ npm run build:macos-installer
 - 安装到 `/Applications`
 - 启动 `Zhouheng Finance Mesh.app`
 
-桌面版现在会以菜单栏 app 的形式运行，把用户数据放到 `~/Library/Application Support/Zhouheng Finance Mesh`，首次启动自动打开 `system.html`，并默认使用：
+桌面版现在会以菜单栏 app 的形式运行，把用户数据放到 `~/Library/Application Support/Zhouheng Finance Mesh`，首次启动自动打开 `getting-started.html?mode=admin&entry=desktop`，并默认使用：
 
 - `OLLAMA_MODE=cloud`
 - `OLLAMA_MODEL=kimi-k2.5`
@@ -172,10 +231,16 @@ npm run build:windows-package
 
 会生成：
 
+- `dist/windows/zhouheng-finance-mesh-<version>-windows.exe`
 - `dist/windows/zhouheng-finance-mesh-<version>-windows.zip`
 - 一个包含安装 / 启动 / 停止脚本的发布目录
 
-Windows 版本会直接内置官方 Node.js 22.22.2 runtime，安装到 `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`，把用户数据放到 `%LOCALAPPDATA%\Zhouheng Finance Mesh`，并通过托盘入口提供启动 / 停止 / 打开控制台等动作。
+Windows 版本会直接内置官方 Node.js 22.22.2 runtime，安装到 `%LOCALAPPDATA%\Programs\Zhouheng Finance Mesh`，把用户数据放到 `%LOCALAPPDATA%\Zhouheng Finance Mesh`，并通过托盘入口提供首次向导 / 启动 / 停止 / 打开控制台等动作。
+
+推荐安装顺序：
+
+- 优先用 `.exe`（NSIS 一键安装）
+- `.zip` 作为策略受限场景的 fallback
 
 详细说明见 [docs/windows-desktop-package.md](./docs/windows-desktop-package.md)。
 
@@ -243,10 +308,13 @@ npm run dev
 - `integrations/mcp/server.ts`：共享 MCP server 入口
 - `integrations/claude/`：Claude 本地接入说明与示例配置
 - `integrations/manus/`：Manus 本地接入说明与示例配置
+- `integrations/cursor/`：Cursor 本地接入说明与示例配置
+- `integrations/cline/`：Cline 本地接入说明与示例配置
+- `integrations/cherry-studio/`：Cherry Studio 本地接入说明与示例配置
 - `npm run mcp:serve`：直接启动共享 MCP connector
 - `npm run smoke:mcp`：本地验证五个工具可见，并真实调用决策与法规搜索
 - `npm run smoke:openclaw`：在 fixture host 里加载 OpenClaw 原生插件并验证三类工具与 prompt guidance
-- `npm run doctor:hosts`：统一检查三家配置模板、接入文档、共享 MCP smoke 和 OpenClaw fixture smoke
+- `npm run doctor:hosts`：统一检查六家宿主配置模板、接入文档、共享 MCP smoke 和 OpenClaw fixture smoke
 
 当前统一暴露的工具面包括：
 
@@ -262,7 +330,7 @@ npm run dev
 - 稳定的 `structuredContent`
 - 明确的 `outputSchema`
 
-这样 Claude 与 Manus 共用同一套本地契约，OpenClaw 则继续走原生插件面，但静态清单和 smoke 也会被同一套契约持续校验。
+这样 Claude / Manus / Cursor / Cline / Cherry Studio 共用同一套本地契约，OpenClaw 则继续走原生插件面，但静态清单和 smoke 也会被同一套契约持续校验。
 
 ## 审计历史
 
@@ -312,8 +380,8 @@ npm run dev
 ## CI 与发布基线
 
 - `.github/workflows/ci.yml` 会在 PR 和 `main` 上执行 `npm ci`、`npm test`、`npm run verify:server`、`npm run verify:manifests`、`docker build`、`npm run smoke:restore`、`npm run smoke:ui`
-- `.github/workflows/release.yml` 只会在 `workflow_dispatch` 或 `v0.3.0` 这种 semver tag 上触发发布
-- `npm run release:check -- --tag v0.3.0` 会强校验 git tag、`package.json` 版本和 `CHANGELOG.md` 标题一致
+- `.github/workflows/release.yml` 只会在 `workflow_dispatch` 或 `v0.4.0` 这种 semver tag 上触发发布
+- `npm run release:check -- --tag v0.4.0` 会强校验 git tag、`package.json` 版本和 `CHANGELOG.md` 标题一致
 - CI 会在 `npm run verify:manifests` 前临时拉起一个 kind 集群，因为 `kubectl` 的 dry-run 仍然需要 API discovery 来识别内置资源
 - 发布产物固定是 `ghcr.io/wd041216-bit/zhouheng-global-finance-mesh` 容器镜像和 npm 公共包
 
@@ -330,7 +398,7 @@ npm run dev
 
 如果你仍然需要接到 OpenClaw，请使用 `integrations/openclaw/` 下的适配器，而不是把整个仓库继续当成 skill 根目录。
 
-如果是 Claude 或 Manus 这类支持 MCP 的宿主，则直接使用共享入口：
+如果是 Claude、Manus、Cursor、Cline、Cherry Studio 这类支持 MCP 的宿主，则直接使用共享入口：
 
 ```bash
 npm run mcp:serve
@@ -341,6 +409,9 @@ npm run mcp:serve
 - [integrations/mcp/README.md](./integrations/mcp/README.md)
 - [integrations/claude/README.md](./integrations/claude/README.md)
 - [integrations/manus/README.md](./integrations/manus/README.md)
+- [integrations/cursor/README.md](./integrations/cursor/README.md)
+- [integrations/cline/README.md](./integrations/cline/README.md)
+- [integrations/cherry-studio/README.md](./integrations/cherry-studio/README.md)
 
 ## 企业化边界
 
@@ -370,6 +441,8 @@ npm run mcp:serve
 - [docs/cloud-runtime-operations.md](./docs/cloud-runtime-operations.md)
 - [docs/restore-drill-operations.md](./docs/restore-drill-operations.md)
 - [docs/deployment-baseline.md](./docs/deployment-baseline.md)
+- [docs/host-integration-matrix.md](./docs/host-integration-matrix.md)
+- [docs/v0.4.0-launch-checklist.md](./docs/v0.4.0-launch-checklist.md)
 - [docs/roadmap.md](./docs/roadmap.md)
 - [docs/marketing-launch.md](./docs/marketing-launch.md)
 - [docs/handoff-to-openclaw-self-operator.md](./docs/handoff-to-openclaw-self-operator.md)
@@ -381,3 +454,6 @@ npm run mcp:serve
 - [docs/checkpoint-2026-03-31-console-backup-observability.md](./docs/checkpoint-2026-03-31-console-backup-observability.md)
 - [docs/checkpoint-2026-03-31-recovery-ci-release.md](./docs/checkpoint-2026-03-31-recovery-ci-release.md)
 - [docs/checkpoint-2026-03-31-apple-ui-agent-hub.md](./docs/checkpoint-2026-03-31-apple-ui-agent-hub.md)
+- [SECURITY.md](./SECURITY.md)
+- [SUPPORT.md](./SUPPORT.md)
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)

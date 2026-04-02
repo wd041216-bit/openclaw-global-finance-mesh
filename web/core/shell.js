@@ -113,7 +113,7 @@ export async function initShell(config) {
         <div>
           <p class="brand-eyebrow">Apple-style Guided Finance Console</p>
           <h1 class="brand-title">周衡全球财务网格</h1>
-          <p class="brand-copy">先帮用户选对模式，再把复杂能力顺着任务路径 cascade 到正确的子页面。</p>
+          <p class="brand-copy">先帮用户选对模式，再把复杂能力顺着任务路径 cascade 到正确子页面，并把桌面首次向导与 Agent 接入保持同一事实源。</p>
         </div>
         <div class="chrome-actions">
           <div class="identity-pill">${buildIdentityPill(globalData)}</div>
@@ -199,9 +199,13 @@ function buildTopNav(activeId) {
 function renderSectionShell(pageMeta, activePageId, pageTitle, globalData, consoleMode) {
   const items = pageMeta.sectionId ? getVisibleSectionItems(pageMeta.sectionId, globalData) : [];
   const experience = globalData.overview?.experience;
+  const desktopOnboardingPending = Boolean(globalData?.prefs?.desktopOnboardingSeen) && !Boolean(globalData?.prefs?.desktopOnboardingCompleted);
   const modeLabel = consoleMode === "admin"
     ? experience?.adminStatusLabel || "先完成管理链路"
     : experience?.businessStatusLabel || "先进入业务链路";
+  const summaryLabel = desktopOnboardingPending
+    ? "桌面首次向导尚未完成，建议先回到开始使用页。"
+    : modeLabel;
 
   return `
     <div class="section-shell">
@@ -209,12 +213,14 @@ function renderSectionShell(pageMeta, activePageId, pageTitle, globalData, conso
         <div>
           <p class="section-kicker">${escapeHtml(pageMeta.sectionLabel || pageMeta.topLabel || "当前分区")}</p>
           <h2 class="section-shell-title">${escapeHtml(pageTitle)}</h2>
-          <p class="summary-note">${escapeHtml(modeLabel)}</p>
+          <p class="summary-note">${escapeHtml(summaryLabel)}</p>
         </div>
         ${
           pageMeta.topNavId === "agents"
             ? `<a class="button ghost" href="/getting-started.html?mode=${escapeHtml(consoleMode)}">查看开始使用</a>`
-            : `<a class="button ghost" href="/getting-started.html?mode=${escapeHtml(consoleMode)}">进入${consoleMode === "admin" ? "管理" : "业务"}引导</a>`
+            : desktopOnboardingPending
+              ? `<a class="button ghost" href="/getting-started.html?mode=admin&entry=desktop">继续首次向导</a>`
+              : `<a class="button ghost" href="/getting-started.html?mode=${escapeHtml(consoleMode)}">进入${consoleMode === "admin" ? "管理" : "业务"}引导</a>`
         }
       </div>
       ${items.length ? `<nav class="section-nav" aria-label="当前分区导航">${items
@@ -304,11 +310,14 @@ function buildHeroStatus(globalData, consoleMode, topNavId) {
       <p class="section-kicker">兼容层状态</p>
       <div class="hero-stat">
         <strong>统一 adapter registry</strong>
-        <p class="summary-note">OpenClaw、Claude、Manus 保持同一事实源，安装步骤和能力说明不再散落在各页。</p>
+        <p class="summary-note">OpenClaw + 五个 MCP 宿主共用同一事实源，安装步骤和能力说明不再散落在各页。</p>
         <div class="meta-list">
           <span>${pill("good", "OpenClaw")}</span>
           <span>${pill("info", "Claude MCP")}</span>
           <span>${pill("info", "Manus MCP")}</span>
+          <span>${pill("info", "Cursor MCP")}</span>
+          <span>${pill("info", "Cline MCP")}</span>
+          <span>${pill("info", "Cherry MCP")}</span>
         </div>
       </div>
     `;
@@ -322,6 +331,7 @@ function buildHeroStatus(globalData, consoleMode, topNavId) {
       <div class="meta-list">
         <span>${pill(globalData.access?.session?.authenticated ? "good" : globalData.access?.config?.enabled ? "warn" : "neutral", globalData.access?.session?.authenticated ? "已登录" : globalData.access?.config?.enabled ? "未登录" : "开放模式")}</span>
         ${runtime ? `<span>${pill(runtime.goLiveReady ? "good" : runtime.requiresProviderAction ? "warn" : statusToneFromStatus("degraded"), runtime.goLiveReady ? "可正式试点" : "待放行")}</span>` : ""}
+        ${globalData?.prefs?.desktopOnboardingSeen && !globalData?.prefs?.desktopOnboardingCompleted ? `<span>${pill("warn", "向导未完成")}</span>` : ""}
         ${integrity ? `<span>${pill(statusToneFromStatus(integrity.status), integrity.summary || translateStatus(integrity.status))}</span>` : ""}
         ${recovery ? `<span>${pill(statusToneFromStatus(recovery.status), recovery.summary || translateStatus(recovery.status))}</span>` : ""}
       </div>

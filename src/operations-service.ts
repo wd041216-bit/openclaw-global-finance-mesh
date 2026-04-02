@@ -23,6 +23,29 @@ export interface GuideStep {
   blockingReason?: string;
 }
 
+export interface OnboardingOverview {
+  defaultMode: ConsoleMode;
+  businessStartHref: string;
+  adminStartHref: string;
+  desktopFirstLaunchHref: string;
+  businessSteps: GuideStep[];
+  adminSteps: GuideStep[];
+}
+
+export interface DesktopEntryState {
+  entry: "web" | "desktop";
+  mode: ConsoleMode;
+  href: string;
+  summary: string;
+}
+
+export interface AdapterHostTarget {
+  id: string;
+  title: string;
+  href: string;
+  reason: string;
+}
+
 export interface ExperienceOverview {
   preferredMode: ConsoleMode;
   recommendedLanding: string;
@@ -31,6 +54,10 @@ export interface ExperienceOverview {
   businessStatusLabel: string;
   adminStatusLabel: string;
   globalBlockers: string[];
+  onboarding: OnboardingOverview;
+  desktopEntry: DesktopEntryState;
+  desktopBlockers: string[];
+  nextRecommendedInstall: AdapterHostTarget;
 }
 
 export interface DashboardOverview {
@@ -660,14 +687,55 @@ function buildExperienceOverview(input: {
     },
   ];
 
+  const desktopBlockers = dedupeStrings(globalBlockers.slice(0, 3));
+  const desktopFirstLaunchHref = "/getting-started.html?mode=admin&entry=desktop";
+  const businessStartHref = "/getting-started.html?mode=business";
+  const adminStartHref = "/getting-started.html?mode=admin";
+  const nextRecommendedInstall = pickNextRecommendedInstall(runtimeReady);
+
   return {
     preferredMode,
-    recommendedLanding: preferredMode === "admin" ? "/getting-started.html?mode=admin" : "/getting-started.html?mode=business",
+    recommendedLanding: preferredMode === "admin" ? adminStartHref : businessStartHref,
     businessGuide,
     adminGuide,
     businessStatusLabel: buildModeStatusLabel("business", businessGuide),
     adminStatusLabel: buildModeStatusLabel("admin", adminGuide),
     globalBlockers,
+    onboarding: {
+      defaultMode: preferredMode,
+      businessStartHref,
+      adminStartHref,
+      desktopFirstLaunchHref,
+      businessSteps: businessGuide,
+      adminSteps: adminGuide,
+    },
+    desktopEntry: {
+      entry: "desktop",
+      mode: "admin",
+      href: desktopFirstLaunchHref,
+      summary: desktopBlockers.length
+        ? `桌面首次向导还有 ${desktopBlockers.length} 项待处理：${desktopBlockers[0]}`
+        : "桌面首次向导已完成关键步骤，可直接进入业务工作台。",
+    },
+    desktopBlockers,
+    nextRecommendedInstall,
+  };
+}
+
+function pickNextRecommendedInstall(runtimeReady: boolean): AdapterHostTarget {
+  if (runtimeReady) {
+    return {
+      id: "claude",
+      title: "优先接入 Claude MCP",
+      href: "/agents.html#adapter-claude",
+      reason: "运行时已放行，适合先把共享 MCP 能力交给业务协作场景试用。",
+    };
+  }
+  return {
+    id: "openclaw",
+    title: "先接入 OpenClaw 本地插件",
+    href: "/agents.html#adapter-openclaw",
+    reason: "在运行时放行前，先用本地插件和示例链路做最小闭环验证。",
   };
 }
 
